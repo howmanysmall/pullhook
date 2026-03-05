@@ -62,9 +62,9 @@ brew install howmanysmall/pullhook/pullhook
 
 5. Install Rust development tools:
 
-   ```bash
-   cargo binstall cargo-nextest cargo-audit cargo-deny cargo-shear cargo-bloat cargo-insta cargo-zigbuild
-   ```
+    ```bash
+    cargo binstall cargo-nextest cargo-audit cargo-deny cargo-shear cargo-bloat cargo-insta cargo-zigbuild sccache
+    ```
 
 ### Local Development Workflow
 
@@ -132,6 +132,7 @@ Triggered on version tags (`v*.*.*`). Builds and publishes multi-platform binari
 
 | Tool | Purpose | Version |
 |------|---------|---------|
+| `sccache` | Rust compilation caching | latest |
 | `cargo-nextest` | Fast test runner | 0.9.129 |
 | `cargo-audit` | Security vulnerability scanner | 0.22.1 |
 | `cargo-deny` | Dependency policy enforcement | 0.19.0 |
@@ -164,6 +165,20 @@ Triggered on version tags (`v*.*.*`). Builds and publishes multi-platform binari
 MIT
 
 ## Troubleshooting
+
+### sccache Statistics
+
+View cache hit/miss rates:
+
+```bash
+sccache --show-stats
+```
+
+Clear the cache if needed:
+
+```bash
+sccache --zero-stats
+```
 
 ### Gitleaks False Positives
 

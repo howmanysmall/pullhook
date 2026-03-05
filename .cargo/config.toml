@@ -1,6 +1,8 @@
 [build]
-# Optimize incremental compilation for faster local dev cycles
-incremental = true
+# Use sccache for faster builds
+rustc-wrapper = "sccache"
+# Incremental compilation disabled when using sccache (sccache provides better caching)
+incremental = false
 
 [profile.dev]
 # Faster debug builds with limited opt for dependencies
