@@ -59,6 +59,9 @@ impl PackageManager {
 pub fn detect_package_manager(repo_root: &Path) -> Result<PackageManager, PullhookError> {
 	let mut detected_by_lock = Vec::new();
 
+	if file_exists(repo_root, "bun.lock") || file_exists(repo_root, "bun.lockb") {
+		detected_by_lock.push(PackageManager::Bun);
+	}
 	if file_exists(repo_root, "package-lock.json") {
 		detected_by_lock.push(PackageManager::Npm);
 	}
@@ -67,9 +70,6 @@ pub fn detect_package_manager(repo_root: &Path) -> Result<PackageManager, Pullho
 	}
 	if file_exists(repo_root, "pnpm-lock.yaml") {
 		detected_by_lock.push(PackageManager::Pnpm);
-	}
-	if file_exists(repo_root, "bun.lock") || file_exists(repo_root, "bun.lockb") {
-		detected_by_lock.push(PackageManager::Bun);
 	}
 	if file_exists(repo_root, "deno.lock") {
 		detected_by_lock.push(PackageManager::Deno);

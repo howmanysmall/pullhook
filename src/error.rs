@@ -69,14 +69,16 @@ pub enum PullhookError {
 	},
 
 	/// Command exited with non-zero status.
-	#[error("command failed: `{command}` in `{cwd}` exited with {code}\n{details}")]
+	#[error("command failed: `{command}` in `{cwd}` exited with {status}\n{details}")]
 	CommandFailed {
 		/// Command string executed.
 		command: String,
 		/// Current working directory.
 		cwd: String,
-		/// Exit code.
-		code: i32,
+		/// Exit code when available. `None` means no exit code was provided (e.g. signal termination).
+		code: Option<i32>,
+		/// Human-readable exit status string.
+		status: String,
 		/// Captured stderr or failure details.
 		details: String,
 	},

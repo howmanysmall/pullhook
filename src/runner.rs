@@ -2,7 +2,7 @@
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::{Command, ExitStatus, Stdio};
 
 use rayon::prelude::*;
 use tracing::debug;
@@ -36,15 +36,32 @@ impl Invocation {
 	}
 }
 
+/// Execution state for an invocation or a task.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ResultState {
+	/// Process exited with success status.
+	Success,
+	/// Process exited with a non-zero exit code.
+	Failed,
+	/// Process exited without an exit code (usually signal termination).
+	Interrupted,
+	/// Process failed to spawn.
+	SpawnError,
+}
+
 /// Output from a single invocation.
 #[derive(Debug, Clone)]
 pub struct InvocationOutput {
 	/// Display command text.
 	pub command: String,
-	/// Captured stdout (empty in debug mode).
+	/// Captured stdout (lossy-decoded, empty in debug mode).
 	pub stdout: String,
-	/// Captured stderr (empty in debug mode).
+	/// Captured stderr (lossy-decoded, empty in debug mode).
 	pub stderr: String,
+	/// Explicit invocation result state.
+	pub state: ResultState,
+	/// Exit code when available.
+	pub exit_code: Option<i32>,
 }
 
 /// Execution result for a single task directory.
@@ -54,9 +71,22 @@ pub struct TaskResult {
 	pub cwd: PathBuf,
 	/// Outputs from invocations run in this task.
 	pub outputs: Vec<InvocationOutput>,
+	/// Explicit task result state.
+	pub state: ResultState,
 	/// Error produced by the first failed invocation, if any.
 	pub error: Option<PullhookError>,
 }
+
+#[derive(Debug)]
+struct InvocationExecution {
+	output: InvocationOutput,
+	error: Option<PullhookError>,
+}
+
+const NO_OUTPUT_CAPTURED: &str = "no output captured";
+const NO_EXIT_CODE_CAPTURED: &str = "process terminated without an exit code";
+const SEE_STREAMED_OUTPUT: &str = "see streamed output above";
+const NO_EXIT_CODE_STREAMED_OUTPUT: &str = "process terminated without an exit code; see streamed output above";
 
 /// Build invocation list in deterministic order.
 pub fn prepare_invocations(command: Option<&str>, script: Option<&str>) -> Result<Vec<Invocation>, PullhookError> {
@@ -142,6 +172,15 @@ pub fn run_tasks(
 	Ok(indexed.into_iter().map(|(_, result)| result).collect())
 }
 
+/// Compute a display cwd relative to repository root.
+#[must_use]
+pub fn relative_cwd_label(cwd: &Path, repo_root: &Path) -> String {
+	cwd.strip_prefix(repo_root)
+		.ok()
+		.and_then(|path| if path.as_os_str().is_empty() { None } else { Some(path) })
+		.map_or_else(|| ".".to_owned(), |path| path.display().to_string())
+}
+
 /// Print grouped outputs for non-debug mode.
 pub fn print_grouped_results(results: &[TaskResult], repo_root: &Path, debug_enabled: bool) {
 	if debug_enabled {
@@ -149,12 +188,7 @@ pub fn print_grouped_results(results: &[TaskResult], repo_root: &Path, debug_ena
 	}
 
 	for result in results {
-		let relative_cwd = result
-			.cwd
-			.strip_prefix(repo_root)
-			.ok()
-			.and_then(|path| if path.as_os_str().is_empty() { None } else { Some(path) })
-			.map_or_else(|| ".".to_owned(), |path| path.display().to_string());
+		let relative_cwd = relative_cwd_label(&result.cwd, repo_root);
 
 		println!("=== {relative_cwd} ===");
 
@@ -178,31 +212,29 @@ fn run_task(cwd: &Path, invocations: &[Invocation], shell: bool, debug_enabled: 
 	let mut outputs = Vec::new();
 
 	for invocation in invocations {
-		match run_invocation(invocation, cwd, shell, debug_enabled) {
-			Ok(output) => outputs.push(output),
-			Err(error) => {
-				return TaskResult {
-					cwd: cwd.to_path_buf(),
-					outputs,
-					error: Some(error),
-				};
-			}
+		let InvocationExecution { output, error } = run_invocation(invocation, cwd, shell, debug_enabled);
+		let state = output.state;
+		outputs.push(output);
+
+		if let Some(error) = error {
+			return TaskResult {
+				cwd: cwd.to_path_buf(),
+				outputs,
+				state,
+				error: Some(error),
+			};
 		}
 	}
 
 	TaskResult {
 		cwd: cwd.to_path_buf(),
 		outputs,
+		state: ResultState::Success,
 		error: None,
 	}
 }
 
-fn run_invocation(
-	invocation: &Invocation,
-	cwd: &Path,
-	shell: bool,
-	debug_enabled: bool,
-) -> Result<InvocationOutput, PullhookError> {
+fn run_invocation(invocation: &Invocation, cwd: &Path, shell: bool, debug_enabled: bool) -> InvocationExecution {
 	match invocation {
 		Invocation::Command { raw, argv } => {
 			if shell {
@@ -215,19 +247,14 @@ fn run_invocation(
 	}
 }
 
-fn run_command_direct(
-	raw: &str,
-	argv: &[String],
-	cwd: &Path,
-	debug_enabled: bool,
-) -> Result<InvocationOutput, PullhookError> {
+fn run_command_direct(raw: &str, argv: &[String], cwd: &Path, debug_enabled: bool) -> InvocationExecution {
 	let mut command = Command::new(&argv[0]);
 	command.args(&argv[1..]).current_dir(cwd);
 
 	run_process(command, raw, cwd, debug_enabled)
 }
 
-fn run_command_shell(raw: &str, cwd: &Path, debug_enabled: bool) -> Result<InvocationOutput, PullhookError> {
+fn run_command_shell(raw: &str, cwd: &Path, debug_enabled: bool) -> InvocationExecution {
 	let mut command = if cfg!(windows) {
 		let mut command = Command::new("cmd");
 		command.arg("/C").arg(raw);
@@ -242,80 +269,173 @@ fn run_command_shell(raw: &str, cwd: &Path, debug_enabled: bool) -> Result<Invoc
 	run_process(command, raw, cwd, debug_enabled)
 }
 
-fn run_script(script: &str, cwd: &Path, debug_enabled: bool) -> Result<InvocationOutput, PullhookError> {
+fn run_script(script: &str, cwd: &Path, debug_enabled: bool) -> InvocationExecution {
 	let mut command = Command::new("npm");
 	command.args(["run-script", script]).current_dir(cwd);
 
 	run_process(command, &format!("npm run-script {script}"), cwd, debug_enabled)
 }
 
-fn run_process(
-	mut command: Command,
-	display_command: &str,
-	cwd: &Path,
-	debug_enabled: bool,
-) -> Result<InvocationOutput, PullhookError> {
+fn run_process(command: Command, display_command: &str, cwd: &Path, debug_enabled: bool) -> InvocationExecution {
 	if debug_enabled {
-		debug!(
-			command = display_command,
-			cwd = %cwd.display(),
-			"running invocation"
-		);
-		let status = command
-			.stdout(Stdio::inherit())
-			.stderr(Stdio::inherit())
-			.status()
-			.map_err(|source| PullhookError::CommandIo {
-				command: display_command.to_owned(),
-				cwd: cwd.display().to_string(),
-				source,
-			})?;
+		return run_streaming_process(command, display_command, cwd);
+	}
 
-		if status.success() {
-			return Ok(InvocationOutput {
-				command: display_command.to_owned(),
-				stdout: String::new(),
-				stderr: String::new(),
-			});
+	run_captured_process(command, display_command, cwd)
+}
+
+fn run_streaming_process(mut command: Command, display_command: &str, cwd: &Path) -> InvocationExecution {
+	debug!(
+		command = display_command,
+		cwd = %cwd.display(),
+		"running invocation"
+	);
+
+	let status = match command.stdout(Stdio::inherit()).stderr(Stdio::inherit()).status() {
+		Ok(status) => status,
+		Err(source) => {
+			return InvocationExecution {
+				output: invocation_output(
+					display_command,
+					String::new(),
+					String::new(),
+					ResultState::SpawnError,
+					None,
+				),
+				error: Some(PullhookError::CommandIo {
+					command: display_command.to_owned(),
+					cwd: cwd.display().to_string(),
+					source,
+				}),
+			};
 		}
+	};
 
-		return Err(PullhookError::CommandFailed {
+	let (state, exit_code) = classify_exit_status(status);
+	if state == ResultState::Success {
+		return InvocationExecution {
+			output: invocation_output(display_command, String::new(), String::new(), state, exit_code),
+			error: None,
+		};
+	}
+
+	let details = if state == ResultState::Interrupted {
+		NO_EXIT_CODE_STREAMED_OUTPUT.to_owned()
+	} else {
+		SEE_STREAMED_OUTPUT.to_owned()
+	};
+
+	InvocationExecution {
+		output: invocation_output(display_command, String::new(), String::new(), state, exit_code),
+		error: Some(PullhookError::CommandFailed {
 			command: display_command.to_owned(),
 			cwd: cwd.display().to_string(),
-			code: status.code().unwrap_or(-1),
-			details: "see streamed output above".to_owned(),
-		});
+			code: exit_code,
+			status: format_exit_status(exit_code),
+			details,
+		}),
+	}
+}
+
+fn run_captured_process(mut command: Command, display_command: &str, cwd: &Path) -> InvocationExecution {
+	let output = match command.output() {
+		Ok(output) => output,
+		Err(source) => {
+			return InvocationExecution {
+				output: invocation_output(
+					display_command,
+					String::new(),
+					String::new(),
+					ResultState::SpawnError,
+					None,
+				),
+				error: Some(PullhookError::CommandIo {
+					command: display_command.to_owned(),
+					cwd: cwd.display().to_string(),
+					source,
+				}),
+			};
+		}
+	};
+
+	let stdout = normalize_output(&output.stdout);
+	let stderr = normalize_output(&output.stderr);
+	let (state, exit_code) = classify_exit_status(output.status);
+
+	if state == ResultState::Success {
+		return InvocationExecution {
+			output: invocation_output(display_command, stdout, stderr, state, exit_code),
+			error: None,
+		};
 	}
 
-	let output = command.output().map_err(|source| PullhookError::CommandIo {
-		command: display_command.to_owned(),
-		cwd: cwd.display().to_string(),
-		source,
-	})?;
+	let fallback = if state == ResultState::Interrupted {
+		NO_EXIT_CODE_CAPTURED
+	} else {
+		NO_OUTPUT_CAPTURED
+	};
+	let details = normalize_failure_details(&stdout, &stderr, fallback);
 
-	let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-	let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-
-	if output.status.success() {
-		return Ok(InvocationOutput {
+	InvocationExecution {
+		output: invocation_output(display_command, stdout, stderr, state, exit_code),
+		error: Some(PullhookError::CommandFailed {
 			command: display_command.to_owned(),
-			stdout,
-			stderr,
-		});
+			cwd: cwd.display().to_string(),
+			code: exit_code,
+			status: format_exit_status(exit_code),
+			details,
+		}),
+	}
+}
+
+fn invocation_output(
+	display_command: &str,
+	stdout: String,
+	stderr: String,
+	state: ResultState,
+	exit_code: Option<i32>,
+) -> InvocationOutput {
+	InvocationOutput {
+		command: display_command.to_owned(),
+		stdout,
+		stderr,
+		state,
+		exit_code,
+	}
+}
+
+fn classify_exit_status(status: ExitStatus) -> (ResultState, Option<i32>) {
+	let code = status.code();
+	if status.success() {
+		return (ResultState::Success, code);
 	}
 
-	Err(PullhookError::CommandFailed {
-		command: display_command.to_owned(),
-		cwd: cwd.display().to_string(),
-		code: output.status.code().unwrap_or(-1),
-		details: if stderr.trim().is_empty() {
-			if stdout.trim().is_empty() {
-				"no output captured".to_owned()
-			} else {
-				stdout.trim().to_owned()
-			}
+	if code.is_some() {
+		return (ResultState::Failed, code);
+	}
+
+	(ResultState::Interrupted, None)
+}
+
+fn normalize_output(bytes: &[u8]) -> String {
+	String::from_utf8_lossy(bytes).to_string()
+}
+
+fn normalize_failure_details(stdout: &str, stderr: &str, fallback: &str) -> String {
+	if stderr.trim().is_empty() {
+		if stdout.trim().is_empty() {
+			fallback.to_owned()
 		} else {
-			stderr.trim().to_owned()
-		},
-	})
+			stdout.trim().to_owned()
+		}
+	} else {
+		stderr.trim().to_owned()
+	}
+}
+
+fn format_exit_status(code: Option<i32>) -> String {
+	code.map_or_else(
+		|| "no exit code (terminated by signal)".to_owned(),
+		|value| value.to_string(),
+	)
 }

@@ -4,6 +4,8 @@ use std::num::NonZeroUsize;
 
 use clap::Parser;
 
+use crate::output::RenderMode;
+
 /// Pullhook command line arguments.
 #[derive(Debug, Clone, Parser)]
 #[command(name = "pullhook")]
@@ -41,6 +43,10 @@ pub struct Cli {
 	/// Enable debug logging.
 	#[arg(short = 'd', long = "debug", default_value_t = false)]
 	pub debug: bool,
+
+	/// Control non-debug ANSI styling (`auto`, `always`, `never`).
+	#[arg(long = "render", value_name = "mode", value_enum, default_value_t = RenderMode::Auto)]
+	pub render: RenderMode,
 
 	/// Run command once in repo root if any match.
 	#[arg(short = 'o', long = "once", default_value_t = false)]

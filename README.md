@@ -122,6 +122,112 @@ pullhook --pattern "packages/*/package-lock.json" --command "npm install" --jobs
 
 If conflicting lock files are present, `pullhook` errors and asks for explicit `--pattern`/`--command`.
 
+## Output examples (`--render never`)
+
+These examples show deterministic plain output without ANSI styling.
+
+Success:
+
+```text
+Prepare
+pattern: packages/a/package-lock.json
+
+Discovery
+changed: 2
+matched: 1
+
+Tasks
+directory: packages/a
+command: npm install
+[ok] success
+
+Summary
+matched files: 1
+task dirs: 1
+passed: 1
+failed: 0
+interrupted: 0
+[ok] all tasks passed
+```
+
+No change:
+
+```text
+Prepare
+pattern: **/*.md
+
+Discovery
+changed: 2
+matched: 0
+
+Result
+[warn] no matching files found
+```
+
+Dry run:
+
+```text
+Prepare
+pattern: packages/*/package-lock.json
+
+Discovery
+changed: 2
+matched: 2
+
+Dry Run
+directory: packages/a
+command: npm install
+[warn] planned only
+directory: packages/b
+command: npm install
+[warn] planned only
+
+Summary
+matched files: 2
+task dirs: 2
+planned commands: 2
+executed commands: 0
+[warn] dry run only: 2 command(s) planned, 0 executed
+```
+
+Failure:
+
+`stdout`
+
+```text
+Prepare
+pattern: packages/a/package-lock.json
+
+Discovery
+changed: 2
+matched: 1
+
+Tasks
+directory: packages/a
+command: sh -c 'echo fail-stdout; echo fail-stderr >&2; exit 7'
+fail-stdout
+[error] failed
+
+Summary
+matched files: 1
+task dirs: 1
+passed: 0
+failed: 1
+interrupted: 0
+[error] 1 task(s) failed
+```
+
+`stderr`
+
+```text
+fail-stderr
+[error] task failed
+cwd: packages/a
+command: sh -c 'echo fail-stdout; echo fail-stderr >&2; exit 7'
+status: exit code 7
+error: 1 task(s) failed
+```
+
 ## Development
 
 Run tests:
