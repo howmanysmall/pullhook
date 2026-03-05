@@ -11,7 +11,7 @@ It keeps the familiar `git-pull-run` workflow, with additive improvements:
 - safer command execution (no shell unless `--shell`)
 - bounded parallel jobs (`--jobs`)
 - dry-run previews (`--dry-run`)
-- per-directory dedupe (`--unique-cwd`)
+- per-directory de-dupe (`--unique-cwd`)
 
 ## Install
 
@@ -72,7 +72,7 @@ Options:
       --jobs <n>            Max parallel jobs (default: min(CPUs, 8))
       --shell               Run --command through shell
       --dry-run             Print planned commands and exit
-      --unique-cwd          Dedupe per-match working directories
+      --unique-cwd          De-dupe per-match working directories
   -h, --help                Print help
   -V, --version             Print version
 ```
@@ -233,7 +233,6 @@ error: 1 task(s) failed
 Run tests:
 
 ```bash
-cargo test
 cargo nextest run
 ```
 
