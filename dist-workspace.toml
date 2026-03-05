@@ -28,3 +28,9 @@ install-path = "CARGO_HOME"
 publish-jobs = ["homebrew"]
 # Whether to install an updater program
 install-updater = true
+# Generate and dist a source tarball
+source-tarball = false
+# Checksums to generate for each App
+checksum = "false"
+# Which actions to run on pull requests
+pr-run-mode = "skip"
