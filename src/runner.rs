@@ -155,21 +155,26 @@ pub fn run_tasks(
 	shell: bool,
 	debug_enabled: bool,
 ) -> Result<Vec<TaskResult>, PullhookError> {
+	if tasks.len() <= 1 || jobs <= 1 {
+		return Ok(tasks
+			.iter()
+			.map(|cwd| run_task(cwd, invocations, shell, debug_enabled))
+			.collect());
+	}
+
 	let pool = rayon::ThreadPoolBuilder::new()
 		.num_threads(jobs)
 		.build()
 		.map_err(|error| PullhookError::Message(error.to_string()))?;
 
-	let mut indexed = pool.install(|| {
+	let results = pool.install(|| {
 		tasks
 			.par_iter()
-			.enumerate()
-			.map(|(index, cwd)| (index, run_task(cwd, invocations, shell, debug_enabled)))
+			.map(|cwd| run_task(cwd, invocations, shell, debug_enabled))
 			.collect::<Vec<_>>()
 	});
 
-	indexed.sort_by_key(|(index, _)| *index);
-	Ok(indexed.into_iter().map(|(_, result)| result).collect())
+	Ok(results)
 }
 
 /// Compute a display cwd relative to repository root.

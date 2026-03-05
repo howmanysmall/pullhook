@@ -13,27 +13,35 @@ pub fn repo_root(debug_enabled: bool) -> Result<PathBuf, PullhookError> {
 	Ok(PathBuf::from(output.trim()))
 }
 
-/// Resolve the base commit for diffing.
-pub fn resolve_base(explicit: Option<&str>, debug_enabled: bool) -> Result<String, PullhookError> {
+/// Resolve base and return changed files in one pass.
+pub fn resolve_base_and_changed_files(
+	explicit: Option<&str>,
+	debug_enabled: bool,
+) -> Result<(String, Vec<PathBuf>), PullhookError> {
 	if let Some(base) = explicit {
-		if revision_exists(base, debug_enabled)? {
-			if debug_enabled {
-				debug!(%base, "using explicit base revision");
-			}
-			return Ok(base.to_owned());
+		if !revision_exists(base, debug_enabled)? {
+			return Err(PullhookError::Message(format!(
+				"base revision `{base}` could not be resolved"
+			)));
 		}
 
-		return Err(PullhookError::Message(format!(
-			"base revision `{base}` could not be resolved"
-		)));
+		let files = changed_files(base, debug_enabled)?;
+		if debug_enabled {
+			debug!(%base, "using explicit base revision");
+		}
+		return Ok((base.to_owned(), files));
 	}
 
 	for candidate in ["HEAD@{1}", "ORIG_HEAD", "HEAD~1"] {
-		if revision_exists(candidate, debug_enabled)? {
-			if debug_enabled {
-				debug!(base = candidate, "selected diff base");
+		match changed_files(candidate, debug_enabled) {
+			Ok(files) => {
+				if debug_enabled {
+					debug!(base = candidate, "selected diff base");
+				}
+				return Ok((candidate.to_owned(), files));
 			}
-			return Ok(candidate.to_owned());
+			Err(PullhookError::GitCommand { .. }) => {}
+			Err(error) => return Err(error),
 		}
 	}
 

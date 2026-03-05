@@ -144,11 +144,12 @@ fn resolve_run_config(cli: &Cli, repo_root: &std::path::Path) -> Result<RunConfi
 }
 
 fn collect_matches(cli: &Cli, pattern: &str) -> Result<MatchSet> {
-	let base = git::resolve_base(cli.base.as_deref(), cli.debug).context("failed to resolve diff base")?;
-	let changed_files = git::changed_files(&base, cli.debug).context("failed to read changed files")?;
+	let (base, changed_files) = git::resolve_base_and_changed_files(cli.base.as_deref(), cli.debug)
+		.context("failed to resolve diff base or read changed files")?;
 	let changed_count = changed_files.len();
 
 	if cli.debug {
+		debug!(%base, "resolved diff base");
 		debug!(count = changed_count, "loaded changed files");
 		for path in &changed_files {
 			debug!(changed = %path.display(), "changed file");

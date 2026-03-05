@@ -36,6 +36,12 @@ cargo deny check
 cargo shear --check
 ```
 
+### Lint and Quality (always run before finishing a task)
+
+```bash
+bash ./scripts/pre-commit.sh
+```
+
 ### Benchmarks
 
 ```bash
