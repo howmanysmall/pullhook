@@ -123,11 +123,12 @@ pub struct TaskBlock<'a> {
 	pub outcome: TaskOutcome,
 }
 
-/// Unified non-debug renderer.
+/// Unified renderer.
 #[derive(Debug, Clone)]
 pub struct Renderer {
 	tokens: StyleTokens,
 	section_started: Cell<bool>,
+	compact: bool,
 }
 
 impl Renderer {
@@ -135,7 +136,8 @@ impl Renderer {
 	#[must_use]
 	pub fn new(requested_mode: RenderMode) -> Self {
 		let effective_mode = requested_mode.effective();
-		let tokens = if effective_mode.use_style() {
+		let styled = effective_mode.use_style();
+		let tokens = if styled {
 			StyleTokens::styled()
 		} else {
 			StyleTokens::plain()
@@ -144,17 +146,29 @@ impl Renderer {
 		Self {
 			tokens,
 			section_started: Cell::new(false),
+			compact: styled,
 		}
 	}
 
 	/// Render the prepare stage.
 	pub fn render_prepare_stage(&self, pattern: &str) {
+		if self.compact {
+			let _ = pattern;
+			println!("✔ pullhook ready");
+			return;
+		}
+
 		self.start_section("Prepare");
 		self.print_key_value("pattern", pattern);
 	}
 
 	/// Render changed-file discovery counters.
 	pub fn render_discovery_stage(&self, changed_files: usize, matched_files: usize) {
+		if self.compact {
+			let _ = (changed_files, matched_files);
+			return;
+		}
+
 		self.start_section("Discovery");
 		self.print_key_value("changed", changed_files);
 		self.print_key_value("matched", matched_files);
@@ -162,12 +176,22 @@ impl Renderer {
 
 	/// Render an optional user message stage.
 	pub fn render_message_stage(&self, message: &str) {
+		if self.compact {
+			println!("  › {message}");
+			return;
+		}
+
 		self.start_section("Message");
 		self.print_key_value("message", message);
 	}
 
 	/// Render no-match completion stage.
-	pub fn render_no_match_stage(&self) {
+	pub fn render_no_match_stage(&self, pattern: &str, changed_files: usize, matched_files: usize) {
+		if self.compact {
+			println!("  › No relevant changes for {pattern} (changed: {changed_files}, matched: {matched_files})");
+			return;
+		}
+
 		self.start_section("Result");
 		println!("{} no matching files found", self.tokens.warn_badge);
 	}

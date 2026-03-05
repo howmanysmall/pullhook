@@ -196,7 +196,23 @@ Informational (PR-only, non-blocking):
 
 ## Release
 
-Releases are managed by `cargo-dist` via `dist-workspace.toml` and triggered on `v*.*.*` tags.
+Releases are managed by `cargo-release` for versioning and `cargo-dist` for distribution.
+See [RELEASE.md](./RELEASE.md) for release workflow details.
+
+Install `cargo-release` to automate releases:
+
+```bash
+cargo install cargo-release
+```
+
+Run a release:
+
+```bash
+# Update CHANGELOG.md first, then:
+cargo release 0.2.0
+# or cargo release minor
+```
+
 Artifacts are published to GitHub Releases, Homebrew (`howmanysmall/pullhook`), npm (`@pobammer/pullhook`),
 and shell/powershell installers.
 

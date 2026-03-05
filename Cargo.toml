@@ -7,6 +7,15 @@ homepage = "https://github.com/howmanysmall/pullhook"
 repository = "https://github.com/howmanysmall/pullhook"
 license = "MIT"
 
+# Configuration for cargo-release
+[workspace.metadata.release]
+publish = false
+allow-branch = ["main"]
+verify = true
+sign-commit = false
+sign-tag = false
+pre-release-hook = ["./scripts/pre-commit.sh"]
+
 [dependencies]
 anyhow = "1.0.100"
 clap = { version = "4.5.53", features = ["derive"] }

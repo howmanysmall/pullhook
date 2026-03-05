@@ -57,7 +57,7 @@ fn run(cli: &Cli) -> Result<()> {
 	renderer.render_discovery_stage(changed_count, matched_files.len());
 
 	if matched_files.is_empty() {
-		renderer.render_no_match_stage();
+		renderer.render_no_match_stage(&run_config.pattern, changed_count, matched_files.len());
 		return Ok(());
 	}
 

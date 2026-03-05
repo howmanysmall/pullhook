@@ -8,3 +8,5 @@ cargo clippy --all-targets -- -D warnings
 cargo audit --quiet
 cargo deny check
 cargo shear
+
+exit 0
