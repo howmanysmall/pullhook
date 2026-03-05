@@ -23,6 +23,7 @@ struct RunConfig {
 	command: Option<String>,
 	script: Option<String>,
 	once: bool,
+	install_matchers: Option<Vec<String>>,
 }
 
 #[derive(Debug)]
@@ -44,7 +45,7 @@ fn main() {
 fn run(cli: &Cli) -> Result<()> {
 	let renderer = Renderer::new(cli.render);
 	let non_debug_output = !cli.debug;
-	let repo_root = git::repo_root(cli.debug).context("failed to resolve repository root")?;
+	let repo_root = resolve_repo_root(cli.debug)?;
 	let run_config = resolve_run_config(cli, &repo_root)?;
 
 	if non_debug_output {
@@ -54,7 +55,7 @@ fn run(cli: &Cli) -> Result<()> {
 	let MatchSet {
 		changed_count,
 		matched_files,
-	} = collect_matches(cli, &run_config.pattern)?;
+	} = collect_matches(cli, &run_config)?;
 
 	if non_debug_output {
 		renderer.render_discovery_stage(changed_count, matched_files.len());
@@ -117,13 +118,16 @@ fn resolve_run_config(cli: &Cli, repo_root: &std::path::Path) -> Result<RunConfi
 	let mut command = cli.command.clone();
 	let script = cli.script.clone();
 	let mut once = cli.effective_once();
+	let mut install_matchers = None;
 
 	if cli.install {
 		let package_manager =
 			detect_package_manager(repo_root).context("failed to detect package manager for --install")?;
-		package_manager.install_pattern().clone_into(&mut pattern);
+		let install_pattern = package_manager.install_pattern();
+		install_pattern.clone_into(&mut pattern);
 		command = Some(package_manager.install_command());
 		once = true;
+		install_matchers = Some(parse_install_matchers(install_pattern));
 
 		if cli.debug {
 			debug!(
@@ -140,10 +144,25 @@ fn resolve_run_config(cli: &Cli, repo_root: &std::path::Path) -> Result<RunConfi
 		command,
 		script,
 		once,
+		install_matchers,
 	})
 }
 
-fn collect_matches(cli: &Cli, pattern: &str) -> Result<MatchSet> {
+fn parse_install_matchers(pattern: &str) -> Vec<String> {
+	const PREFIX: &str = "+(";
+
+	if let Some(inner) = pattern.strip_prefix(PREFIX).and_then(|value| value.strip_suffix(')')) {
+		return inner
+			.split('|')
+			.filter(|part| !part.is_empty())
+			.map(ToOwned::to_owned)
+			.collect();
+	}
+
+	vec![pattern.to_owned()]
+}
+
+fn collect_matches(cli: &Cli, run_config: &RunConfig) -> Result<MatchSet> {
 	let (base, changed_files) = git::resolve_base_and_changed_files(cli.base.as_deref(), cli.debug)
 		.context("failed to resolve diff base or read changed files")?;
 	let changed_count = changed_files.len();
@@ -156,11 +175,22 @@ fn collect_matches(cli: &Cli, pattern: &str) -> Result<MatchSet> {
 		}
 	}
 
-	let matcher = matcher::compile(pattern).context("failed to compile pattern")?;
-	let matched_files: Vec<_> = changed_files
-		.into_iter()
-		.filter(|path| matcher.is_match(path))
-		.collect();
+	let matched_files: Vec<_> = if let Some(install_matchers) = &run_config.install_matchers {
+		changed_files
+			.into_iter()
+			.filter(|path| {
+				path.file_name()
+					.and_then(std::ffi::OsStr::to_str)
+					.is_some_and(|name| install_matchers.iter().any(|candidate| candidate == name))
+			})
+			.collect()
+	} else {
+		let matcher = matcher::compile(&run_config.pattern).context("failed to compile pattern")?;
+		changed_files
+			.into_iter()
+			.filter(|path| matcher.is_match(path))
+			.collect()
+	};
 
 	if cli.debug {
 		debug!(count = matched_files.len(), "matched changed files");
@@ -173,6 +203,18 @@ fn collect_matches(cli: &Cli, pattern: &str) -> Result<MatchSet> {
 		changed_count,
 		matched_files,
 	})
+}
+
+fn resolve_repo_root(debug_enabled: bool) -> Result<std::path::PathBuf> {
+	let cwd = std::env::current_dir().context("failed to read current working directory")?;
+	if cwd.join(".git").exists() {
+		if debug_enabled {
+			debug!(cwd = %cwd.display(), "using current working directory as repository root");
+		}
+		return Ok(cwd);
+	}
+
+	git::repo_root(debug_enabled).context("failed to resolve repository root")
 }
 
 fn render_message(renderer: &Renderer, non_debug_output: bool, message: &str) {
@@ -322,6 +364,10 @@ fn print_dry_run(
 }
 
 fn init_tracing(debug_enabled: bool) {
+	if !debug_enabled && std::env::var_os("RUST_LOG").is_none() {
+		return;
+	}
+
 	let fallback = if debug_enabled { "debug" } else { "error" };
 	let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(fallback));
 
