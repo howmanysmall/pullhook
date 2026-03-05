@@ -139,6 +139,7 @@ fn run_pullhook(repo_root: &Path, args: &[&str]) -> std::process::Output {
 	ProcessCommand::new(assert_cmd::cargo::cargo_bin!("pullhook"))
 		.current_dir(repo_root)
 		.env("RUST_LOG", "debug")
+		.env("PULLHOOK_RENDER_MODE", "never")
 		.args(args)
 		.output()
 		.expect("run pullhook command")

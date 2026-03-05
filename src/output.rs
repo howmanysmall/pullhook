@@ -42,11 +42,40 @@ impl RenderMode {
 	#[must_use]
 	fn use_style(self) -> bool {
 		match self {
-			Self::Auto => io::stdout().is_terminal() && io::stderr().is_terminal(),
+			Self::Auto => {
+				if env::var_os("NO_COLOR").is_some() || env_var_is_zero("CLICOLOR") {
+					return false;
+				}
+				if env_var_is_set_and_non_zero("CLICOLOR_FORCE") {
+					return true;
+				}
+				if env::var_os("TERM").is_some_and(|value| value == "dumb") {
+					return false;
+				}
+
+				io::stdout().is_terminal() || io::stderr().is_terminal()
+			}
 			Self::Always => true,
 			Self::Never => false,
 		}
 	}
+
+	#[must_use]
+	fn use_compact_layout(self) -> bool {
+		match self {
+			Self::Auto => io::stdout().is_terminal(),
+			Self::Always => true,
+			Self::Never => false,
+		}
+	}
+}
+
+fn env_var_is_zero(name: &str) -> bool {
+	env::var_os(name).is_some_and(|value| value.to_string_lossy() == "0")
+}
+
+fn env_var_is_set_and_non_zero(name: &str) -> bool {
+	env::var_os(name).is_some_and(|value| value.to_string_lossy() != "0")
 }
 
 /// Deterministic summary payload for the final stage.
@@ -137,6 +166,7 @@ impl Renderer {
 	pub fn new(requested_mode: RenderMode) -> Self {
 		let effective_mode = requested_mode.effective();
 		let styled = effective_mode.use_style();
+		let compact = effective_mode.use_compact_layout();
 		let tokens = if styled {
 			StyleTokens::styled()
 		} else {
@@ -146,7 +176,7 @@ impl Renderer {
 		Self {
 			tokens,
 			section_started: Cell::new(false),
-			compact: styled,
+			compact,
 		}
 	}
 
@@ -154,7 +184,14 @@ impl Renderer {
 	pub fn render_prepare_stage(&self, pattern: &str) {
 		if self.compact {
 			let _ = pattern;
-			println!("✔ pullhook ready");
+			println!(
+				"{}{}{} {}pullhook{} ready",
+				self.tokens.success_prefix,
+				self.tokens.success_symbol,
+				self.tokens.success_suffix,
+				self.tokens.bold_prefix,
+				self.tokens.bold_suffix
+			);
 			return;
 		}
 
@@ -165,7 +202,21 @@ impl Renderer {
 	/// Render changed-file discovery counters.
 	pub fn render_discovery_stage(&self, changed_files: usize, matched_files: usize) {
 		if self.compact {
-			let _ = (changed_files, matched_files);
+			if matched_files > 0 {
+				println!(
+					"  {}{}{} Found {}{}{} relevant change(s) {}(changed: {}, matched: {}){}",
+					self.tokens.info_prefix,
+					self.tokens.info_symbol,
+					self.tokens.info_suffix,
+					self.tokens.bold_prefix,
+					matched_files,
+					self.tokens.bold_suffix,
+					self.tokens.dim_prefix,
+					changed_files,
+					matched_files,
+					self.tokens.dim_suffix
+				);
+			}
 			return;
 		}
 
@@ -177,7 +228,15 @@ impl Renderer {
 	/// Render an optional user message stage.
 	pub fn render_message_stage(&self, message: &str) {
 		if self.compact {
-			println!("  › {message}");
+			println!(
+				"  {}{}{} {}{}{}",
+				self.tokens.info_prefix,
+				self.tokens.info_symbol,
+				self.tokens.info_suffix,
+				self.tokens.info_prefix,
+				message,
+				self.tokens.info_suffix
+			);
 			return;
 		}
 
@@ -188,7 +247,19 @@ impl Renderer {
 	/// Render no-match completion stage.
 	pub fn render_no_match_stage(&self, pattern: &str, changed_files: usize, matched_files: usize) {
 		if self.compact {
-			println!("  › No relevant changes for {pattern} (changed: {changed_files}, matched: {matched_files})");
+			println!(
+				"  {}{}{} No relevant changes for {}{}{} {}(changed: {}, matched: {}){}",
+				self.tokens.info_prefix,
+				self.tokens.info_symbol,
+				self.tokens.info_suffix,
+				self.tokens.bold_prefix,
+				pattern,
+				self.tokens.bold_suffix,
+				self.tokens.dim_prefix,
+				changed_files,
+				matched_files,
+				self.tokens.dim_suffix
+			);
 			return;
 		}
 
@@ -198,11 +269,33 @@ impl Renderer {
 
 	/// Render the dry-run stage header.
 	pub fn render_dry_run_stage(&self) {
+		if self.compact {
+			println!(
+				"  {}{}{} Dry run mode",
+				self.tokens.warn_prefix, self.tokens.warn_symbol, self.tokens.warn_suffix
+			);
+			return;
+		}
+
 		self.start_section("Dry Run");
 	}
 
 	/// Render one dry-run command block.
 	pub fn render_dry_run_block(&self, relative_cwd: &str, command: &str) {
+		if self.compact {
+			println!(
+				"  {}{}{} {}{}{}",
+				self.tokens.info_prefix,
+				self.tokens.info_symbol,
+				self.tokens.info_suffix,
+				self.tokens.bold_prefix,
+				relative_cwd,
+				self.tokens.bold_suffix
+			);
+			println!("    {}{}{}", self.tokens.dim_prefix, command, self.tokens.dim_suffix);
+			return;
+		}
+
 		self.print_directory(relative_cwd);
 		self.print_command(command);
 		println!("{} planned only", self.tokens.warn_badge);
@@ -210,11 +303,51 @@ impl Renderer {
 
 	/// Render task stage header.
 	pub fn render_task_stage(&self) {
+		if self.compact {
+			return;
+		}
+
 		self.start_section("Tasks");
 	}
 
 	/// Render one task block.
 	pub fn render_task_block(&self, block: TaskBlock<'_>) {
+		if self.compact {
+			let (prefix, symbol, suffix) = match block.outcome {
+				TaskOutcome::Success => (
+					self.tokens.success_prefix,
+					self.tokens.success_symbol,
+					self.tokens.success_suffix,
+				),
+				TaskOutcome::Failed | TaskOutcome::SpawnError => (
+					self.tokens.error_prefix,
+					self.tokens.error_symbol,
+					self.tokens.error_suffix,
+				),
+				TaskOutcome::Interrupted => (
+					self.tokens.warn_prefix,
+					self.tokens.warn_symbol,
+					self.tokens.warn_suffix,
+				),
+			};
+
+			println!(
+				"  {prefix}{symbol}{suffix} {}{}{}",
+				self.tokens.bold_prefix, block.relative_cwd, self.tokens.bold_suffix
+			);
+
+			for command in block.commands {
+				println!(
+					"    {}{}{}",
+					self.tokens.dim_prefix, command.command, self.tokens.dim_suffix
+				);
+				Self::print_indented_stdout(command.stdout);
+				Self::print_indented_stderr(command.stderr);
+			}
+
+			return;
+		}
+
 		self.print_directory(block.relative_cwd);
 
 		for command in block.commands {
@@ -239,6 +372,47 @@ impl Renderer {
 
 	/// Render final summary stage.
 	pub fn render_summary_stage(&self, summary: Summary) {
+		if self.compact {
+			if summary.task_dirs == 0 {
+				return;
+			}
+
+			println!();
+			if summary.failed == 0 && summary.interrupted == 0 {
+				println!(
+					"  {}{}{} {}{}{} task(s) completed successfully",
+					self.tokens.success_prefix,
+					self.tokens.success_symbol,
+					self.tokens.success_suffix,
+					self.tokens.success_prefix,
+					summary.passed,
+					self.tokens.success_suffix
+				);
+			} else if summary.failed == 0 {
+				println!(
+					"  {}{}{} {}{}{} task(s) interrupted",
+					self.tokens.warn_prefix,
+					self.tokens.warn_symbol,
+					self.tokens.warn_suffix,
+					self.tokens.warn_prefix,
+					summary.interrupted,
+					self.tokens.warn_suffix
+				);
+			} else {
+				println!(
+					"  {}{}{} {}{}{} task(s) failed, {} interrupted",
+					self.tokens.error_prefix,
+					self.tokens.error_symbol,
+					self.tokens.error_suffix,
+					self.tokens.error_prefix,
+					summary.failed,
+					self.tokens.error_suffix,
+					summary.interrupted
+				);
+			}
+			return;
+		}
+
 		self.start_section("Summary");
 		self.print_key_value("matched files", summary.matched_files);
 		self.print_key_value("task dirs", summary.task_dirs);
@@ -262,6 +436,20 @@ impl Renderer {
 
 	/// Render final dry-run summary stage.
 	pub fn render_dry_run_summary_stage(&self, summary: DryRunSummary) {
+		if self.compact {
+			println!(
+				"\n  {}{}{} {}{}{} planned command(s) across {} task(s)",
+				self.tokens.warn_prefix,
+				self.tokens.warn_symbol,
+				self.tokens.warn_suffix,
+				self.tokens.warn_prefix,
+				summary.planned_commands,
+				self.tokens.warn_suffix,
+				summary.task_dirs
+			);
+			return;
+		}
+
 		self.start_section("Summary");
 		self.print_key_value("matched files", summary.matched_files);
 		self.print_key_value("task dirs", summary.task_dirs);
@@ -296,6 +484,26 @@ impl Renderer {
 				"spawn error".to_owned(),
 			),
 		};
+
+		if self.compact {
+			eprintln!(
+				"  {}{}{} {headline}",
+				self.tokens.error_prefix, self.tokens.error_symbol, self.tokens.error_suffix
+			);
+			eprintln!(
+				"    {}cwd:{} {}",
+				self.tokens.dim_prefix, self.tokens.dim_suffix, report.relative_cwd
+			);
+			eprintln!(
+				"    {}command:{} {}",
+				self.tokens.dim_prefix, self.tokens.dim_suffix, report.command
+			);
+			eprintln!(
+				"    {}status:{} {status}",
+				self.tokens.dim_prefix, self.tokens.dim_suffix
+			);
+			return;
+		}
 
 		eprintln!("{badge} {headline}");
 		eprintln!(
@@ -339,6 +547,18 @@ impl Renderer {
 			self.tokens.cmd_label_prefix, self.tokens.cmd_label_suffix
 		);
 	}
+
+	fn print_indented_stdout(text: &str) {
+		for line in text.lines() {
+			println!("    │ {line}");
+		}
+	}
+
+	fn print_indented_stderr(text: &str) {
+		for line in text.lines() {
+			eprintln!("    │ {line}");
+		}
+	}
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -354,6 +574,22 @@ struct StyleTokens {
 	success_badge: &'static str,
 	warn_badge: &'static str,
 	error_badge: &'static str,
+	success_symbol: &'static str,
+	warn_symbol: &'static str,
+	error_symbol: &'static str,
+	info_symbol: &'static str,
+	bold_prefix: &'static str,
+	bold_suffix: &'static str,
+	dim_prefix: &'static str,
+	dim_suffix: &'static str,
+	success_prefix: &'static str,
+	success_suffix: &'static str,
+	warn_prefix: &'static str,
+	warn_suffix: &'static str,
+	error_prefix: &'static str,
+	error_suffix: &'static str,
+	info_prefix: &'static str,
+	info_suffix: &'static str,
 }
 
 impl StyleTokens {
@@ -370,6 +606,22 @@ impl StyleTokens {
 			success_badge: "[ok]",
 			warn_badge: "[warn]",
 			error_badge: "[error]",
+			success_symbol: "[ok]",
+			warn_symbol: "[warn]",
+			error_symbol: "[error]",
+			info_symbol: ">",
+			bold_prefix: "",
+			bold_suffix: "",
+			dim_prefix: "",
+			dim_suffix: "",
+			success_prefix: "",
+			success_suffix: "",
+			warn_prefix: "",
+			warn_suffix: "",
+			error_prefix: "",
+			error_suffix: "",
+			info_prefix: "",
+			info_suffix: "",
 		}
 	}
 
@@ -386,6 +638,22 @@ impl StyleTokens {
 			success_badge: "\x1b[1;32m[ok]\x1b[0m",
 			warn_badge: "\x1b[1;33m[warn]\x1b[0m",
 			error_badge: "\x1b[1;31m[error]\x1b[0m",
+			success_symbol: "✔",
+			warn_symbol: "⚠",
+			error_symbol: "✖",
+			info_symbol: "›",
+			bold_prefix: "\x1b[1m",
+			bold_suffix: "\x1b[0m",
+			dim_prefix: "\x1b[2m",
+			dim_suffix: "\x1b[0m",
+			success_prefix: "\x1b[1;32m",
+			success_suffix: "\x1b[0m",
+			warn_prefix: "\x1b[1;33m",
+			warn_suffix: "\x1b[0m",
+			error_prefix: "\x1b[1;31m",
+			error_suffix: "\x1b[0m",
+			info_prefix: "\x1b[1;36m",
+			info_suffix: "\x1b[0m",
 		}
 	}
 }
