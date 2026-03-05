@@ -24,7 +24,6 @@ cargo install --path .
 cargo nextest run
 cargo nextest run -E 'test(test_name)'
 cargo nextest run --no-tests=pass
-cargo test
 ```
 
 ### Lint and Quality (run before pushing)

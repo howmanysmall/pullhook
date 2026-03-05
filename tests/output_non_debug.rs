@@ -77,11 +77,11 @@ fn non_debug_single_match_routes_stdout_and_stderr_separately() {
 		"single-match stderr should only contain command stderr"
 	);
 	assert!(
-		!stdout.contains("single-stderr"),
+		count_exact_lines(&stdout, "single-stderr") == 0,
 		"stderr content must not appear in stdout:\n{stdout}"
 	);
 	assert!(
-		!stderr.contains("single-stdout"),
+		count_exact_lines(&stderr, "single-stdout") == 0,
 		"stdout content must not appear in stderr:\n{stderr}"
 	);
 }
@@ -306,7 +306,7 @@ fn non_debug_failure_reports_task_failure_on_stderr() {
 		],
 	);
 	assert!(
-		!stdout.contains("fail-stderr"),
+		count_exact_lines(&stdout, "fail-stderr") == 0,
 		"command stderr must not be routed to stdout:\n{stdout}"
 	);
 }
@@ -530,6 +530,10 @@ fn non_empty_lines(text: &str) -> Vec<&str> {
 
 fn count_occurrences(haystack: &str, needle: &str) -> usize {
 	haystack.match_indices(needle).count()
+}
+
+fn count_exact_lines(haystack: &str, needle: &str) -> usize {
+	haystack.lines().filter(|line| *line == needle).count()
 }
 
 fn assert_in_order(haystack: &str, ordered_fragments: &[&str]) {

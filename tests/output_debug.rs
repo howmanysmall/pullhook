@@ -28,27 +28,27 @@ fn debug_mode_streams_outputs_and_keeps_non_debug_contract_out() {
 	let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
 
 	assert_eq!(
-		count_occurrences(&stdout, "debug-stream-stdout"),
+		count_exact_lines(&stdout, "debug-stream-stdout"),
 		2,
 		"stdout should be streamed once per matched task",
 	);
 	assert_eq!(
-		count_occurrences(&stderr, "debug-stream-stderr"),
+		count_exact_lines(&stderr, "debug-stream-stderr"),
 		2,
 		"stderr should be streamed once per matched task",
 	);
 	assert_eq!(
-		count_occurrences(&stderr, "loaded changed files"),
+		count_occurrences(&stdout, "loaded changed files"),
 		1,
 		"changed-files diagnostic should be printed once",
 	);
 	assert_eq!(
-		count_occurrences(&stderr, "matched changed files"),
+		count_occurrences(&stdout, "matched changed files"),
 		1,
 		"matched-files diagnostic should be printed once",
 	);
 	assert_eq!(
-		count_occurrences(&stderr, "running invocation"),
+		count_occurrences(&stdout, "running invocation"),
 		2,
 		"invocation diagnostic should be printed once per task",
 	);
@@ -79,12 +79,12 @@ fn debug_mode_failure_reports_once_without_renderer_failure_copy() {
 	let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
 
 	assert_eq!(
-		count_occurrences(&stderr, "debug-failure-stderr"),
+		count_exact_lines(&stderr, "debug-failure-stderr"),
 		1,
 		"failing command stderr should remain streamed once",
 	);
 	assert_eq!(
-		count_occurrences(&stderr, "running invocation"),
+		count_occurrences(&stdout, "running invocation"),
 		1,
 		"single --once invocation should emit one invocation diagnostic",
 	);
@@ -131,6 +131,10 @@ fn assert_excludes_non_debug_contract_text(stdout: &str, stderr: &str) {
 
 fn count_occurrences(haystack: &str, needle: &str) -> usize {
 	haystack.match_indices(needle).count()
+}
+
+fn count_exact_lines(haystack: &str, needle: &str) -> usize {
+	haystack.lines().filter(|line| *line == needle).count()
 }
 
 fn run_pullhook(repo_root: &Path, args: &[&str]) -> std::process::Output {

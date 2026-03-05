@@ -1,0 +1,17 @@
+{
+	"mcpServers": {
+		"context7": {
+			"args": ["x", "--bun", "@upstash/context7-mcp"],
+			"command": "bun",
+			"env": {},
+			"type": "stdio"
+		},
+		"gh-grep": {
+			"type": "http",
+			"url": "https://mcp.grep.app"
+		},
+		"npm-registry": {
+			"command": "npm-registry-mcp"
+		}
+	}
+}
