@@ -4,6 +4,16 @@
 .DS_Store
 
 .agents/skills/rust-best-practices
+.agents/skills/llm-council
+.agents/skills/markdown-url
+.agents/skills/parallel-task
+.agents/skills/parallel-task-spark
+.agents/skills/plan-harder
+.agents/skills/planner
+.agents/skills/super-swarm-spark
+.agents/skills/swarm-planner
+.agents/skills/tdd-test-writer
+
 /opensrc/
 
 *.o

@@ -1,10 +1,55 @@
 {
+  "version": 1,
   "skills": {
+    "llm-council": {
+      "source": "am-will/codex-skills",
+      "sourceType": "github",
+      "computedHash": "ac408ec68f72afce439aac6dc45d0f35394ef6b17bd08ce5f35843909eadb51c"
+    },
+    "markdown-url": {
+      "source": "am-will/codex-skills",
+      "sourceType": "github",
+      "computedHash": "4ec19a7bf6c8e3f4889f4d13bd46f5d346984817e5029a2c4da305265bddbd99"
+    },
+    "parallel-task": {
+      "source": "am-will/codex-skills",
+      "sourceType": "github",
+      "computedHash": "9acf7923dd26d3a29961b1da124df9178870961bd90d0a78e792d6539408e0a7"
+    },
+    "parallel-task-spark": {
+      "source": "am-will/codex-skills",
+      "sourceType": "github",
+      "computedHash": "cbe969ebccf79e52357d7023b58e8f4875b089ffa40f78d2682ccb62c896e63a"
+    },
+    "plan-harder": {
+      "source": "am-will/codex-skills",
+      "sourceType": "github",
+      "computedHash": "a5a22b3a135f349474a4a482992c264e5c6f8bdaa614517522420d334a810a12"
+    },
+    "planner": {
+      "source": "am-will/codex-skills",
+      "sourceType": "github",
+      "computedHash": "ab1d97975dcf20cebe27960f1b0abd7e2db16fa31261aebe29342eca33076f91"
+    },
     "rust-best-practices": {
       "source": "apollographql/skills",
       "sourceType": "github",
       "computedHash": "ba11ae333ab71e30dd83de34d5f5cfa23ed3ee782618215f7fb69b749d63762d"
+    },
+    "super-swarm-spark": {
+      "source": "am-will/codex-skills",
+      "sourceType": "github",
+      "computedHash": "23ee432abb842069cf3db0c9f6ee35fb90284776dcb3d2deb0664c73c106b9ab"
+    },
+    "swarm-planner": {
+      "source": "am-will/codex-skills",
+      "sourceType": "github",
+      "computedHash": "0b342edf24f96716adbef172d953caffbd05ea3a461f257d2369f53fd8374a83"
+    },
+    "tdd-test-writer": {
+      "source": "am-will/codex-skills",
+      "sourceType": "github",
+      "computedHash": "d12b7bec698ceb6491f81682fb9aa2e56b5376c5741fae4022d6b413edccf181"
     }
-  },
-  "version": 1
+  }
 }
