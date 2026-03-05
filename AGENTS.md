@@ -33,7 +33,7 @@ cargo fmt --all --check
 cargo clippy --all-targets -- -D warnings
 cargo audit
 cargo deny check
-cargo shear --check
+cargo shear
 ```
 
 ### Lint and Quality (always run before finishing a task)
@@ -132,8 +132,7 @@ Two-phase detection in `pm.rs`:
 - Rust is pinned to `1.93.1` via `rust-toolchain.toml` (edition 2021).
 - `sccache` is configured as the rustc wrapper in `.cargo/config.toml`.
 - Incremental compilation is disabled (sccache is the primary cache strategy).
-- `mold` linker is used on non-macOS targets. macOS uses the default linker.
-- Override linker config if needed with `RUSTFLAGS="" cargo build`.
+- No custom linker is configured by default.
 
 ### Commit Style
 

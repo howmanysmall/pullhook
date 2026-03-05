@@ -20,10 +20,6 @@ strip = true
 # Profile for cargo-dist releases (inherits from release in Cargo.toml)
 # Additional optimization already defined in Cargo.toml
 
-[target.'cfg(not(target_os = "macos"))']
-# Use mold linker when available on non-macOS targets (macOS clang rejects -fuse-ld=mold)
-rustflags = ["-C", "link-arg=-fuse-ld=mold"]
-
 [net]
 # Prefer vendored OpenSSL for consistent builds
 git-fetch-with-cli = false

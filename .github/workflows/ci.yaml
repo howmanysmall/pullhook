@@ -85,8 +85,8 @@ jobs:
             - name: Install cargo-binstall
               uses: cargo-bins/cargo-binstall@main
             - name: Install cargo-deny
-              run: cargo binstall --no-confirm cargo-deny@0.19.0
-            - run: cargo deny check
+              run: cargo binstall --no-confirm --force cargo-deny@0.19.0
+            - run: ${CARGO_HOME:-$HOME/.cargo}/bin/cargo-deny check
 
     # Dead code detection
     shear:
@@ -103,7 +103,7 @@ jobs:
               uses: cargo-bins/cargo-binstall@main
             - name: Install cargo-shear
               run: cargo binstall --no-confirm cargo-shear@1.9.1
-            - run: cargo shear --check
+            - run: cargo shear
 
     # Secret scanning
     gitleaks:

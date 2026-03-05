@@ -243,7 +243,7 @@ cargo fmt --all --check
 cargo clippy --all-targets -- -D warnings
 cargo audit
 cargo deny check
-cargo shear --check
+cargo shear
 ```
 
 ## License
