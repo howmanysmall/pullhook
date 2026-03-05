@@ -153,6 +153,13 @@ Triggered on version tags (`v*.*.*`). Builds and publishes multi-platform binari
 | `lefthook.yaml` | Git hook configuration |
 | `Cargo.toml` | Rust lint rules (`clippy::all`, `clippy::pedantic`, `clippy::nursery`) |
 
+`mold` is only configured for non-macOS targets in `.cargo/config.toml` because Apple `clang` does not accept `-fuse-ld=mold`.
+To force a build using local defaults without repository linker overrides, run:
+
+```bash
+RUSTFLAGS="" cargo build
+```
+
 ## Contributing
 
 1. Make sure pre-commit checks pass locally
