@@ -7,7 +7,7 @@ use std::process::Command as ProcessCommand;
 use tempfile::TempDir;
 
 #[test]
-fn debug_mode_streams_outputs_and_keeps_non_debug_contract_out() {
+fn debug_mode_streams_outputs_and_keeps_renderer_output() {
 	let temp = setup_repo_with_merge();
 	let repo_root = temp.path();
 
@@ -53,11 +53,11 @@ fn debug_mode_streams_outputs_and_keeps_non_debug_contract_out() {
 		"invocation diagnostic should be printed once per task",
 	);
 
-	assert_excludes_non_debug_contract_text(&stdout, &stderr);
+	assert_includes_renderer_contract_text(&stdout);
 }
 
 #[test]
-fn debug_mode_failure_reports_once_without_renderer_failure_copy() {
+fn debug_mode_failure_reports_once_with_renderer_failure_copy() {
 	let temp = setup_repo_with_merge();
 	let repo_root = temp.path();
 
@@ -100,32 +100,30 @@ fn debug_mode_failure_reports_once_without_renderer_failure_copy() {
 	);
 
 	assert!(
-		!stderr.contains("cwd:"),
-		"renderer non-debug failure detail labels should not appear in debug mode",
+		stderr.contains("cwd:"),
+		"renderer failure detail labels should appear in debug mode",
 	);
 	assert!(
-		!stderr.contains("status:"),
-		"renderer non-debug failure detail labels should not appear in debug mode",
+		stderr.contains("task failed")
+			|| stderr.contains("task interrupted")
+			|| stderr.contains("task failed to start"),
+		"stderr should include renderer failure report headline for non-success runs",
 	);
 
-	assert_excludes_non_debug_contract_text(&stdout, &stderr);
+	assert_includes_renderer_contract_text(&stdout);
 }
 
-fn assert_excludes_non_debug_contract_text(stdout: &str, stderr: &str) {
-	for marker in ["Prepare", "Discovery", "Tasks", "Summary", "directory:", "command:"] {
+fn assert_includes_renderer_contract_text(stdout: &str) {
+	for marker in ["Prepare", "Discovery", "Summary", "directory:", "command:"] {
 		assert!(
-			!stdout.contains(marker),
-			"stdout should not contain non-debug renderer marker `{marker}`",
-		);
-		assert!(
-			!stderr.contains(marker),
-			"stderr should not contain non-debug renderer marker `{marker}`",
+			stdout.contains(marker),
+			"stdout should contain renderer marker `{marker}` in debug mode",
 		);
 	}
 
 	assert!(
 		!stdout.contains("=== "),
-		"debug mode should not print grouped non-debug task headers",
+		"debug mode should not print grouped legacy task headers",
 	);
 }
 

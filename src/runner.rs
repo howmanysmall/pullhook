@@ -186,33 +186,6 @@ pub fn relative_cwd_label(cwd: &Path, repo_root: &Path) -> String {
 		.map_or_else(|| ".".to_owned(), |path| path.display().to_string())
 }
 
-/// Print grouped outputs for non-debug mode.
-pub fn print_grouped_results(results: &[TaskResult], repo_root: &Path, debug_enabled: bool) {
-	if debug_enabled {
-		return;
-	}
-
-	for result in results {
-		let relative_cwd = relative_cwd_label(&result.cwd, repo_root);
-
-		println!("=== {relative_cwd} ===");
-
-		for output in &result.outputs {
-			println!("$ {}", output.command);
-			if !output.stdout.is_empty() {
-				print!("{}", output.stdout);
-			}
-			if !output.stderr.is_empty() {
-				eprint!("{}", output.stderr);
-			}
-		}
-
-		if let Some(error) = &result.error {
-			eprintln!("error: {error}");
-		}
-	}
-}
-
 fn run_task(cwd: &Path, invocations: &[Invocation], shell: bool, debug_enabled: bool) -> TaskResult {
 	let mut outputs = Vec::new();
 

@@ -44,39 +44,32 @@ fn main() {
 
 fn run(cli: &Cli) -> Result<()> {
 	let renderer = Renderer::new(cli.render);
-	let non_debug_output = !cli.debug;
 	let repo_root = resolve_repo_root(cli.debug)?;
 	let run_config = resolve_run_config(cli, &repo_root)?;
 
-	if non_debug_output {
-		renderer.render_prepare_stage(&run_config.pattern);
-	}
+	renderer.render_prepare_stage(&run_config.pattern);
 
 	let MatchSet {
 		changed_count,
 		matched_files,
 	} = collect_matches(cli, &run_config)?;
 
-	if non_debug_output {
-		renderer.render_discovery_stage(changed_count, matched_files.len());
-	}
+	renderer.render_discovery_stage(changed_count, matched_files.len());
 
 	if matched_files.is_empty() {
-		if non_debug_output {
-			renderer.render_no_match_stage();
-		}
+		renderer.render_no_match_stage();
 		return Ok(());
 	}
 
 	if let Some(message) = &cli.message {
-		render_message(&renderer, non_debug_output, message);
+		render_message(&renderer, message);
 	}
 
 	let invocations = runner::prepare_invocations(run_config.command.as_deref(), run_config.script.as_deref())
 		.context("failed to prepare command invocations")?;
 
 	if invocations.is_empty() {
-		render_empty_summary(&renderer, non_debug_output, matched_files.len());
+		render_empty_summary(&renderer, matched_files.len());
 		return Ok(());
 	}
 
@@ -95,16 +88,12 @@ fn run(cli: &Cli) -> Result<()> {
 	let results = runner::run_tasks(&tasks, &invocations, cli.effective_jobs(), cli.shell, cli.debug)
 		.context("failed to execute tasks")?;
 
-	if non_debug_output {
-		render_task_results(&renderer, &results, &repo_root);
-	} else {
-		runner::print_grouped_results(&results, &repo_root, cli.debug);
-	}
+	render_task_results(&renderer, &results, &repo_root);
 
 	report_debug_errors(cli.debug, &results);
 	let counts = summarize_results(&results);
 	let failure_count = counts.failed + counts.interrupted;
-	render_summary(&renderer, non_debug_output, matched_files.len(), counts);
+	render_summary(&renderer, matched_files.len(), counts);
 
 	if failure_count > 0 {
 		return Err(anyhow!("{failure_count} task(s) failed"));
@@ -217,19 +206,11 @@ fn resolve_repo_root(debug_enabled: bool) -> Result<std::path::PathBuf> {
 	git::repo_root(debug_enabled).context("failed to resolve repository root")
 }
 
-fn render_message(renderer: &Renderer, non_debug_output: bool, message: &str) {
-	if non_debug_output {
-		renderer.render_message_stage(message);
-	} else {
-		println!("{message}");
-	}
+fn render_message(renderer: &Renderer, message: &str) {
+	renderer.render_message_stage(message);
 }
 
-fn render_empty_summary(renderer: &Renderer, non_debug_output: bool, matched_files: usize) {
-	if !non_debug_output {
-		return;
-	}
-
+fn render_empty_summary(renderer: &Renderer, matched_files: usize) {
 	renderer.render_summary_stage(Summary {
 		matched_files,
 		task_dirs: 0,
@@ -289,11 +270,7 @@ fn report_debug_errors(debug_enabled: bool, results: &[runner::TaskResult]) {
 	}
 }
 
-fn render_summary(renderer: &Renderer, non_debug_output: bool, matched_files: usize, counts: TaskCounters) {
-	if !non_debug_output {
-		return;
-	}
-
+fn render_summary(renderer: &Renderer, matched_files: usize, counts: TaskCounters) {
 	renderer.render_summary_stage(Summary {
 		matched_files,
 		task_dirs: counts.task_dirs,
@@ -371,14 +348,10 @@ fn init_tracing(debug_enabled: bool) {
 	let fallback = if debug_enabled { "debug" } else { "error" };
 	let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(fallback));
 
-	let formatter = tracing_subscriber::fmt()
+	tracing_subscriber::fmt()
 		.with_env_filter(filter)
 		.with_target(debug_enabled)
-		.with_level(debug_enabled);
-
-	if debug_enabled {
-		formatter.init();
-	} else {
-		formatter.without_time().init();
-	}
+		.with_level(debug_enabled)
+		.without_time()
+		.init();
 }
