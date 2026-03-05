@@ -1,0 +1,3 @@
+[tools]
+gitleaks = "gitleaks/gitleaks@8.30.0"
+lefthook = "evilmartians/lefthook@2.1.2"

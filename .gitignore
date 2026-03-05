@@ -1,0 +1,13 @@
+/target/
+/test/
+.env*
+.DS_Store
+
+.agents/skills/rust-best-practices
+/opensrc/
+
+*.o
+*.d
+*.rlib
+.rustfmt_errors.txt
+.lefthook/

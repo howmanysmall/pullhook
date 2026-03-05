@@ -1,0 +1,80 @@
+{
+	"$schema": "https://biomejs.dev/schemas/latest/schema.json",
+	"assist": {
+		"actions": {
+			"recommended": true,
+			"source": {
+				"organizeImports": "on",
+				"recommended": true,
+				"useSortedAttributes": "on",
+				"useSortedKeys": "on",
+				"useSortedProperties": "on"
+			}
+		},
+		"enabled": true,
+		"includes": ["**", "!**/{dist,target,do-not-sync-ever,node_modules}/**", "!skills-lock.json", "!bun.lock"]
+	},
+	"formatter": {
+		"attributePosition": "auto",
+		"bracketSameLine": false,
+		"bracketSpacing": true,
+		"enabled": true,
+		"expand": "auto",
+		"formatWithErrors": true,
+		"includes": ["**", "!**/{dist,target,do-not-sync-ever,node_modules}/**", "!skills-lock.json", "!bun.lock"],
+		"indentStyle": "tab",
+		"indentWidth": 4,
+		"lineEnding": "lf",
+		"lineWidth": 120,
+		"trailingNewline": true,
+		"useEditorconfig": false
+	},
+	"javascript": { "linter": { "enabled": false } },
+	"json": {
+		"assist": { "enabled": true },
+		"formatter": {
+			"bracketSpacing": true,
+			"enabled": true,
+			"expand": "auto",
+			"indentStyle": "tab",
+			"indentWidth": 4,
+			"lineWidth": 120,
+			"trailingCommas": "none"
+		},
+		"linter": { "enabled": true }
+	},
+	"linter": { "enabled": false },
+	"overrides": [
+		{
+			"includes": [
+				".vscode/**",
+				".vscode/*.code-snippets",
+				"**/*.code-workspace",
+				"tsconfig.json",
+				"tsconfig*.json",
+				"opencode.jsonc",
+				"*.code-snippets"
+			],
+			"json": {
+				"formatter": {
+					"enabled": true,
+					"indentStyle": "tab",
+					"indentWidth": 4,
+					"lineWidth": 120,
+					"trailingCommas": "all"
+				},
+				"linter": { "enabled": true },
+				"parser": {
+					"allowComments": true,
+					"allowTrailingCommas": true
+				}
+			}
+		}
+	],
+	"vcs": {
+		"clientKind": "git",
+		"defaultBranch": "main",
+		"enabled": true,
+		"useIgnoreFile": false
+	}
+}

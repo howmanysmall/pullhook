@@ -1,0 +1,29 @@
+{
+	"inputs": [
+		{
+			"description": "API key for authentication",
+			"id": "context7-api-key",
+			"password": true,
+			"type": "promptString",
+		},
+	],
+	"servers": {
+		"context7": {
+			"headers": { "CONTEXT7_API_KEY": "${input:context7-api-key}" },
+			"type": "http",
+			"url": "https://mcp.context7.com/mcp",
+		},
+		"gh-grep": {
+			"type": "http",
+			"url": "https://mcp.grep.app",
+		},
+		"github": {
+			"type": "http",
+			"url": "https://api.githubcopilot.com/mcp/",
+		},
+		"package-registry": {
+			"args": ["x", "--bun", "package-registry-mcp"],
+			"command": "bun",
+		},
+	},
+}

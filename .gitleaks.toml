@@ -1,0 +1,12 @@
+# Gitleaks configuration for pullhook
+# https://github.com/gitleaks/gitleaks
+
+title = "pullhook gitleaks config"
+
+[extend]
+useDefault = true
+
+# Add custom allowlist rules here if needed
+# [[allowlist]]
+# description = "Explanation"
+# regexes = ['^safe-pattern$']

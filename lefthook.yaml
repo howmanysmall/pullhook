@@ -1,0 +1,28 @@
+pre-commit:
+  commands:
+    lint-staged:
+      run: bun x --bun lint-staged
+    gitleaks:
+      run: gitleaks detect --source .
+    clippy:
+      run: cargo clippy --all-targets -- -D warnings
+    audit:
+      run: cargo audit --quiet
+    deny:
+      run: cargo deny check
+    shear:
+      run: cargo shear
+  parallel: true
+
+pre-push:
+  commands:
+    test:
+      run: cargo nextest run
+
+commit-msg:
+  commands:
+    commitlint:
+      run: bun run commitlint --edit {1}
+      skip:
+        - merge
+        - rebase
