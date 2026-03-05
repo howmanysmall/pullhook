@@ -17,7 +17,7 @@ pre-commit:
 pre-push:
   commands:
     test:
-      run: cargo nextest run
+      run: cargo nextest run --no-tests=pass
 
 commit-msg:
   commands:
