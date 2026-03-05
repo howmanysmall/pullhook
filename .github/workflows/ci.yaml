@@ -59,6 +59,7 @@ jobs:
               uses: cargo-bins/cargo-binstall@main
             - name: Install cargo-nextest
               run: cargo binstall --no-confirm cargo-nextest@0.9.129
+            - run: cargo test --all-targets --all-features
             - run: cargo nextest run --all-targets --all-features
 
     # Security audit

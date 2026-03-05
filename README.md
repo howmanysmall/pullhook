@@ -3,207 +3,144 @@
 [![CI](https://github.com/howmanysmall/pullhook/actions/workflows/ci.yaml/badge.svg)](https://github.com/howmanysmall/pullhook/actions/workflows/ci.yaml)
 [![Release](https://github.com/howmanysmall/pullhook/actions/workflows/release.yml/badge.svg)](https://github.com/howmanysmall/pullhook/actions/workflows/release.yml)
 
-Run commands when files change after git pull.
+`pullhook` runs commands when files changed by `git pull` match a glob pattern.
 
-## Installation
+It keeps the familiar `git-pull-run` workflow, with additive improvements:
 
-### From Source
+- resilient diff base fallback (`HEAD@{1}` -> `ORIG_HEAD`)
+- safer command execution (no shell unless `--shell`)
+- bounded parallel jobs (`--jobs`)
+- dry-run previews (`--dry-run`)
+- per-directory dedupe (`--unique-cwd`)
+
+## Install
+
+### From source
 
 ```bash
 cargo install --path .
 ```
 
-### Using cargo-binstall
+### cargo-binstall
 
 ```bash
 cargo binstall pullhook
 ```
 
-### Using Homebrew (macOS/Linux)
+### Homebrew
 
 ```bash
 brew install howmanysmall/pullhook/pullhook
 ```
 
-## Development Setup
-
-### Prerequisites
-
-- Rust 1.93.1 (via `rust-toolchain.toml`)
-- [Bun](https://bun.sh) (for JS tooling)
-- [Rokit](https://github.com/rojo-rbx/rokit) (for gitleaks/lefthook)
-
-### Initial Setup
-
-1. Clone the repository:
-
-   ```bash
-   git clone https://github.com/howmanysmall/pullhook.git
-   cd pullhook
-   ```
-
-2. Install Rokit tools:
-
-   ```bash
-   rokit install
-   ```
-
-3. Install Node dependencies:
-
-   ```bash
-   bun install
-   ```
-
-4. Install Git hooks:
-
-   ```bash
-   lefthook install
-   ```
-
-5. Install Rust development tools:
-
-    ```bash
-    cargo binstall cargo-nextest cargo-audit cargo-deny cargo-shear cargo-bloat cargo-insta cargo-zigbuild sccache
-    ```
-
-### Local Development Workflow
-
-#### Running tests
+## Build
 
 ```bash
-cargo test          # standard runner
-cargo nextest run   # faster, better output
+cargo build
+cargo build --release
 ```
 
-#### Code quality checks
+## Hook setup (`post-merge`)
 
-Run these before pushing (or use the hooks):
+Create `.git/hooks/post-merge`:
 
 ```bash
-cargo fmt --all --check     # format check
-cargo clippy --all-targets -- -D warnings  # linting
-cargo audit                 # security audit
-cargo deny check             # dependency policy
-cargo shear --check         # dead code detection
+#!/usr/bin/env sh
+pullhook --install --message "Dependency files changed. Running install..."
 ```
 
-#### Pre-commit hooks
-
-Lefthook runs these automatically before each commit:
-
-- JavaScript/JSON/TOML formatting (Biome, tombi)
-- Markdown linting (rumdl)
-- Secret scanning (gitleaks)
-- Rust formatting check
-- Clippy linting
-- Security audit
-- Dependency policy check
-- Dead code detection
-
-#### Pre-push hooks
-
-`cargo nextest run` runs automatically before pushing.
-
-### CI/CD
-
-#### CI workflow (`.github/workflows/ci.yaml`)
-
-Required checks on Ubuntu (PRs fail if these don't pass):
-
-- Format verification
-- Clippy linting with `-D warnings`
-- Test suite via cargo-nextest
-- Security audit
-- Dependency policy
-- Dead code detection
-- Secret scanning
-- Documentation checks
-
-Informational checks (won't block):
-
-- Binary size analysis (cargo-bloat)
-- Cross-compilation smoke test (cargo-zigbuild)
-
-#### Release workflow (`.github/workflows/release.yml`)
-
-Triggered on version tags (`v*.*.*`). Builds and publishes multi-platform binaries to GitHub Releases, Homebrew, and npm (@pobammer/pullhook).
-
-### Tooling
-
-| Tool | Purpose | Version |
-|------|---------|---------|
-| `sccache` | Rust compilation caching | latest |
-| `cargo-nextest` | Fast test runner | 0.9.129 |
-| `cargo-audit` | Security vulnerability scanner | 0.22.1 |
-| `cargo-deny` | Dependency policy enforcement | 0.19.0 |
-| `cargo-shear` | Unused dependency detection | 1.9.1 |
-| `cargo-bloat` | Binary size analysis | 0.12.1 |
-| `cargo-insta` | Snapshot testing | 1.46.3 |
-| `cargo-zigbuild` | Zig-based cross-compilation | 0.22.1 |
-| `lefthook` | Git hooks manager | 2.1.2 |
-| `gitleaks` | Secret scanner | 8.30.0 |
-
-### Configuration Files
-
-| File | Purpose |
-|------|---------|
-| `rust-toolchain.toml` | Pin Rust version to 1.93.1 |
-| `.cargo/config.toml` | Build optimizations (mold linker, LTO settings) |
-| `deny.toml` | License/advisory/source policy for dependencies |
-| `lefthook.yaml` | Git hook configuration |
-| `Cargo.toml` | Rust lint rules (`clippy::all`, `clippy::pedantic`, `clippy::nursery`) |
-
-`mold` is only configured for non-macOS targets in `.cargo/config.toml` because Apple `clang` does not accept `-fuse-ld=mold`.
-To force a build using local defaults without repository linker overrides, run:
+Then make it executable:
 
 ```bash
-RUSTFLAGS="" cargo build
+chmod +x .git/hooks/post-merge
 ```
 
-## Contributing
+## Usage
 
-1. Make sure pre-commit checks pass locally
-2. Run `cargo nextest run` before pushing
-3. Open a PR; CI validates all checks
-4. Keep test coverage for new features
+```text
+Usage: pullhook [OPTIONS]
+
+Options:
+  -p, --pattern <glob>      Pattern to match files (required unless --install)
+  -c, --command <command>   Command to run for each match
+  -s, --script <script>     Script to run as `npm run-script <script>`
+  -i, --install             Detect package manager and run install (implies --once)
+  -m, --message <message>   Message to print once when matches are found
+  -d, --debug               Enable debug logging
+  -o, --once                Run once in repo root
+      --base <rev>          Override diff base revision
+      --jobs <n>            Max parallel jobs (default: min(CPUs, 8))
+      --shell               Run --command through shell
+      --dry-run             Print planned commands and exit
+      --unique-cwd          Dedupe per-match working directories
+  -h, --help                Print help
+  -V, --version             Print version
+```
+
+## Examples
+
+Run install when `package-lock.json` changed:
+
+```bash
+pullhook --pattern "package-lock.json" --command "npm install"
+```
+
+Run once from repo root:
+
+```bash
+pullhook --pattern "packages/*/package-lock.json" --command "npm install" --once
+```
+
+Auto-detect package manager and install:
+
+```bash
+pullhook --install
+```
+
+Preview commands without executing:
+
+```bash
+pullhook --pattern "**/*.rs" --command "cargo test" --dry-run
+```
+
+Limit parallel work:
+
+```bash
+pullhook --pattern "packages/*/package-lock.json" --command "npm install" --jobs 4
+```
+
+## `--install` detection
+
+`pullhook --install` detects package manager files from repo root:
+
+- npm: `package-lock.json` or fallback `package.json`
+- yarn: `yarn.lock`
+- pnpm: `pnpm-lock.yaml`
+- bun: `bun.lock` or `bun.lockb`
+- deno: `deno.lock`, `deno.json`, or `deno.jsonc`
+- vlt: `vlt-lock.json`
+
+If conflicting lock files are present, `pullhook` errors and asks for explicit `--pattern`/`--command`.
+
+## Development
+
+Run tests:
+
+```bash
+cargo test
+cargo nextest run
+```
+
+Run quality checks:
+
+```bash
+cargo fmt --all --check
+cargo clippy --all-targets -- -D warnings
+cargo audit
+cargo deny check
+cargo shear --check
+```
 
 ## License
 
 MIT
-
-## Troubleshooting
-
-### sccache Statistics
-
-View cache hit/miss rates:
-
-```bash
-sccache --show-stats
-```
-
-Clear the cache if needed:
-
-```bash
-sccache --zero-stats
-```
-
-### Gitleaks False Positives
-
-If gitleaks flags non-sensitive data, add an allowlist entry to `.gitleaks.toml` (create if missing):
-
-```toml
-[[allowlist]]
-description = "Explanation of why this is safe"
-regexes = ['^pattern-to-allow$']
-```
-
-### Cargo Deny License Issues
-
-If a new dependency has an unexpected license:
-
-1. Verify the license is acceptable
-2. Add to `allow` list in `deny.toml` under `[licenses]`
-
-### Dependency Version Conflicts
-
-Run `cargo tree -d` to identify duplicate versions, then use `[patch]` sections in `Cargo.toml` if needed.
