@@ -13,7 +13,7 @@ use clap::Parser;
 use tracing::debug;
 use tracing_subscriber::EnvFilter;
 
-use crate::cli::Cli;
+use crate::cli::{Cli, Commands, RunArgs};
 use crate::git::GitRepo;
 use crate::output::{DryRunSummary, NonSuccessReport, Renderer, Summary, TaskBlock};
 use crate::pm::{PackageManager, detect_package_manager};
@@ -54,15 +54,25 @@ impl MatchStrategy {
 
 fn main() {
 	let cli = Cli::parse();
-	init_tracing(cli.debug);
 
-	if let Err(error) = run(&cli) {
+	if let Some(Commands::Completion { shell }) = cli.command.as_ref() {
+		print_completion(*shell);
+		return;
+	}
+
+	init_tracing(cli.run.debug);
+
+	if let Err(error) = run(&cli.run) {
 		eprintln!("error: {error:#}");
 		std::process::exit(1);
 	}
 }
 
-fn run(cli: &Cli) -> Result<()> {
+fn print_completion(shell: clap_complete::Shell) {
+	Cli::print_completion(shell);
+}
+
+fn run(cli: &RunArgs) -> Result<()> {
 	let renderer = Renderer::new(cli.render);
 	let cwd = std::env::current_dir().context("failed to read current working directory")?;
 	let repo = GitRepo::discover(&cwd, cli.debug).context("failed to resolve repository root")?;
@@ -127,7 +137,7 @@ fn run(cli: &Cli) -> Result<()> {
 	Ok(())
 }
 
-fn resolve_run_config(cli: &Cli, repo_root: &std::path::Path) -> Result<RunConfig> {
+fn resolve_run_config(cli: &RunArgs, repo_root: &std::path::Path) -> Result<RunConfig> {
 	let mut match_strategy = MatchStrategy::Glob(cli.pattern.clone().unwrap_or_default());
 	let mut command = cli.command.clone();
 	let script = cli.script.clone();
@@ -158,7 +168,7 @@ fn resolve_run_config(cli: &Cli, repo_root: &std::path::Path) -> Result<RunConfi
 	})
 }
 
-fn collect_matches(cli: &Cli, repo: &GitRepo, run_config: &RunConfig) -> Result<(usize, Vec<std::path::PathBuf>)> {
+fn collect_matches(cli: &RunArgs, repo: &GitRepo, run_config: &RunConfig) -> Result<(usize, Vec<std::path::PathBuf>)> {
 	let (base, changed_count, matched_files) = match &run_config.match_strategy {
 		MatchStrategy::Glob(pattern) => {
 			let (base, changed_files) = repo

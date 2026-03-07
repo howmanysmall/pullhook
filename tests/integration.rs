@@ -152,6 +152,43 @@ fn install_accepts_explicit_base() {
 	assert!(stdout.contains("command: npm install"));
 }
 
+#[test]
+fn completion_command_succeeds_outside_git_repo() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = ProcessCommand::new(assert_cmd::cargo::cargo_bin!("pullhook"))
+		.current_dir(temp.path())
+		.args(["completion", "bash"])
+		.output()
+		.expect("command runs");
+
+	assert!(
+		output.status.success(),
+		"completion command should succeed outside a git repo"
+	);
+
+	let stdout = String::from_utf8_lossy(&output.stdout);
+	assert!(stdout.contains("_pullhook()"));
+	assert!(stdout.contains("complete -F _pullhook -o bashdefault -o default pullhook"));
+
+	let stderr = String::from_utf8_lossy(&output.stderr);
+	assert!(stderr.trim().is_empty(), "completion command should not write stderr");
+}
+
+#[test]
+fn completion_command_rejects_run_arguments() {
+	let output = ProcessCommand::new(assert_cmd::cargo::cargo_bin!("pullhook"))
+		.args(["--install", "completion", "bash"])
+		.output()
+		.expect("command runs");
+
+	assert!(!output.status.success(), "mixed run and completion args should fail");
+
+	let stderr = String::from_utf8_lossy(&output.stderr);
+	assert!(stderr.contains("cannot be used with"));
+	assert!(stderr.contains("completion"));
+}
+
 fn setup_repo_with_merge() -> TempDir {
 	let temp = tempfile::tempdir().expect("create temp dir");
 	let repo_root = temp.path();

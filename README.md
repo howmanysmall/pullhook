@@ -58,7 +58,11 @@ chmod +x .git/hooks/post-merge
 ## Usage
 
 ```text
-Usage: pullhook [OPTIONS]
+Usage: pullhook [OPTIONS] [COMMAND]
+
+Commands:
+  completion  Generate shell completion scripts
+  help        Print this message or the help of the given subcommand(s)
 
 Options:
   -p, --pattern <glob>      Pattern to match files (required unless --install)
@@ -101,6 +105,14 @@ Preview commands without executing:
 
 ```bash
 pullhook --pattern "**/*.rs" --command "cargo test" --dry-run
+```
+
+Generate shell completions:
+
+```bash
+pullhook completion bash > ~/.local/share/bash-completion/completions/pullhook
+pullhook completion zsh > "${fpath[1]}/_pullhook"
+pullhook completion fish > ~/.config/fish/completions/pullhook.fish
 ```
 
 Limit parallel work:
