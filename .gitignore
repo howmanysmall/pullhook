@@ -21,3 +21,6 @@
 *.rlib
 .rustfmt_errors.txt
 .lefthook/
+
+# opensrc - source code for packages
+opensrc/

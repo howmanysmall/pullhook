@@ -1,6 +1,5 @@
 //! Git operations used by pullhook.
 
-use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 
 use gix::bstr::BStr;
@@ -74,12 +73,15 @@ impl GitRepo {
 	}
 
 	/// Resolve base and collect install matches without materializing all changed paths.
-	pub fn resolve_install_matches(
+	pub fn resolve_install_matches<F>(
 		&self,
 		explicit: Option<&str>,
-		watched_files: &[&str],
+		mut is_match: F,
 		debug_enabled: bool,
-	) -> Result<(String, usize, Vec<PathBuf>), PullhookError> {
+	) -> Result<(String, usize, Vec<PathBuf>), PullhookError>
+	where
+		F: FnMut(&Path) -> bool,
+	{
 		let repo = self.repo.to_thread_local();
 		let base = resolve_base(&repo, explicit, debug_enabled)?;
 		let changes = diff_changes(&repo, &base)?;
@@ -94,11 +96,7 @@ impl GitRepo {
 				debug!(changed = %path.display(), "changed file");
 			}
 
-			if path
-				.file_name()
-				.and_then(OsStr::to_str)
-				.is_some_and(|name| watched_files.contains(&name))
-			{
+			if is_match(&path) {
 				matched_files.push(path);
 			}
 		}
@@ -203,6 +201,7 @@ mod tests {
 	use tempfile::TempDir;
 
 	use crate::error::PullhookError;
+	use crate::matcher;
 
 	use super::GitRepo;
 
@@ -284,17 +283,33 @@ mod tests {
 	}
 
 	#[test]
-	fn install_fast_path_matches_nested_manifests_by_basename() {
+	fn install_fast_path_uses_full_relative_path_matching() {
 		let temp = setup_repo_with_nested_manifest_change();
 		let repo = GitRepo::discover(temp.path(), false).expect("discover repo");
+		let matcher = matcher::compile("+(package.json|package-lock.json)").expect("compile matcher");
 
 		let (base, changed_count, matched_files) = repo
-			.resolve_install_matches(None, &["package.json", "package-lock.json"], false)
+			.resolve_install_matches(None, |path| matcher.is_match(path), false)
 			.expect("resolve install matches");
 
 		assert_eq!(base, "HEAD@{1}");
 		assert_eq!(changed_count, 1);
-		assert_eq!(matched_files, vec![PathBuf::from("packages/a/package.json")]);
+		assert!(matched_files.is_empty());
+	}
+
+	#[test]
+	fn install_fast_path_matches_repo_root_manifest_changes() {
+		let temp = setup_repo_with_root_manifest_change();
+		let repo = GitRepo::discover(temp.path(), false).expect("discover repo");
+		let matcher = matcher::compile("+(package.json|package-lock.json)").expect("compile matcher");
+
+		let (base, changed_count, matched_files) = repo
+			.resolve_install_matches(None, |path| matcher.is_match(path), false)
+			.expect("resolve install matches");
+
+		assert_eq!(base, "HEAD@{1}");
+		assert_eq!(changed_count, 1);
+		assert_eq!(matched_files, vec![PathBuf::from("package-lock.json")]);
 	}
 
 	fn clear_head_reflog(repo_root: &Path) {
@@ -388,6 +403,44 @@ mod tests {
 		run_git(
 			repo_root,
 			&["merge", "--no-ff", "feature/update-manifest", "-m", "merge feature"],
+		);
+
+		temp
+	}
+
+	fn setup_repo_with_root_manifest_change() -> TempDir {
+		let temp = tempfile::tempdir().expect("create temp dir");
+		let repo_root = temp.path();
+
+		run_git(repo_root, &["init"]);
+		run_git(repo_root, &["config", "user.email", "pullhook@example.com"]);
+		run_git(repo_root, &["config", "user.name", "Pullhook Test"]);
+
+		write_file(repo_root, Path::new("package.json"), "{\"name\":\"root\"}\n");
+		write_file(
+			repo_root,
+			Path::new("package-lock.json"),
+			"{\"name\":\"root\",\"lockfileVersion\":3}\n",
+		);
+
+		run_git(repo_root, &["add", "."]);
+		run_git(repo_root, &["commit", "-m", "initial"]);
+
+		let branch = current_branch(repo_root);
+		run_git(repo_root, &["checkout", "-b", "feature/update-lockfile"]);
+
+		write_file(
+			repo_root,
+			Path::new("package-lock.json"),
+			"{\"name\":\"root\",\"lockfileVersion\":4}\n",
+		);
+
+		run_git(repo_root, &["add", "."]);
+		run_git(repo_root, &["commit", "-m", "update root lockfile"]);
+		run_git(repo_root, &["checkout", &branch]);
+		run_git(
+			repo_root,
+			&["merge", "--no-ff", "feature/update-lockfile", "-m", "merge feature"],
 		);
 
 		temp

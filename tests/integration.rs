@@ -72,7 +72,7 @@ fn skips_execution_when_no_files_match() {
 }
 
 #[test]
-fn install_matches_nested_manifest_changes_by_basename() {
+fn install_ignores_nested_manifest_changes_that_do_not_match_install_pattern() {
 	let temp = setup_repo_with_nested_manifest_change();
 	let repo_root = temp.path();
 
@@ -87,6 +87,26 @@ fn install_matches_nested_manifest_changes_by_basename() {
 
 	let stdout = String::from_utf8_lossy(&output.stdout);
 	assert!(stdout.contains("pattern: +(package.json|package-lock.json)"));
+	assert!(stdout.contains("matched: 0"));
+	assert!(!stdout.contains("directory: ."));
+	assert!(!stdout.contains("command: npm install"));
+}
+
+#[test]
+fn install_matches_repo_root_manifest_changes() {
+	let temp = setup_repo_with_root_manifest_change();
+	let repo_root = temp.path();
+
+	let output = ProcessCommand::new(assert_cmd::cargo::cargo_bin!("pullhook"))
+		.current_dir(repo_root)
+		.env("PULLHOOK_RENDER_MODE", "never")
+		.args(["--install", "--dry-run"])
+		.output()
+		.expect("command runs");
+
+	assert!(output.status.success(), "--install --dry-run should succeed");
+
+	let stdout = String::from_utf8_lossy(&output.stdout);
 	assert!(stdout.contains("matched: 1"));
 	assert!(stdout.contains("directory: ."));
 	assert!(stdout.contains("command: npm install"));
@@ -94,7 +114,7 @@ fn install_matches_nested_manifest_changes_by_basename() {
 
 #[test]
 fn install_runs_from_subdirectory_with_repo_root_discovery() {
-	let temp = setup_repo_with_nested_manifest_change();
+	let temp = setup_repo_with_root_manifest_change();
 	let repo_root = temp.path();
 
 	let output = ProcessCommand::new(assert_cmd::cargo::cargo_bin!("pullhook"))
@@ -114,7 +134,7 @@ fn install_runs_from_subdirectory_with_repo_root_discovery() {
 
 #[test]
 fn install_accepts_explicit_base() {
-	let temp = setup_repo_with_nested_manifest_change();
+	let temp = setup_repo_with_root_manifest_change();
 	let repo_root = temp.path();
 
 	let output = ProcessCommand::new(assert_cmd::cargo::cargo_bin!("pullhook"))
@@ -174,6 +194,45 @@ fn setup_repo_with_merge() -> TempDir {
 	run_git(
 		repo_root,
 		&["merge", "--no-ff", "feature/update-locks", "-m", "merge feature"],
+	);
+
+	temp
+}
+
+fn setup_repo_with_root_manifest_change() -> TempDir {
+	let temp = tempfile::tempdir().expect("create temp dir");
+	let repo_root = temp.path();
+
+	fs::create_dir_all(repo_root.join("packages/a")).expect("create nested package directory");
+	run_git(repo_root, &["init"]);
+	run_git(repo_root, &["config", "user.email", "pullhook@example.com"]);
+	run_git(repo_root, &["config", "user.name", "Pullhook Test"]);
+
+	write_file(repo_root, Path::new("package.json"), "{\"name\":\"root\"}\n");
+	write_file(
+		repo_root,
+		Path::new("package-lock.json"),
+		"{\"name\":\"root\",\"lockfileVersion\":3}\n",
+	);
+
+	run_git(repo_root, &["add", "."]);
+	run_git(repo_root, &["commit", "-m", "initial"]);
+
+	let branch = current_branch(repo_root);
+	run_git(repo_root, &["checkout", "-b", "feature/update-lockfile"]);
+
+	write_file(
+		repo_root,
+		Path::new("package-lock.json"),
+		"{\"name\":\"root\",\"lockfileVersion\":4}\n",
+	);
+
+	run_git(repo_root, &["add", "."]);
+	run_git(repo_root, &["commit", "-m", "update root lockfile"]);
+	run_git(repo_root, &["checkout", &branch]);
+	run_git(
+		repo_root,
+		&["merge", "--no-ff", "feature/update-lockfile", "-m", "merge feature"],
 	);
 
 	temp

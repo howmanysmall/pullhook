@@ -35,17 +35,13 @@ impl RunConfig {
 #[derive(Debug, Clone)]
 enum MatchStrategy {
 	Glob(String),
-	Install {
-		pattern: String,
-		watched_files: &'static [&'static str],
-	},
+	Install { pattern: String },
 }
 
 impl MatchStrategy {
 	fn from_package_manager(package_manager: PackageManager) -> Self {
 		Self::Install {
 			pattern: package_manager.install_pattern(),
-			watched_files: package_manager.watched_files(),
 		}
 	}
 
@@ -188,9 +184,10 @@ fn collect_matches(cli: &Cli, repo: &GitRepo, run_config: &RunConfig) -> Result<
 
 			(base, changed_count, matched_files)
 		}
-		MatchStrategy::Install { watched_files, .. } => {
+		MatchStrategy::Install { pattern } => {
+			let matcher = matcher::compile(pattern).context("failed to compile pattern")?;
 			let (base, changed_count, matched_files) = repo
-				.resolve_install_matches(cli.base.as_deref(), watched_files, cli.debug)
+				.resolve_install_matches(cli.base.as_deref(), |path| matcher.is_match(path), cli.debug)
 				.context("failed to resolve diff base or read changed files")?;
 			(base, changed_count, matched_files)
 		}
