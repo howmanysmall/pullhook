@@ -90,7 +90,7 @@ impl GitRepo {
 
 		for change in changes {
 			let path = relative_path_from_bstr(change.location());
-			changed_count = changed_count.saturating_add(1);
+			changed_count += 1;
 
 			if debug_enabled {
 				debug!(changed = %path.display(), "changed file");

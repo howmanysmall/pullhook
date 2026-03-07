@@ -52,12 +52,6 @@ impl MatchStrategy {
 	}
 }
 
-#[derive(Debug)]
-struct MatchSet {
-	changed_count: usize,
-	matched_files: Vec<std::path::PathBuf>,
-}
-
 fn main() {
 	let cli = Cli::parse();
 	init_tracing(cli.debug);
@@ -77,10 +71,7 @@ fn run(cli: &Cli) -> Result<()> {
 
 	renderer.render_prepare_stage(run_config.pattern());
 
-	let MatchSet {
-		changed_count,
-		matched_files,
-	} = collect_matches(cli, &repo, &run_config)?;
+	let (changed_count, matched_files) = collect_matches(cli, &repo, &run_config)?;
 
 	renderer.render_discovery_stage(changed_count, matched_files.len());
 
@@ -90,14 +81,20 @@ fn run(cli: &Cli) -> Result<()> {
 	}
 
 	if let Some(message) = &cli.message {
-		render_message(&renderer, message);
+		renderer.render_message_stage(message);
 	}
 
 	let invocations = runner::prepare_invocations(run_config.command.as_deref(), run_config.script.as_deref())
 		.context("failed to prepare command invocations")?;
 
 	if invocations.is_empty() {
-		render_empty_summary(&renderer, matched_files.len());
+		renderer.render_summary_stage(Summary {
+			matched_files: matched_files.len(),
+			task_dirs: 0,
+			passed: 0,
+			failed: 0,
+			interrupted: 0,
+		});
 		return Ok(());
 	}
 
@@ -161,7 +158,7 @@ fn resolve_run_config(cli: &Cli, repo_root: &std::path::Path) -> Result<RunConfi
 	})
 }
 
-fn collect_matches(cli: &Cli, repo: &GitRepo, run_config: &RunConfig) -> Result<MatchSet> {
+fn collect_matches(cli: &Cli, repo: &GitRepo, run_config: &RunConfig) -> Result<(usize, Vec<std::path::PathBuf>)> {
 	let (base, changed_count, matched_files) = match &run_config.match_strategy {
 		MatchStrategy::Glob(pattern) => {
 			let (base, changed_files) = repo
@@ -201,24 +198,7 @@ fn collect_matches(cli: &Cli, repo: &GitRepo, run_config: &RunConfig) -> Result<
 		}
 	}
 
-	Ok(MatchSet {
-		changed_count,
-		matched_files,
-	})
-}
-
-fn render_message(renderer: &Renderer, message: &str) {
-	renderer.render_message_stage(message);
-}
-
-fn render_empty_summary(renderer: &Renderer, matched_files: usize) {
-	renderer.render_summary_stage(Summary {
-		matched_files,
-		task_dirs: 0,
-		passed: 0,
-		failed: 0,
-		interrupted: 0,
-	});
+	Ok((changed_count, matched_files))
 }
 
 fn render_task_results(renderer: &Renderer, results: &[runner::TaskResult], repo_root: &std::path::Path) {
@@ -308,14 +288,14 @@ fn print_dry_run(
 ) -> usize {
 	renderer.render_dry_run_stage();
 	let mut planned_commands = 0usize;
-	let display_commands: Vec<_> = invocations.iter().map(runner::Invocation::display).collect();
 
 	for cwd in tasks {
 		let relative = runner::relative_cwd_label(cwd, repo_root);
 
-		for command in &display_commands {
-			renderer.render_dry_run_block(&relative, command);
-			planned_commands = planned_commands.saturating_add(1);
+		for invocation in invocations {
+			let command = invocation.display();
+			renderer.render_dry_run_block(&relative, command.as_ref());
+			planned_commands += 1;
 		}
 	}
 

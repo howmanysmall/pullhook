@@ -159,13 +159,8 @@ pub fn detect_package_manager(repo_root: &Path) -> Result<PackageManager, Pullho
 		root: repo_root.display().to_string(),
 	})
 }
-
-fn file_exists(root: &Path, name: &str) -> bool {
-	root.join(name).is_file()
-}
-
 fn any_file_exists(root: &Path, names: &[&str]) -> bool {
-	names.iter().any(|name| file_exists(root, name))
+	names.iter().any(|name| root.join(name).is_file())
 }
 
 #[cfg(test)]
