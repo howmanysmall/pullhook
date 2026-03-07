@@ -53,6 +53,8 @@ const VLT_SPEC: PackageManagerSpec = PackageManagerSpec {
 	watched_files: &["package.json", "vlt-lock.json"],
 };
 
+// TODO: add wally support?
+
 const LOCKFILE_DETECTION_ORDER: [PackageManager; 6] = [
 	PackageManager::Bun,
 	PackageManager::Npm,
