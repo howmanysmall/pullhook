@@ -24,7 +24,6 @@ cargo install --path .
 cargo nextest run
 cargo nextest run -E 'test(test_name)'
 cargo nextest run --no-tests=pass
-cargo test
 ```
 
 ### Lint and Quality (run before pushing)
@@ -34,7 +33,13 @@ cargo fmt --all --check
 cargo clippy --all-targets -- -D warnings
 cargo audit
 cargo deny check
-cargo shear --check
+cargo shear
+```
+
+### Lint and Quality (always run before finishing a task)
+
+```bash
+bash ./scripts/pre-commit.sh
 ```
 
 ### Benchmarks
@@ -127,8 +132,7 @@ Two-phase detection in `pm.rs`:
 - Rust is pinned to `1.93.1` via `rust-toolchain.toml` (edition 2021).
 - `sccache` is configured as the rustc wrapper in `.cargo/config.toml`.
 - Incremental compilation is disabled (sccache is the primary cache strategy).
-- `mold` linker is used on non-macOS targets. macOS uses the default linker.
-- Override linker config if needed with `RUSTFLAGS="" cargo build`.
+- No custom linker is configured by default.
 
 ### Commit Style
 
@@ -191,7 +195,23 @@ Informational (PR-only, non-blocking):
 
 ## Release
 
-Releases are managed by `cargo-dist` via `dist-workspace.toml` and triggered on `v*.*.*` tags.
+Releases are managed by `cargo-release` for versioning and `cargo-dist` for distribution.
+See [RELEASE.md](./RELEASE.md) for release workflow details.
+
+Install `cargo-release` to automate releases:
+
+```bash
+cargo install cargo-release
+```
+
+Run a release:
+
+```bash
+# Update CHANGELOG.md first, then:
+cargo release 0.2.0
+# or cargo release minor
+```
+
 Artifacts are published to GitHub Releases, Homebrew (`howmanysmall/pullhook`), npm (`@pobammer/pullhook`),
 and shell/powershell installers.
 

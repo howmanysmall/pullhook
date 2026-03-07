@@ -58,7 +58,7 @@ jobs:
             - name: Install cargo-binstall
               uses: cargo-bins/cargo-binstall@main
             - name: Install cargo-nextest
-              run: cargo binstall --no-confirm cargo-nextest@0.9.129
+              run: cargo binstall --force --no-confirm cargo-nextest@0.9.129
             - run: cargo nextest run --all-targets --all-features
 
     # Security audit
@@ -67,9 +67,14 @@ jobs:
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v4
-            - uses: rustsec/audit-check@v2
+            - uses: dtolnay/rust-toolchain@master
               with:
-                  token: ${{ secrets.GITHUB_TOKEN }}
+                  toolchain: "1.93.1"
+            - name: Install cargo-binstall
+              uses: cargo-bins/cargo-binstall@main
+            - name: Install cargo-audit
+              run: cargo binstall --force --no-confirm cargo-audit@0.22.1
+            - run: cargo audit
 
     # Dependency policy enforcement
     deny:
@@ -85,7 +90,7 @@ jobs:
             - name: Install cargo-binstall
               uses: cargo-bins/cargo-binstall@main
             - name: Install cargo-deny
-              run: cargo binstall --no-confirm cargo-deny@0.19.0
+              run: cargo binstall --force --no-confirm cargo-deny@0.19.0
             - run: cargo deny check
 
     # Dead code detection
@@ -102,13 +107,16 @@ jobs:
             - name: Install cargo-binstall
               uses: cargo-bins/cargo-binstall@main
             - name: Install cargo-shear
-              run: cargo binstall --no-confirm cargo-shear@1.9.1
-            - run: cargo shear --check
+              run: cargo binstall --force --no-confirm cargo-shear@1.9.1
+            - run: cargo shear
 
     # Secret scanning
     gitleaks:
         name: Secret Scanning (gitleaks)
         runs-on: ubuntu-latest
+        permissions:
+            contents: read
+            pull-requests: read
         steps:
             - uses: actions/checkout@v4
               with:
@@ -148,7 +156,7 @@ jobs:
             - name: Install cargo-binstall
               uses: cargo-bins/cargo-binstall@main
             - name: Install cargo-bloat
-              run: cargo binstall --no-confirm cargo-bloat@0.12.1
+              run: cargo binstall --force --no-confirm cargo-bloat@0.12.1
             - name: Build release binary
               run: cargo build --release
             - name: Analyze binary size
@@ -170,7 +178,7 @@ jobs:
             - name: Install cargo-binstall
               uses: cargo-bins/cargo-binstall@main
             - name: Install cargo-zigbuild
-              run: cargo binstall --no-confirm cargo-zigbuild@0.22.1
+              run: cargo binstall --force --no-confirm cargo-zigbuild@0.22.1
             - name: Install Zig
               uses: goto-bus-stop/setup-zig@v2
               with:

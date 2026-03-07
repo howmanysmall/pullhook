@@ -1,11 +1,14 @@
 {
 	"devDependencies": {
-		"@biomejs/biome": "^2.4.5",
+		"@biomejs/biome": "^2.4.6",
 		"@commitlint/config-conventional": "^20.4.3",
 		"@commitlint/types": "^20.4.3",
 		"commitlint": "^20.4.3",
 		"lint-staged": "^16.3.2"
 	},
+	"license": "MIT",
+	"name": "pullhook",
+	"private": true,
 	"scripts": {
 		"commitlint": "commitlint",
 		"lint-staged": "lint-staged",
