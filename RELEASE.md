@@ -78,10 +78,8 @@ Release behavior is configured in `[workspace.metadata.release]` in `Cargo.toml`
 - `sign-commit = false` - No GPG signing
 - `sign-tag = false` - No GPG signing
 
-Release builds also clear `CARGO_BUILD_RUSTC_WRAPPER` via
-[`./.github/cargo-dist-build-setup.yml`](./.github/cargo-dist-build-setup.yml), which is injected into the
-generated [release workflow](./.github/workflows/release.yml) through cargo-dist's `github-build-setup`
-setting. Do not hand-edit `release.yml`; regenerate it through cargo-dist instead.
+The generated [release workflow](./.github/workflows/release.yml) should be kept fully cargo-dist-managed.
+Do not hand-edit `release.yml`; regenerate it through cargo-dist instead.
 
 ## Dry Run
 

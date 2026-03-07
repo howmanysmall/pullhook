@@ -1,7 +1,5 @@
 [build]
-# Use sccache for faster builds
-rustc-wrapper = "sccache"
-# Incremental compilation disabled when using sccache (sccache provides better caching)
+# Incremental compilation disabled for more stable cache behavior across environments.
 incremental = false
 
 [profile.dev]

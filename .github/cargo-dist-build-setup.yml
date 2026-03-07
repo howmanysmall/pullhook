@@ -1,8 +1,0 @@
-- name: Disable sccache wrapper for cargo-dist builds
-  if: runner.os != 'Windows'
-  run: echo 'CARGO_BUILD_RUSTC_WRAPPER=' >> "$GITHUB_ENV"
-
-- name: Disable sccache wrapper for cargo-dist builds
-  if: runner.os == 'Windows'
-  shell: pwsh
-  run: '"CARGO_BUILD_RUSTC_WRAPPER=" >> $env:GITHUB_ENV'
