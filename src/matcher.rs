@@ -1,5 +1,6 @@
 //! Glob matching utilities.
 
+use std::borrow::Cow;
 use std::path::Path;
 
 use globset::{GlobBuilder, GlobMatcher};
@@ -17,7 +18,9 @@ impl Matcher {
 	#[must_use]
 	pub fn is_match(&self, path: &Path) -> bool {
 		let normalized = normalize_path(path);
-		self.matchers.iter().any(|matcher| matcher.is_match(&normalized))
+		self.matchers
+			.iter()
+			.any(|matcher| matcher.is_match(normalized.as_ref()))
 	}
 }
 
@@ -147,14 +150,22 @@ fn is_escaped(value: &str, index: usize) -> bool {
 	backslashes % 2 == 1
 }
 
-fn normalize_path(path: &Path) -> String {
-	path.to_string_lossy().replace('\\', "/")
+fn normalize_path(path: &Path) -> Cow<'_, str> {
+	let normalized = path.to_string_lossy();
+	if normalized.contains('\\') {
+		return Cow::Owned(normalized.replace('\\', "/"));
+	}
+
+	normalized
 }
 
 #[cfg(test)]
 mod tests {
 	use super::compile;
+	use std::borrow::Cow;
 	use std::path::Path;
+
+	use crate::matcher::normalize_path;
 
 	#[test]
 	fn matches_basic_glob() {
@@ -191,5 +202,20 @@ mod tests {
 		let error = compile("+(a|+(b|c))").expect_err("nested extglob should fail");
 		let message = error.to_string();
 		assert!(message.contains("nested extglob"));
+	}
+
+	#[test]
+	fn normalize_path_borrows_when_no_separator_rewrite_is_needed() {
+		assert!(matches!(
+			normalize_path(Path::new("src/main.rs")),
+			Cow::Borrowed("src/main.rs")
+		));
+	}
+
+	#[test]
+	fn normalize_path_rewrites_windows_separators_when_present() {
+		let normalized = normalize_path(Path::new(r"src\main.rs"));
+		assert!(matches!(normalized, Cow::Owned(_)));
+		assert_eq!(normalized, "src/main.rs");
 	}
 }

@@ -271,81 +271,36 @@ fn run_streaming_process(mut command: Command, display_command: &str, cwd: &Path
 
 	let status = match command.stdout(Stdio::inherit()).stderr(Stdio::inherit()).status() {
 		Ok(status) => status,
-		Err(source) => {
-			return InvocationExecution {
-				output: invocation_output(
-					display_command,
-					String::new(),
-					String::new(),
-					ResultState::SpawnError,
-					None,
-				),
-				error: Some(PullhookError::CommandIo {
-					command: display_command.to_owned(),
-					cwd: cwd.display().to_string(),
-					source,
-				}),
-			};
-		}
+		Err(source) => return spawn_error(display_command, cwd, source),
 	};
 
 	let (state, exit_code) = classify_exit_status(status);
-	if state == ResultState::Success {
-		return InvocationExecution {
-			output: invocation_output(display_command, String::new(), String::new(), state, exit_code),
-			error: None,
-		};
-	}
-
-	let details = if state == ResultState::Interrupted {
-		NO_EXIT_CODE_STREAMED_OUTPUT.to_owned()
-	} else {
-		SEE_STREAMED_OUTPUT.to_owned()
+	let details = match state {
+		ResultState::Success => String::new(),
+		ResultState::Interrupted => NO_EXIT_CODE_STREAMED_OUTPUT.to_owned(),
+		ResultState::Failed | ResultState::SpawnError => SEE_STREAMED_OUTPUT.to_owned(),
 	};
 
-	InvocationExecution {
-		output: invocation_output(display_command, String::new(), String::new(), state, exit_code),
-		error: Some(PullhookError::CommandFailed {
-			command: display_command.to_owned(),
-			cwd: cwd.display().to_string(),
-			code: exit_code,
-			status: format_exit_status(exit_code),
-			details,
-		}),
-	}
+	finalize_execution(
+		display_command,
+		cwd,
+		String::new(),
+		String::new(),
+		state,
+		exit_code,
+		details,
+	)
 }
 
 fn run_captured_process(mut command: Command, display_command: &str, cwd: &Path) -> InvocationExecution {
 	let output = match command.output() {
 		Ok(output) => output,
-		Err(source) => {
-			return InvocationExecution {
-				output: invocation_output(
-					display_command,
-					String::new(),
-					String::new(),
-					ResultState::SpawnError,
-					None,
-				),
-				error: Some(PullhookError::CommandIo {
-					command: display_command.to_owned(),
-					cwd: cwd.display().to_string(),
-					source,
-				}),
-			};
-		}
+		Err(source) => return spawn_error(display_command, cwd, source),
 	};
 
 	let stdout = normalize_output(&output.stdout);
 	let stderr = normalize_output(&output.stderr);
 	let (state, exit_code) = classify_exit_status(output.status);
-
-	if state == ResultState::Success {
-		return InvocationExecution {
-			output: invocation_output(display_command, stdout, stderr, state, exit_code),
-			error: None,
-		};
-	}
 
 	let fallback = if state == ResultState::Interrupted {
 		NO_EXIT_CODE_CAPTURED
@@ -354,15 +309,53 @@ fn run_captured_process(mut command: Command, display_command: &str, cwd: &Path)
 	};
 	let details = normalize_failure_details(&stdout, &stderr, fallback);
 
+	finalize_execution(display_command, cwd, stdout, stderr, state, exit_code, details)
+}
+
+fn spawn_error(display_command: &str, cwd: &Path, source: std::io::Error) -> InvocationExecution {
 	InvocationExecution {
-		output: invocation_output(display_command, stdout, stderr, state, exit_code),
-		error: Some(PullhookError::CommandFailed {
+		output: invocation_output(
+			display_command,
+			String::new(),
+			String::new(),
+			ResultState::SpawnError,
+			None,
+		),
+		error: Some(PullhookError::CommandIo {
 			command: display_command.to_owned(),
 			cwd: cwd.display().to_string(),
-			code: exit_code,
-			status: format_exit_status(exit_code),
-			details,
+			source,
 		}),
+	}
+}
+
+fn finalize_execution(
+	display_command: &str,
+	cwd: &Path,
+	stdout: String,
+	stderr: String,
+	state: ResultState,
+	exit_code: Option<i32>,
+	details: String,
+) -> InvocationExecution {
+	let output = invocation_output(display_command, stdout, stderr, state, exit_code);
+	if state == ResultState::Success {
+		return InvocationExecution { output, error: None };
+	}
+
+	InvocationExecution {
+		output,
+		error: Some(command_failed(display_command, cwd, exit_code, details)),
+	}
+}
+
+fn command_failed(display_command: &str, cwd: &Path, exit_code: Option<i32>, details: String) -> PullhookError {
+	PullhookError::CommandFailed {
+		command: display_command.to_owned(),
+		cwd: cwd.display().to_string(),
+		code: exit_code,
+		status: format_exit_status(exit_code),
+		details,
 	}
 }
 

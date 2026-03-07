@@ -4,6 +4,64 @@ use std::path::Path;
 
 use crate::error::PullhookError;
 
+struct PackageManagerSpec {
+	name: &'static str,
+	lock_files: &'static [&'static str],
+	config_files: &'static [&'static str],
+	watched_files: &'static [&'static str],
+}
+
+const NPM_SPEC: PackageManagerSpec = PackageManagerSpec {
+	name: "npm",
+	lock_files: &["package-lock.json"],
+	config_files: &["package.json"],
+	watched_files: &["package.json", "package-lock.json"],
+};
+
+const YARN_SPEC: PackageManagerSpec = PackageManagerSpec {
+	name: "yarn",
+	lock_files: &["yarn.lock"],
+	config_files: &[],
+	watched_files: &["package.json", "yarn.lock"],
+};
+
+const PNPM_SPEC: PackageManagerSpec = PackageManagerSpec {
+	name: "pnpm",
+	lock_files: &["pnpm-lock.yaml"],
+	config_files: &[],
+	watched_files: &["package.json", "pnpm-lock.yaml"],
+};
+
+const BUN_SPEC: PackageManagerSpec = PackageManagerSpec {
+	name: "bun",
+	lock_files: &["bun.lock", "bun.lockb"],
+	config_files: &[],
+	watched_files: &["package.json", "bun.lock", "bun.lockb"],
+};
+
+const DENO_SPEC: PackageManagerSpec = PackageManagerSpec {
+	name: "deno",
+	lock_files: &["deno.lock"],
+	config_files: &["deno.json", "deno.jsonc"],
+	watched_files: &["package.json", "deno.json", "deno.jsonc", "deno.lock"],
+};
+
+const VLT_SPEC: PackageManagerSpec = PackageManagerSpec {
+	name: "vlt",
+	lock_files: &["vlt-lock.json"],
+	config_files: &[],
+	watched_files: &["package.json", "vlt-lock.json"],
+};
+
+const LOCKFILE_DETECTION_ORDER: [PackageManager; 6] = [
+	PackageManager::Bun,
+	PackageManager::Npm,
+	PackageManager::Yarn,
+	PackageManager::Pnpm,
+	PackageManager::Deno,
+	PackageManager::Vlt,
+];
+
 /// Supported package managers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PackageManager {
@@ -22,17 +80,39 @@ pub enum PackageManager {
 }
 
 impl PackageManager {
+	const fn spec(self) -> &'static PackageManagerSpec {
+		match self {
+			Self::Npm => &NPM_SPEC,
+			Self::Yarn => &YARN_SPEC,
+			Self::Pnpm => &PNPM_SPEC,
+			Self::Bun => &BUN_SPEC,
+			Self::Deno => &DENO_SPEC,
+			Self::Vlt => &VLT_SPEC,
+		}
+	}
+
 	/// Binary name.
 	#[must_use]
 	pub const fn name(self) -> &'static str {
-		match self {
-			Self::Npm => "npm",
-			Self::Yarn => "yarn",
-			Self::Pnpm => "pnpm",
-			Self::Bun => "bun",
-			Self::Deno => "deno",
-			Self::Vlt => "vlt",
-		}
+		self.spec().name
+	}
+
+	/// Lock files that uniquely identify the package manager.
+	#[must_use]
+	pub const fn lock_files(self) -> &'static [&'static str] {
+		self.spec().lock_files
+	}
+
+	/// Config files used when no lock file is present.
+	#[must_use]
+	pub const fn config_files(self) -> &'static [&'static str] {
+		self.spec().config_files
+	}
+
+	/// Files that should trigger `--install`.
+	#[must_use]
+	pub const fn watched_files(self) -> &'static [&'static str] {
+		self.spec().watched_files
 	}
 
 	/// Install command used by `--install`.
@@ -43,40 +123,17 @@ impl PackageManager {
 
 	/// Pattern used by `--install`.
 	#[must_use]
-	pub const fn install_pattern(self) -> &'static str {
-		match self {
-			Self::Npm => "+(package.json|package-lock.json)",
-			Self::Yarn => "+(package.json|yarn.lock)",
-			Self::Pnpm => "+(package.json|pnpm-lock.yaml)",
-			Self::Bun => "+(package.json|bun.lock|bun.lockb)",
-			Self::Deno => "+(package.json|deno.json|deno.jsonc|deno.lock)",
-			Self::Vlt => "+(package.json|vlt-lock.json)",
-		}
+	pub fn install_pattern(self) -> String {
+		format!("+({})", self.watched_files().join("|"))
 	}
 }
 
 /// Detect the package manager for `--install`.
 pub fn detect_package_manager(repo_root: &Path) -> Result<PackageManager, PullhookError> {
-	let mut detected_by_lock = Vec::new();
-
-	if file_exists(repo_root, "bun.lock") || file_exists(repo_root, "bun.lockb") {
-		detected_by_lock.push(PackageManager::Bun);
-	}
-	if file_exists(repo_root, "package-lock.json") {
-		detected_by_lock.push(PackageManager::Npm);
-	}
-	if file_exists(repo_root, "yarn.lock") {
-		detected_by_lock.push(PackageManager::Yarn);
-	}
-	if file_exists(repo_root, "pnpm-lock.yaml") {
-		detected_by_lock.push(PackageManager::Pnpm);
-	}
-	if file_exists(repo_root, "deno.lock") {
-		detected_by_lock.push(PackageManager::Deno);
-	}
-	if file_exists(repo_root, "vlt-lock.json") {
-		detected_by_lock.push(PackageManager::Vlt);
-	}
+	let detected_by_lock: Vec<_> = LOCKFILE_DETECTION_ORDER
+		.into_iter()
+		.filter(|package_manager| any_file_exists(repo_root, package_manager.lock_files()))
+		.collect();
 
 	if detected_by_lock.len() > 1 {
 		return Err(PullhookError::AmbiguousPackageManagers {
@@ -88,11 +145,11 @@ pub fn detect_package_manager(repo_root: &Path) -> Result<PackageManager, Pullho
 		return Ok(found);
 	}
 
-	if file_exists(repo_root, "deno.json") || file_exists(repo_root, "deno.jsonc") {
+	if any_file_exists(repo_root, PackageManager::Deno.config_files()) {
 		return Ok(PackageManager::Deno);
 	}
 
-	if file_exists(repo_root, "package.json") {
+	if any_file_exists(repo_root, PackageManager::Npm.config_files()) {
 		return Ok(PackageManager::Npm);
 	}
 
@@ -105,6 +162,10 @@ fn file_exists(root: &Path, name: &str) -> bool {
 	root.join(name).is_file()
 }
 
+fn any_file_exists(root: &Path, names: &[&str]) -> bool {
+	names.iter().any(|name| file_exists(root, name))
+}
+
 #[cfg(test)]
 mod tests {
 	use std::fs;
@@ -112,6 +173,45 @@ mod tests {
 	use tempfile::tempdir;
 
 	use super::{PackageManager, detect_package_manager};
+
+	#[test]
+	fn install_pattern_matches_current_npm_contract() {
+		assert_eq!(
+			PackageManager::Npm.install_pattern(),
+			"+(package.json|package-lock.json)"
+		);
+	}
+
+	#[test]
+	fn install_pattern_matches_current_yarn_contract() {
+		assert_eq!(PackageManager::Yarn.install_pattern(), "+(package.json|yarn.lock)");
+	}
+
+	#[test]
+	fn install_pattern_matches_current_pnpm_contract() {
+		assert_eq!(PackageManager::Pnpm.install_pattern(), "+(package.json|pnpm-lock.yaml)");
+	}
+
+	#[test]
+	fn install_pattern_matches_current_bun_contract() {
+		assert_eq!(
+			PackageManager::Bun.install_pattern(),
+			"+(package.json|bun.lock|bun.lockb)"
+		);
+	}
+
+	#[test]
+	fn install_pattern_matches_current_deno_contract() {
+		assert_eq!(
+			PackageManager::Deno.install_pattern(),
+			"+(package.json|deno.json|deno.jsonc|deno.lock)"
+		);
+	}
+
+	#[test]
+	fn install_pattern_matches_current_vlt_contract() {
+		assert_eq!(PackageManager::Vlt.install_pattern(), "+(package.json|vlt-lock.json)");
+	}
 
 	#[test]
 	fn detects_npm_from_lock_file() {

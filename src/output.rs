@@ -7,6 +7,8 @@ use std::io::{self, IsTerminal};
 
 use clap::ValueEnum;
 
+use crate::runner::{InvocationOutput, ResultState};
+
 /// Environment override for render mode, primarily for deterministic tests.
 pub const RENDER_MODE_ENV: &str = "PULLHOOK_RENDER_MODE";
 
@@ -112,33 +114,9 @@ pub struct NonSuccessReport<'a> {
 	/// Failed or interrupted command text.
 	pub command: &'a str,
 	/// Final task outcome.
-	pub outcome: TaskOutcome,
+	pub outcome: ResultState,
 	/// Exit code when available.
 	pub exit_code: Option<i32>,
-}
-
-/// Logical task result for task-block rendering.
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub enum TaskOutcome {
-	/// The task succeeded.
-	Success,
-	/// The task failed with a non-zero exit code.
-	Failed,
-	/// The task terminated without an exit code.
-	Interrupted,
-	/// The task failed before process spawn.
-	SpawnError,
-}
-
-/// Display payload for one command rendered within a task block.
-#[derive(Debug, Clone, Copy)]
-pub struct TaskCommand<'a> {
-	/// Display command.
-	pub command: &'a str,
-	/// Captured stdout text.
-	pub stdout: &'a str,
-	/// Captured stderr text.
-	pub stderr: &'a str,
 }
 
 /// Display payload for one task block.
@@ -147,9 +125,9 @@ pub struct TaskBlock<'a> {
 	/// Task directory relative to repository root.
 	pub relative_cwd: &'a str,
 	/// Commands executed in this task directory, in invocation order.
-	pub commands: &'a [TaskCommand<'a>],
+	pub commands: &'a [InvocationOutput],
 	/// Final task status.
-	pub outcome: TaskOutcome,
+	pub outcome: ResultState,
 }
 
 /// Unified renderer.
@@ -314,17 +292,17 @@ impl Renderer {
 	pub fn render_task_block(&self, block: TaskBlock<'_>) {
 		if self.compact {
 			let (prefix, symbol, suffix) = match block.outcome {
-				TaskOutcome::Success => (
+				ResultState::Success => (
 					self.tokens.success_prefix,
 					self.tokens.success_symbol,
 					self.tokens.success_suffix,
 				),
-				TaskOutcome::Failed | TaskOutcome::SpawnError => (
+				ResultState::Failed | ResultState::SpawnError => (
 					self.tokens.error_prefix,
 					self.tokens.error_symbol,
 					self.tokens.error_suffix,
 				),
-				TaskOutcome::Interrupted => (
+				ResultState::Interrupted => (
 					self.tokens.warn_prefix,
 					self.tokens.warn_symbol,
 					self.tokens.warn_suffix,
@@ -341,8 +319,8 @@ impl Renderer {
 					"    {}{}{}",
 					self.tokens.dim_prefix, command.command, self.tokens.dim_suffix
 				);
-				Self::print_indented_stdout(command.stdout);
-				Self::print_indented_stderr(command.stderr);
+				Self::print_indented_stdout(&command.stdout);
+				Self::print_indented_stderr(&command.stderr);
 			}
 
 			return;
@@ -351,7 +329,7 @@ impl Renderer {
 		self.print_directory(block.relative_cwd);
 
 		for command in block.commands {
-			self.print_command(command.command);
+			self.print_command(&command.command);
 
 			if !command.stdout.is_empty() {
 				print!("{}", command.stdout);
@@ -362,10 +340,10 @@ impl Renderer {
 		}
 
 		let (badge, status) = match block.outcome {
-			TaskOutcome::Success => (self.tokens.success_badge, "success"),
-			TaskOutcome::Failed => (self.tokens.error_badge, "failed"),
-			TaskOutcome::Interrupted => (self.tokens.warn_badge, "interrupted"),
-			TaskOutcome::SpawnError => (self.tokens.error_badge, "spawn_error"),
+			ResultState::Success => (self.tokens.success_badge, "success"),
+			ResultState::Failed => (self.tokens.error_badge, "failed"),
+			ResultState::Interrupted => (self.tokens.warn_badge, "interrupted"),
+			ResultState::SpawnError => (self.tokens.error_badge, "spawn_error"),
 		};
 		println!("{badge} {status}");
 	}
@@ -464,8 +442,8 @@ impl Renderer {
 	/// Render deterministic non-success details for one task.
 	pub fn render_non_success_report(&self, report: NonSuccessReport<'_>) {
 		let (badge, headline, status) = match report.outcome {
-			TaskOutcome::Success => return,
-			TaskOutcome::Failed => (
+			ResultState::Success => return,
+			ResultState::Failed => (
 				self.tokens.error_badge,
 				"task failed",
 				report.exit_code.map_or_else(
@@ -473,12 +451,12 @@ impl Renderer {
 					|code| format!("exit code {code}"),
 				),
 			),
-			TaskOutcome::Interrupted => (
+			ResultState::Interrupted => (
 				self.tokens.warn_badge,
 				"task interrupted",
 				"signal termination (no exit code)".to_owned(),
 			),
-			TaskOutcome::SpawnError => (
+			ResultState::SpawnError => (
 				self.tokens.error_badge,
 				"task failed to start",
 				"spawn error".to_owned(),

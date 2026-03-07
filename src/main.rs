@@ -14,16 +14,45 @@ use tracing::debug;
 use tracing_subscriber::EnvFilter;
 
 use crate::cli::Cli;
-use crate::output::{DryRunSummary, NonSuccessReport, Renderer, Summary, TaskBlock, TaskCommand, TaskOutcome};
-use crate::pm::detect_package_manager;
+use crate::output::{DryRunSummary, NonSuccessReport, Renderer, Summary, TaskBlock};
+use crate::pm::{PackageManager, detect_package_manager};
 
 #[derive(Debug, Clone)]
 struct RunConfig {
-	pattern: String,
+	match_strategy: MatchStrategy,
 	command: Option<String>,
 	script: Option<String>,
 	once: bool,
-	install_matchers: Option<Vec<String>>,
+}
+
+impl RunConfig {
+	fn pattern(&self) -> &str {
+		self.match_strategy.pattern()
+	}
+}
+
+#[derive(Debug, Clone)]
+enum MatchStrategy {
+	Glob(String),
+	Install {
+		pattern: String,
+		watched_files: &'static [&'static str],
+	},
+}
+
+impl MatchStrategy {
+	fn from_package_manager(package_manager: PackageManager) -> Self {
+		Self::Install {
+			pattern: package_manager.install_pattern(),
+			watched_files: package_manager.watched_files(),
+		}
+	}
+
+	fn pattern(&self) -> &str {
+		match self {
+			Self::Glob(pattern) | Self::Install { pattern, .. } => pattern,
+		}
+	}
 }
 
 #[derive(Debug)]
@@ -47,7 +76,7 @@ fn run(cli: &Cli) -> Result<()> {
 	let repo_root = resolve_repo_root(cli.debug)?;
 	let run_config = resolve_run_config(cli, &repo_root)?;
 
-	renderer.render_prepare_stage(&run_config.pattern);
+	renderer.render_prepare_stage(run_config.pattern());
 
 	let MatchSet {
 		changed_count,
@@ -57,7 +86,7 @@ fn run(cli: &Cli) -> Result<()> {
 	renderer.render_discovery_stage(changed_count, matched_files.len());
 
 	if matched_files.is_empty() {
-		renderer.render_no_match_stage(&run_config.pattern, changed_count, matched_files.len());
+		renderer.render_no_match_stage(run_config.pattern(), changed_count, matched_files.len());
 		return Ok(());
 	}
 
@@ -103,25 +132,22 @@ fn run(cli: &Cli) -> Result<()> {
 }
 
 fn resolve_run_config(cli: &Cli, repo_root: &std::path::Path) -> Result<RunConfig> {
-	let mut pattern = cli.pattern.clone().unwrap_or_default();
+	let mut match_strategy = MatchStrategy::Glob(cli.pattern.clone().unwrap_or_default());
 	let mut command = cli.command.clone();
 	let script = cli.script.clone();
 	let mut once = cli.effective_once();
-	let mut install_matchers = None;
 
 	if cli.install {
 		let package_manager =
 			detect_package_manager(repo_root).context("failed to detect package manager for --install")?;
-		let install_pattern = package_manager.install_pattern();
-		install_pattern.clone_into(&mut pattern);
+		match_strategy = MatchStrategy::from_package_manager(package_manager);
 		command = Some(package_manager.install_command());
 		once = true;
-		install_matchers = Some(parse_install_matchers(install_pattern));
 
 		if cli.debug {
 			debug!(
 				package_manager = package_manager.name(),
-				pattern,
+				pattern = match_strategy.pattern(),
 				command = command.as_deref().unwrap_or_default(),
 				"resolved --install settings"
 			);
@@ -129,26 +155,11 @@ fn resolve_run_config(cli: &Cli, repo_root: &std::path::Path) -> Result<RunConfi
 	}
 
 	Ok(RunConfig {
-		pattern,
+		match_strategy,
 		command,
 		script,
 		once,
-		install_matchers,
 	})
-}
-
-fn parse_install_matchers(pattern: &str) -> Vec<String> {
-	const PREFIX: &str = "+(";
-
-	if let Some(inner) = pattern.strip_prefix(PREFIX).and_then(|value| value.strip_suffix(')')) {
-		return inner
-			.split('|')
-			.filter(|part| !part.is_empty())
-			.map(ToOwned::to_owned)
-			.collect();
-	}
-
-	vec![pattern.to_owned()]
 }
 
 fn collect_matches(cli: &Cli, run_config: &RunConfig) -> Result<MatchSet> {
@@ -164,21 +175,18 @@ fn collect_matches(cli: &Cli, run_config: &RunConfig) -> Result<MatchSet> {
 		}
 	}
 
-	let matched_files: Vec<_> = if let Some(install_matchers) = &run_config.install_matchers {
-		changed_files
+	let matched_files: Vec<_> = match &run_config.match_strategy {
+		MatchStrategy::Glob(pattern) => {
+			let matcher = matcher::compile(pattern).context("failed to compile pattern")?;
+			changed_files
+				.into_iter()
+				.filter(|path| matcher.is_match(path))
+				.collect()
+		}
+		MatchStrategy::Install { watched_files, .. } => changed_files
 			.into_iter()
-			.filter(|path| {
-				path.file_name()
-					.and_then(std::ffi::OsStr::to_str)
-					.is_some_and(|name| install_matchers.iter().any(|candidate| candidate == name))
-			})
-			.collect()
-	} else {
-		let matcher = matcher::compile(&run_config.pattern).context("failed to compile pattern")?;
-		changed_files
-			.into_iter()
-			.filter(|path| matcher.is_match(path))
-			.collect()
+			.filter(|path| install_matcher_matches(path, watched_files))
+			.collect(),
 	};
 
 	if cli.debug {
@@ -192,6 +200,12 @@ fn collect_matches(cli: &Cli, run_config: &RunConfig) -> Result<MatchSet> {
 		changed_count,
 		matched_files,
 	})
+}
+
+fn install_matcher_matches(path: &std::path::Path, watched_files: &[&str]) -> bool {
+	path.file_name()
+		.and_then(std::ffi::OsStr::to_str)
+		.is_some_and(|name| watched_files.contains(&name))
 }
 
 fn resolve_repo_root(debug_enabled: bool) -> Result<std::path::PathBuf> {
@@ -225,31 +239,21 @@ fn render_task_results(renderer: &Renderer, results: &[runner::TaskResult], repo
 
 	for result in results {
 		let relative = runner::relative_cwd_label(&result.cwd, repo_root);
-		let commands: Vec<_> = result
-			.outputs
-			.iter()
-			.map(|output| TaskCommand {
-				command: &output.command,
-				stdout: &output.stdout,
-				stderr: &output.stderr,
-			})
-			.collect();
-		let outcome = map_task_outcome(result.state);
 
 		renderer.render_task_block(TaskBlock {
 			relative_cwd: &relative,
-			commands: &commands,
-			outcome,
+			commands: &result.outputs,
+			outcome: result.state,
 		});
 
-		if outcome != TaskOutcome::Success {
+		if result.state != runner::ResultState::Success {
 			let (command, exit_code) = result.outputs.last().map_or(("<unknown>", None), |output| {
 				(output.command.as_str(), output.exit_code)
 			});
 			renderer.render_non_success_report(NonSuccessReport {
 				relative_cwd: &relative,
 				command,
-				outcome,
+				outcome: result.state,
 				exit_code,
 			});
 		}
@@ -278,15 +282,6 @@ fn render_summary(renderer: &Renderer, matched_files: usize, counts: TaskCounter
 		failed: counts.failed,
 		interrupted: counts.interrupted,
 	});
-}
-
-const fn map_task_outcome(state: runner::ResultState) -> TaskOutcome {
-	match state {
-		runner::ResultState::Success => TaskOutcome::Success,
-		runner::ResultState::Failed => TaskOutcome::Failed,
-		runner::ResultState::Interrupted => TaskOutcome::Interrupted,
-		runner::ResultState::SpawnError => TaskOutcome::SpawnError,
-	}
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -326,13 +321,13 @@ fn print_dry_run(
 ) -> usize {
 	renderer.render_dry_run_stage();
 	let mut planned_commands = 0usize;
+	let display_commands: Vec<_> = invocations.iter().map(runner::Invocation::display).collect();
 
 	for cwd in tasks {
 		let relative = runner::relative_cwd_label(cwd, repo_root);
 
-		for invocation in invocations {
-			let command = invocation.display();
-			renderer.render_dry_run_block(&relative, &command);
+		for command in &display_commands {
+			renderer.render_dry_run_block(&relative, command);
 			planned_commands = planned_commands.saturating_add(1);
 		}
 	}

@@ -71,6 +71,27 @@ fn skips_execution_when_no_files_match() {
 	assert!(!predicate::path::is_file().eval(&repo_root.join(".pullhook-no-match-marker")));
 }
 
+#[test]
+fn install_matches_nested_manifest_changes_by_basename() {
+	let temp = setup_repo_with_nested_manifest_change();
+	let repo_root = temp.path();
+
+	let output = ProcessCommand::new(assert_cmd::cargo::cargo_bin!("pullhook"))
+		.current_dir(repo_root)
+		.env("PULLHOOK_RENDER_MODE", "never")
+		.args(["--install", "--dry-run"])
+		.output()
+		.expect("command runs");
+
+	assert!(output.status.success(), "--install --dry-run should succeed");
+
+	let stdout = String::from_utf8_lossy(&output.stdout);
+	assert!(stdout.contains("pattern: +(package.json|package-lock.json)"));
+	assert!(stdout.contains("matched: 1"));
+	assert!(stdout.contains("directory: ."));
+	assert!(stdout.contains("command: npm install"));
+}
+
 fn setup_repo_with_merge() -> TempDir {
 	let temp = tempfile::tempdir().expect("create temp dir");
 	let repo_root = temp.path();
@@ -113,6 +134,49 @@ fn setup_repo_with_merge() -> TempDir {
 	run_git(
 		repo_root,
 		&["merge", "--no-ff", "feature/update-locks", "-m", "merge feature"],
+	);
+
+	temp
+}
+
+fn setup_repo_with_nested_manifest_change() -> TempDir {
+	let temp = tempfile::tempdir().expect("create temp dir");
+	let repo_root = temp.path();
+
+	run_git(repo_root, &["init"]);
+	run_git(repo_root, &["config", "user.email", "pullhook@example.com"]);
+	run_git(repo_root, &["config", "user.name", "Pullhook Test"]);
+
+	write_file(repo_root, Path::new("package.json"), "{\"name\":\"root\"}\n");
+	write_file(
+		repo_root,
+		Path::new("package-lock.json"),
+		"{\"name\":\"root\",\"lockfileVersion\":3}\n",
+	);
+	write_file(
+		repo_root,
+		Path::new("packages/a/package.json"),
+		"{\"name\":\"a\",\"version\":\"1.0.0\"}\n",
+	);
+
+	run_git(repo_root, &["add", "."]);
+	run_git(repo_root, &["commit", "-m", "initial"]);
+
+	let branch = current_branch(repo_root);
+	run_git(repo_root, &["checkout", "-b", "feature/update-manifest"]);
+
+	write_file(
+		repo_root,
+		Path::new("packages/a/package.json"),
+		"{\"name\":\"a\",\"version\":\"2.0.0\"}\n",
+	);
+
+	run_git(repo_root, &["add", "."]);
+	run_git(repo_root, &["commit", "-m", "update nested package"]);
+	run_git(repo_root, &["checkout", &branch]);
+	run_git(
+		repo_root,
+		&["merge", "--no-ff", "feature/update-manifest", "-m", "merge feature"],
 	);
 
 	temp

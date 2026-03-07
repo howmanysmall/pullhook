@@ -1,7 +1,7 @@
 //! Git operations used by pullhook.
 
 use std::path::PathBuf;
-use std::process::Command;
+use std::process::{Command, Output};
 
 use tracing::debug;
 
@@ -69,17 +69,7 @@ fn revision_exists(rev: &str, debug_enabled: bool) -> Result<bool, PullhookError
 }
 
 fn run_git<const N: usize>(args: [&str; N], debug_enabled: bool) -> Result<String, PullhookError> {
-	if debug_enabled {
-		debug!(command = format!("git {}", args.join(" ")), "running git command");
-	}
-
-	let output = Command::new("git")
-		.args(args)
-		.output()
-		.map_err(|source| PullhookError::GitIo {
-			command: format!("git {}", args.join(" ")),
-			source,
-		})?;
+	let GitCommandOutput { command, output } = run_git_command(args, debug_enabled, "running git command")?;
 
 	if output.status.success() {
 		let stdout = String::from_utf8_lossy(&output.stdout).to_string();
@@ -87,23 +77,39 @@ fn run_git<const N: usize>(args: [&str; N], debug_enabled: bool) -> Result<Strin
 	}
 
 	Err(PullhookError::GitCommand {
-		command: format!("git {}", args.join(" ")),
+		command,
 		stderr: String::from_utf8_lossy(&output.stderr).trim().to_owned(),
 	})
 }
 
 fn run_git_status<const N: usize>(args: [&str; N], debug_enabled: bool) -> Result<bool, PullhookError> {
+	let GitCommandOutput { output, .. } = run_git_command(args, debug_enabled, "running git probe command")?;
+
+	Ok(output.status.success())
+}
+
+struct GitCommandOutput {
+	command: String,
+	output: Output,
+}
+
+fn run_git_command<const N: usize>(
+	args: [&str; N],
+	debug_enabled: bool,
+	message: &'static str,
+) -> Result<GitCommandOutput, PullhookError> {
+	let command = format!("git {}", args.join(" "));
 	if debug_enabled {
-		debug!(command = format!("git {}", args.join(" ")), "running git probe command");
+		debug!(%command, "{message}");
 	}
 
 	let output = Command::new("git")
 		.args(args)
 		.output()
 		.map_err(|source| PullhookError::GitIo {
-			command: format!("git {}", args.join(" ")),
+			command: command.clone(),
 			source,
 		})?;
 
-	Ok(output.status.success())
+	Ok(GitCommandOutput { command, output })
 }
