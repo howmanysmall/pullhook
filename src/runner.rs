@@ -1,5 +1,6 @@
 //! Command execution and task scheduling.
 
+use std::borrow::Cow;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitStatus, Stdio};
@@ -28,10 +29,10 @@ pub enum Invocation {
 
 impl Invocation {
 	#[must_use]
-	pub fn display(&self) -> String {
+	pub fn display(&self) -> Cow<'_, str> {
 		match self {
-			Self::Command { raw, .. } => raw.clone(),
-			Self::Script { script } => format!("npm run-script {script}"),
+			Self::Command { raw, .. } => Cow::Borrowed(raw),
+			Self::Script { script } => Cow::Owned(format!("npm run-script {script}")),
 		}
 	}
 }
@@ -354,7 +355,10 @@ fn command_failed(display_command: &str, cwd: &Path, exit_code: Option<i32>, det
 		command: display_command.to_owned(),
 		cwd: cwd.display().to_string(),
 		code: exit_code,
-		status: format_exit_status(exit_code),
+		status: exit_code.map_or_else(
+			|| "no exit code (terminated by signal)".to_owned(),
+			|value| value.to_string(),
+		),
 		details,
 	}
 }
@@ -389,7 +393,7 @@ fn classify_exit_status(status: ExitStatus) -> (ResultState, Option<i32>) {
 }
 
 fn normalize_output(bytes: &[u8]) -> String {
-	String::from_utf8_lossy(bytes).to_string()
+	String::from_utf8_lossy(bytes).into_owned()
 }
 
 fn normalize_failure_details(stdout: &str, stderr: &str, fallback: &str) -> String {
@@ -402,11 +406,4 @@ fn normalize_failure_details(stdout: &str, stderr: &str, fallback: &str) -> Stri
 	} else {
 		stderr.trim().to_owned()
 	}
-}
-
-fn format_exit_status(code: Option<i32>) -> String {
-	code.map_or_else(
-		|| "no exit code (terminated by signal)".to_owned(),
-		|value| value.to_string(),
-	)
 }
