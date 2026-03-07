@@ -188,6 +188,12 @@
 		"bash": {
 			"*": "ask",
 			"bat *": "allow",
+			"cargo build *": "allow",
+			"cargo check *": "allow",
+			"cargo clippy *": "allow",
+			"cargo doc *": "allow",
+			"cargo run *": "allow",
+			"cargo test *": "allow",
 			"cat *": "allow",
 			"cd *": "allow",
 			"delta *": "allow",

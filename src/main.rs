@@ -13,7 +13,7 @@ use clap::Parser;
 use tracing::debug;
 use tracing_subscriber::EnvFilter;
 
-use crate::cli::Cli;
+use crate::cli::{Cli, Commands, RunArgs};
 use crate::output::{DryRunSummary, NonSuccessReport, Renderer, Summary, TaskBlock};
 use crate::pm::{PackageManager, detect_package_manager};
 
@@ -63,15 +63,25 @@ struct MatchSet {
 
 fn main() {
 	let cli = Cli::parse();
-	init_tracing(cli.debug);
 
-	if let Err(error) = run(&cli) {
+	if let Some(Commands::Completion { shell }) = cli.command.as_ref() {
+		print_completion(*shell);
+		return;
+	}
+
+	init_tracing(cli.run.debug);
+
+	if let Err(error) = run(&cli.run) {
 		eprintln!("error: {error:#}");
 		std::process::exit(1);
 	}
 }
 
-fn run(cli: &Cli) -> Result<()> {
+fn print_completion(shell: clap_complete::Shell) {
+	Cli::print_completion(shell);
+}
+
+fn run(cli: &RunArgs) -> Result<()> {
 	let renderer = Renderer::new(cli.render);
 	let repo_root = resolve_repo_root(cli.debug)?;
 	let run_config = resolve_run_config(cli, &repo_root)?;
@@ -131,7 +141,7 @@ fn run(cli: &Cli) -> Result<()> {
 	Ok(())
 }
 
-fn resolve_run_config(cli: &Cli, repo_root: &std::path::Path) -> Result<RunConfig> {
+fn resolve_run_config(cli: &RunArgs, repo_root: &std::path::Path) -> Result<RunConfig> {
 	let mut match_strategy = MatchStrategy::Glob(cli.pattern.clone().unwrap_or_default());
 	let mut command = cli.command.clone();
 	let script = cli.script.clone();
@@ -162,7 +172,7 @@ fn resolve_run_config(cli: &Cli, repo_root: &std::path::Path) -> Result<RunConfi
 	})
 }
 
-fn collect_matches(cli: &Cli, run_config: &RunConfig) -> Result<MatchSet> {
+fn collect_matches(cli: &RunArgs, run_config: &RunConfig) -> Result<MatchSet> {
 	let (base, changed_files) = git::resolve_base_and_changed_files(cli.base.as_deref(), cli.debug)
 		.context("failed to resolve diff base or read changed files")?;
 	let changed_count = changed_files.len();

@@ -2,7 +2,8 @@
 
 use std::num::NonZeroUsize;
 
-use clap::Parser;
+use clap::{Args, CommandFactory, Parser, Subcommand};
+use clap_complete::{Shell, generate};
 
 use crate::output::RenderMode;
 
@@ -11,11 +12,34 @@ use crate::output::RenderMode;
 #[command(name = "pullhook")]
 #[command(about = "Run commands when files change after git pull")]
 #[command(version)]
+#[command(args_conflicts_with_subcommands = true)]
+#[command(subcommand_negates_reqs = true)]
+#[command(propagate_version = true)]
+pub struct Cli {
+	#[command(flatten)]
+	pub run: RunArgs,
+
+	#[command(subcommand)]
+	pub command: Option<Commands>,
+}
+
+/// Non-run command variants.
+#[derive(Debug, Clone, Subcommand)]
+pub enum Commands {
+	/// Generate shell completion scripts.
+	Completion {
+		/// Shell to generate completions for.
+		shell: Shell,
+	},
+}
+
+/// Arguments for the default pullhook execution flow.
+#[derive(Debug, Clone, Args)]
 #[expect(
 	clippy::struct_excessive_bools,
 	reason = "CLI flags are naturally represented as independent booleans"
 )]
-pub struct Cli {
+pub struct RunArgs {
 	/// Pattern to match files.
 	#[arg(short = 'p', long = "pattern", value_name = "glob")]
 	#[arg(required_unless_present = "install")]
@@ -74,6 +98,13 @@ pub struct Cli {
 }
 
 impl Cli {
+	/// Write shell completions to stdout.
+	pub fn print_completion(shell: Shell) {
+		generate(shell, &mut Self::command(), "pullhook", &mut std::io::stdout());
+	}
+}
+
+impl RunArgs {
 	/// Compute the effective `--once` mode.
 	#[must_use]
 	pub const fn effective_once(&self) -> bool {
@@ -89,4 +120,29 @@ impl Cli {
 
 fn default_jobs() -> usize {
 	std::thread::available_parallelism().map_or(1, NonZeroUsize::get).min(8)
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn clap_configuration_is_valid() {
+		Cli::command().debug_assert();
+	}
+
+	#[test]
+	fn completion_subcommand_skips_run_requirements() {
+		let cli = Cli::try_parse_from(["pullhook", "completion", "bash"]).expect("completion parses");
+
+		assert!(matches!(cli.command, Some(Commands::Completion { shell: Shell::Bash })));
+		assert!(cli.run.pattern.is_none());
+	}
+
+	#[test]
+	fn run_args_conflict_with_completion_subcommand() {
+		let error = Cli::try_parse_from(["pullhook", "--install", "completion", "bash"]).expect_err("mixed args fail");
+
+		assert_eq!(error.kind(), clap::error::ErrorKind::ArgumentConflict);
+	}
 }
