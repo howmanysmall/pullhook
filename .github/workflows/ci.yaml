@@ -145,6 +145,10 @@ jobs:
     dist-release-workflow:
         name: Release Workflow
         runs-on: ubuntu-latest
+        env:
+            # This job only needs cargo metadata for cargo-dist generation checks.
+            RUSTC_WRAPPER: ""
+            CARGO_BUILD_RUSTC_WRAPPER: ""
         steps:
             - uses: actions/checkout@v6
             - uses: dtolnay/rust-toolchain@master
