@@ -141,6 +141,28 @@ jobs:
               env:
                   RUSTDOCFLAGS: "-D warnings"
 
+    # Ensure generated cargo-dist release workflow is up to date
+    dist-release-workflow:
+        name: Release Workflow
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v6
+            - uses: dtolnay/rust-toolchain@master
+              with:
+                  toolchain: "1.93.1"
+            - name: Install cargo-dist
+              shell: bash
+              run: |
+                  dist_version="$(sed -n 's/^cargo-dist-version = "\(.*\)"/\1/p' dist-workspace.toml)"
+                  if [[ -z "${dist_version}" ]]; then
+                      echo "Failed to read cargo-dist-version from dist-workspace.toml"
+                      exit 1
+                  fi
+
+                  curl --proto '=https' --tlsv1.2 -LsSf "https://github.com/axodotdev/cargo-dist/releases/download/v${dist_version}/cargo-dist-installer.sh" | sh
+            - name: Check generated release workflow
+              run: dist generate --mode ci --check
+
     # Informational: Binary size analysis
     bloat:
         name: Binary Size (cargo-bloat)
@@ -192,7 +214,7 @@ jobs:
         name: CI Success
         runs-on: ubuntu-latest
         if: always()
-        needs: [fmt, clippy, test, audit, deny, shear, gitleaks, docs]
+        needs: [fmt, clippy, test, audit, deny, shear, gitleaks, docs, dist-release-workflow]
         steps:
             - name: Check all required jobs
               run: |
@@ -203,7 +225,8 @@ jobs:
                         "${{ needs.deny.result }}" != "success" || \
                         "${{ needs.shear.result }}" != "success" || \
                         "${{ needs.gitleaks.result }}" != "success" || \
-                        "${{ needs.docs.result }}" != "success" ]]; then
+                        "${{ needs.docs.result }}" != "success" || \
+                        "${{ needs.dist-release-workflow.result }}" != "success" ]]; then
                     echo "One or more required jobs failed"
                     exit 1
                   fi

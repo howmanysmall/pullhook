@@ -16,9 +16,6 @@
 name: Release
 permissions:
   "contents": "write"
-env:
-  # Release runners don't provision sccache, so clear the repo default wrapper for cargo-dist.
-  CARGO_BUILD_RUSTC_WRAPPER: ""
 
 # This task will run whenever you push a git tag that looks like a version
 # like "1.0.0", "v0.1.0-prerelease.1", "my-app/0.1.0", "releases/v1.0.0", etc.
@@ -129,6 +126,13 @@ jobs:
             curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
             echo "$HOME/.cargo/bin" >> $GITHUB_PATH
           fi
+      - name: "Disable sccache wrapper for cargo-dist builds"
+        if: "runner.os != 'Windows'"
+        run: "echo 'CARGO_BUILD_RUSTC_WRAPPER=' >> \"$GITHUB_ENV\""
+      - name: "Disable sccache wrapper for cargo-dist builds"
+        if: "runner.os == 'Windows'"
+        run: "\"CARGO_BUILD_RUSTC_WRAPPER=\" >> $env:GITHUB_ENV"
+        shell: "pwsh"
       - name: Install dist
         run: ${{ matrix.install_dist.run }}
       # Get the dist-manifest
