@@ -19,6 +19,7 @@ pre-release-hook = ["./scripts/pre-commit.sh"]
 [dependencies]
 anyhow = "1.0.100"
 clap = { version = "4.5.53", features = ["derive"] }
+gix = "0.80.0"
 globset = "0.4.18"
 rayon = "1.11.0"
 shell-words = "1.1.0"
@@ -43,4 +44,4 @@ unsafe_code = "forbid"
 # The profile that 'dist' will build with
 [profile.dist]
 inherits = "release"
-lto = "thin"
+panic = "abort"

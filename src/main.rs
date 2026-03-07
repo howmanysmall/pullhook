@@ -14,6 +14,7 @@ use tracing::debug;
 use tracing_subscriber::EnvFilter;
 
 use crate::cli::Cli;
+use crate::git::GitRepo;
 use crate::output::{DryRunSummary, NonSuccessReport, Renderer, Summary, TaskBlock};
 use crate::pm::{PackageManager, detect_package_manager};
 
@@ -34,17 +35,13 @@ impl RunConfig {
 #[derive(Debug, Clone)]
 enum MatchStrategy {
 	Glob(String),
-	Install {
-		pattern: String,
-		watched_files: &'static [&'static str],
-	},
+	Install { pattern: String },
 }
 
 impl MatchStrategy {
 	fn from_package_manager(package_manager: PackageManager) -> Self {
 		Self::Install {
 			pattern: package_manager.install_pattern(),
-			watched_files: package_manager.watched_files(),
 		}
 	}
 
@@ -53,12 +50,6 @@ impl MatchStrategy {
 			Self::Glob(pattern) | Self::Install { pattern, .. } => pattern,
 		}
 	}
-}
-
-#[derive(Debug)]
-struct MatchSet {
-	changed_count: usize,
-	matched_files: Vec<std::path::PathBuf>,
 }
 
 fn main() {
@@ -73,15 +64,14 @@ fn main() {
 
 fn run(cli: &Cli) -> Result<()> {
 	let renderer = Renderer::new(cli.render);
-	let repo_root = resolve_repo_root(cli.debug)?;
+	let cwd = std::env::current_dir().context("failed to read current working directory")?;
+	let repo = GitRepo::discover(&cwd, cli.debug).context("failed to resolve repository root")?;
+	let repo_root = repo.root().to_path_buf();
 	let run_config = resolve_run_config(cli, &repo_root)?;
 
 	renderer.render_prepare_stage(run_config.pattern());
 
-	let MatchSet {
-		changed_count,
-		matched_files,
-	} = collect_matches(cli, &run_config)?;
+	let (changed_count, matched_files) = collect_matches(cli, &repo, &run_config)?;
 
 	renderer.render_discovery_stage(changed_count, matched_files.len());
 
@@ -91,14 +81,20 @@ fn run(cli: &Cli) -> Result<()> {
 	}
 
 	if let Some(message) = &cli.message {
-		render_message(&renderer, message);
+		renderer.render_message_stage(message);
 	}
 
 	let invocations = runner::prepare_invocations(run_config.command.as_deref(), run_config.script.as_deref())
 		.context("failed to prepare command invocations")?;
 
 	if invocations.is_empty() {
-		render_empty_summary(&renderer, matched_files.len());
+		renderer.render_summary_stage(Summary {
+			matched_files: matched_files.len(),
+			task_dirs: 0,
+			passed: 0,
+			failed: 0,
+			interrupted: 0,
+		});
 		return Ok(());
 	}
 
@@ -162,76 +158,47 @@ fn resolve_run_config(cli: &Cli, repo_root: &std::path::Path) -> Result<RunConfi
 	})
 }
 
-fn collect_matches(cli: &Cli, run_config: &RunConfig) -> Result<MatchSet> {
-	let (base, changed_files) = git::resolve_base_and_changed_files(cli.base.as_deref(), cli.debug)
-		.context("failed to resolve diff base or read changed files")?;
-	let changed_count = changed_files.len();
-
-	if cli.debug {
-		debug!(%base, "resolved diff base");
-		debug!(count = changed_count, "loaded changed files");
-		for path in &changed_files {
-			debug!(changed = %path.display(), "changed file");
-		}
-	}
-
-	let matched_files: Vec<_> = match &run_config.match_strategy {
+fn collect_matches(cli: &Cli, repo: &GitRepo, run_config: &RunConfig) -> Result<(usize, Vec<std::path::PathBuf>)> {
+	let (base, changed_count, matched_files) = match &run_config.match_strategy {
 		MatchStrategy::Glob(pattern) => {
+			let (base, changed_files) = repo
+				.resolve_base_and_changed_files(cli.base.as_deref(), cli.debug)
+				.context("failed to resolve diff base or read changed files")?;
+			let changed_count = changed_files.len();
+
+			if cli.debug {
+				debug!(count = changed_count, "loaded changed files");
+				for path in &changed_files {
+					debug!(changed = %path.display(), "changed file");
+				}
+			}
+
 			let matcher = matcher::compile(pattern).context("failed to compile pattern")?;
-			changed_files
+			let matched_files = changed_files
 				.into_iter()
 				.filter(|path| matcher.is_match(path))
-				.collect()
+				.collect();
+
+			(base, changed_count, matched_files)
 		}
-		MatchStrategy::Install { watched_files, .. } => changed_files
-			.into_iter()
-			.filter(|path| install_matcher_matches(path, watched_files))
-			.collect(),
+		MatchStrategy::Install { pattern } => {
+			let matcher = matcher::compile(pattern).context("failed to compile pattern")?;
+			let (base, changed_count, matched_files) = repo
+				.resolve_install_matches(cli.base.as_deref(), |path| matcher.is_match(path), cli.debug)
+				.context("failed to resolve diff base or read changed files")?;
+			(base, changed_count, matched_files)
+		}
 	};
 
 	if cli.debug {
+		debug!(%base, "resolved diff base");
 		debug!(count = matched_files.len(), "matched changed files");
 		for path in &matched_files {
 			debug!(matched = %path.display(), "pattern match");
 		}
 	}
 
-	Ok(MatchSet {
-		changed_count,
-		matched_files,
-	})
-}
-
-fn install_matcher_matches(path: &std::path::Path, watched_files: &[&str]) -> bool {
-	path.file_name()
-		.and_then(std::ffi::OsStr::to_str)
-		.is_some_and(|name| watched_files.contains(&name))
-}
-
-fn resolve_repo_root(debug_enabled: bool) -> Result<std::path::PathBuf> {
-	let cwd = std::env::current_dir().context("failed to read current working directory")?;
-	if cwd.join(".git").exists() {
-		if debug_enabled {
-			debug!(cwd = %cwd.display(), "using current working directory as repository root");
-		}
-		return Ok(cwd);
-	}
-
-	git::repo_root(debug_enabled).context("failed to resolve repository root")
-}
-
-fn render_message(renderer: &Renderer, message: &str) {
-	renderer.render_message_stage(message);
-}
-
-fn render_empty_summary(renderer: &Renderer, matched_files: usize) {
-	renderer.render_summary_stage(Summary {
-		matched_files,
-		task_dirs: 0,
-		passed: 0,
-		failed: 0,
-		interrupted: 0,
-	});
+	Ok((changed_count, matched_files))
 }
 
 fn render_task_results(renderer: &Renderer, results: &[runner::TaskResult], repo_root: &std::path::Path) {
@@ -321,14 +288,14 @@ fn print_dry_run(
 ) -> usize {
 	renderer.render_dry_run_stage();
 	let mut planned_commands = 0usize;
-	let display_commands: Vec<_> = invocations.iter().map(runner::Invocation::display).collect();
 
 	for cwd in tasks {
 		let relative = runner::relative_cwd_label(cwd, repo_root);
 
-		for command in &display_commands {
-			renderer.render_dry_run_block(&relative, command);
-			planned_commands = planned_commands.saturating_add(1);
+		for invocation in invocations {
+			let command = invocation.display();
+			renderer.render_dry_run_block(&relative, command.as_ref());
+			planned_commands += 1;
 		}
 	}
 

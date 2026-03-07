@@ -24,7 +24,6 @@ pub enum RenderMode {
 }
 
 impl RenderMode {
-	#[must_use]
 	fn effective(self) -> Self {
 		env::var(RENDER_MODE_ENV)
 			.ok()
@@ -41,7 +40,6 @@ impl RenderMode {
 		}
 	}
 
-	#[must_use]
 	fn use_style(self) -> bool {
 		match self {
 			Self::Auto => {
@@ -62,7 +60,6 @@ impl RenderMode {
 		}
 	}
 
-	#[must_use]
 	fn use_compact_layout(self) -> bool {
 		match self {
 			Self::Auto => io::stdout().is_terminal(),
