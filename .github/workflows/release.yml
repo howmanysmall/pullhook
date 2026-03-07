@@ -16,6 +16,9 @@
 name: Release
 permissions:
   "contents": "write"
+env:
+  # Release runners don't provision sccache, so clear the repo default wrapper for cargo-dist.
+  CARGO_BUILD_RUSTC_WRAPPER: ""
 
 # This task will run whenever you push a git tag that looks like a version
 # like "1.0.0", "v0.1.0-prerelease.1", "my-app/0.1.0", "releases/v1.0.0", etc.

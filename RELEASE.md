@@ -78,6 +78,9 @@ Release behavior is configured in `[workspace.metadata.release]` in `Cargo.toml`
 - `sign-commit = false` - No GPG signing
 - `sign-tag = false` - No GPG signing
 
+The generated [release workflow](./.github/workflows/release.yml) also sets `CARGO_BUILD_RUSTC_WRAPPER=""`.
+Keep that override if the workflow is regenerated, because release runners do not install `sccache` but the repo-level cargo config enables it by default.
+
 ## Dry Run
 
 To preview what a release will do without making changes:
