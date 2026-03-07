@@ -23,7 +23,7 @@ jobs:
         name: Format
         runs-on: ubuntu-latest
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v6
             - uses: dtolnay/rust-toolchain@master
               with:
                   toolchain: "1.93.1"
@@ -35,7 +35,7 @@ jobs:
         name: Clippy
         runs-on: ubuntu-latest
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v6
             - uses: dtolnay/rust-toolchain@master
               with:
                   toolchain: "1.93.1"
@@ -49,7 +49,7 @@ jobs:
         name: Tests
         runs-on: ubuntu-latest
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v6
             - uses: dtolnay/rust-toolchain@master
               with:
                   toolchain: "1.93.1"
@@ -66,7 +66,7 @@ jobs:
         name: Security Audit
         runs-on: ubuntu-latest
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v6
             - uses: dtolnay/rust-toolchain@master
               with:
                   toolchain: "1.93.1"
@@ -81,7 +81,7 @@ jobs:
         name: Dependency Policy (cargo-deny)
         runs-on: ubuntu-latest
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v6
             - uses: dtolnay/rust-toolchain@master
               with:
                   toolchain: "1.93.1"
@@ -98,7 +98,7 @@ jobs:
         name: Dead Code (cargo-shear)
         runs-on: ubuntu-latest
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v6
             - uses: dtolnay/rust-toolchain@master
               with:
                   toolchain: "1.93.1"
@@ -118,7 +118,7 @@ jobs:
             contents: read
             pull-requests: read
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v6
               with:
                   fetch-depth: 0
             - uses: gitleaks/gitleaks-action@v2
@@ -130,7 +130,7 @@ jobs:
         name: Documentation
         runs-on: ubuntu-latest
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v6
             - uses: dtolnay/rust-toolchain@master
               with:
                   toolchain: "1.93.1"
@@ -147,7 +147,7 @@ jobs:
         runs-on: ubuntu-latest
         if: github.event_name == 'pull_request'
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v6
             - uses: dtolnay/rust-toolchain@master
               with:
                   toolchain: "1.93.1"
@@ -169,7 +169,7 @@ jobs:
         runs-on: ubuntu-latest
         if: github.event_name == 'pull_request'
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v6
             - uses: dtolnay/rust-toolchain@master
               with:
                   toolchain: "1.93.1"
