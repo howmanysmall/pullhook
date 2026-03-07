@@ -1,27 +1,40 @@
 //! Domain errors for pullhook.
 
+use std::error::Error as StdError;
+
 use thiserror::Error;
 
 /// Error type used by internal modules.
 #[derive(Debug, Error)]
 pub enum PullhookError {
-	/// Git command exited unsuccessfully.
-	#[error("git command failed: `{command}`\n{stderr}")]
-	GitCommand {
-		/// Command that was executed.
-		command: String,
-		/// Stderr output.
-		stderr: String,
+	/// Git repository could not be opened or discovered.
+	#[error("failed to open git repository in `{path}`: {source}")]
+	GitOpen {
+		/// Path used to discover the repository.
+		path: String,
+		/// Underlying git error.
+		#[source]
+		source: Box<dyn StdError + Send + Sync>,
 	},
 
-	/// Git command failed to start.
-	#[error("failed to start git command `{command}`: {source}")]
-	GitIo {
-		/// Command that was executed.
-		command: String,
-		/// Underlying IO error.
+	/// Git revision could not be resolved.
+	#[error("failed to resolve git revision `{revision}`: {source}")]
+	GitRevision {
+		/// Revision specification that failed.
+		revision: String,
+		/// Underlying git error.
 		#[source]
-		source: std::io::Error,
+		source: Box<dyn StdError + Send + Sync>,
+	},
+
+	/// Git diff computation failed.
+	#[error("failed to diff `{base}` against `HEAD`: {source}")]
+	GitDiff {
+		/// Base revision used for the diff.
+		base: String,
+		/// Underlying git error.
+		#[source]
+		source: Box<dyn StdError + Send + Sync>,
 	},
 
 	/// Glob pattern parsing or compilation error.

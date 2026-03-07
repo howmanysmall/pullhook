@@ -14,6 +14,7 @@ use tracing::debug;
 use tracing_subscriber::EnvFilter;
 
 use crate::cli::Cli;
+use crate::git::GitRepo;
 use crate::output::{DryRunSummary, NonSuccessReport, Renderer, Summary, TaskBlock};
 use crate::pm::{PackageManager, detect_package_manager};
 
@@ -73,7 +74,9 @@ fn main() {
 
 fn run(cli: &Cli) -> Result<()> {
 	let renderer = Renderer::new(cli.render);
-	let repo_root = resolve_repo_root(cli.debug)?;
+	let cwd = std::env::current_dir().context("failed to read current working directory")?;
+	let repo = GitRepo::discover(&cwd, cli.debug).context("failed to resolve repository root")?;
+	let repo_root = repo.root().to_path_buf();
 	let run_config = resolve_run_config(cli, &repo_root)?;
 
 	renderer.render_prepare_stage(run_config.pattern());
@@ -81,7 +84,7 @@ fn run(cli: &Cli) -> Result<()> {
 	let MatchSet {
 		changed_count,
 		matched_files,
-	} = collect_matches(cli, &run_config)?;
+	} = collect_matches(cli, &repo, &run_config)?;
 
 	renderer.render_discovery_stage(changed_count, matched_files.len());
 
@@ -162,34 +165,39 @@ fn resolve_run_config(cli: &Cli, repo_root: &std::path::Path) -> Result<RunConfi
 	})
 }
 
-fn collect_matches(cli: &Cli, run_config: &RunConfig) -> Result<MatchSet> {
-	let (base, changed_files) = git::resolve_base_and_changed_files(cli.base.as_deref(), cli.debug)
-		.context("failed to resolve diff base or read changed files")?;
-	let changed_count = changed_files.len();
-
-	if cli.debug {
-		debug!(%base, "resolved diff base");
-		debug!(count = changed_count, "loaded changed files");
-		for path in &changed_files {
-			debug!(changed = %path.display(), "changed file");
-		}
-	}
-
-	let matched_files: Vec<_> = match &run_config.match_strategy {
+fn collect_matches(cli: &Cli, repo: &GitRepo, run_config: &RunConfig) -> Result<MatchSet> {
+	let (base, changed_count, matched_files) = match &run_config.match_strategy {
 		MatchStrategy::Glob(pattern) => {
+			let (base, changed_files) = repo
+				.resolve_base_and_changed_files(cli.base.as_deref(), cli.debug)
+				.context("failed to resolve diff base or read changed files")?;
+			let changed_count = changed_files.len();
+
+			if cli.debug {
+				debug!(count = changed_count, "loaded changed files");
+				for path in &changed_files {
+					debug!(changed = %path.display(), "changed file");
+				}
+			}
+
 			let matcher = matcher::compile(pattern).context("failed to compile pattern")?;
-			changed_files
+			let matched_files = changed_files
 				.into_iter()
 				.filter(|path| matcher.is_match(path))
-				.collect()
+				.collect();
+
+			(base, changed_count, matched_files)
 		}
-		MatchStrategy::Install { watched_files, .. } => changed_files
-			.into_iter()
-			.filter(|path| install_matcher_matches(path, watched_files))
-			.collect(),
+		MatchStrategy::Install { watched_files, .. } => {
+			let (base, changed_count, matched_files) = repo
+				.resolve_install_matches(cli.base.as_deref(), watched_files, cli.debug)
+				.context("failed to resolve diff base or read changed files")?;
+			(base, changed_count, matched_files)
+		}
 	};
 
 	if cli.debug {
+		debug!(%base, "resolved diff base");
 		debug!(count = matched_files.len(), "matched changed files");
 		for path in &matched_files {
 			debug!(matched = %path.display(), "pattern match");
@@ -200,24 +208,6 @@ fn collect_matches(cli: &Cli, run_config: &RunConfig) -> Result<MatchSet> {
 		changed_count,
 		matched_files,
 	})
-}
-
-fn install_matcher_matches(path: &std::path::Path, watched_files: &[&str]) -> bool {
-	path.file_name()
-		.and_then(std::ffi::OsStr::to_str)
-		.is_some_and(|name| watched_files.contains(&name))
-}
-
-fn resolve_repo_root(debug_enabled: bool) -> Result<std::path::PathBuf> {
-	let cwd = std::env::current_dir().context("failed to read current working directory")?;
-	if cwd.join(".git").exists() {
-		if debug_enabled {
-			debug!(cwd = %cwd.display(), "using current working directory as repository root");
-		}
-		return Ok(cwd);
-	}
-
-	git::repo_root(debug_enabled).context("failed to resolve repository root")
 }
 
 fn render_message(renderer: &Renderer, message: &str) {

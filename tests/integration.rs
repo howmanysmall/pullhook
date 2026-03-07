@@ -92,6 +92,46 @@ fn install_matches_nested_manifest_changes_by_basename() {
 	assert!(stdout.contains("command: npm install"));
 }
 
+#[test]
+fn install_runs_from_subdirectory_with_repo_root_discovery() {
+	let temp = setup_repo_with_nested_manifest_change();
+	let repo_root = temp.path();
+
+	let output = ProcessCommand::new(assert_cmd::cargo::cargo_bin!("pullhook"))
+		.current_dir(repo_root.join("packages/a"))
+		.env("PULLHOOK_RENDER_MODE", "never")
+		.args(["--install", "--dry-run"])
+		.output()
+		.expect("command runs");
+
+	assert!(output.status.success(), "--install from subdirectory should succeed");
+
+	let stdout = String::from_utf8_lossy(&output.stdout);
+	assert!(stdout.contains("matched: 1"));
+	assert!(stdout.contains("directory: ."));
+	assert!(stdout.contains("command: npm install"));
+}
+
+#[test]
+fn install_accepts_explicit_base() {
+	let temp = setup_repo_with_nested_manifest_change();
+	let repo_root = temp.path();
+
+	let output = ProcessCommand::new(assert_cmd::cargo::cargo_bin!("pullhook"))
+		.current_dir(repo_root)
+		.env("PULLHOOK_RENDER_MODE", "never")
+		.args(["--install", "--base", "HEAD~1", "--dry-run"])
+		.output()
+		.expect("command runs");
+
+	assert!(output.status.success(), "--install with explicit base should succeed");
+
+	let stdout = String::from_utf8_lossy(&output.stdout);
+	assert!(stdout.contains("matched: 1"));
+	assert!(stdout.contains("directory: ."));
+	assert!(stdout.contains("command: npm install"));
+}
+
 fn setup_repo_with_merge() -> TempDir {
 	let temp = tempfile::tempdir().expect("create temp dir");
 	let repo_root = temp.path();
