@@ -1,6 +1,6 @@
 [package]
 name = "pullhook"
-version = "1.0.4"
+version = "0.1.0"
 edition = "2024"
 description = "Run commands after git pull when files change"
 homepage = "https://github.com/howmanysmall/pullhook"
