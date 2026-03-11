@@ -6,7 +6,7 @@ Following [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and [Semantic
 
 ## [Unreleased]
 
-## [0.1.0] - 2025-01-XX
+## [1.0.0] - 2026-03-10
 
 Initial release of pullhook.
 
@@ -70,5 +70,5 @@ Initial release of pullhook.
 - Dependency license and policy enforcement via `cargo deny`
 - Unsafe code forbidden via Rust lint configuration
 
-[Unreleased]: https://github.com/howmanysmall/pullhook/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/howmanysmall/pullhook/releases/tag/v0.1.0
+[Unreleased]: https://github.com/howmanysmall/pullhook/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/howmanysmall/pullhook/releases/tag/v1.0.0
