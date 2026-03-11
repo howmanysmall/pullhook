@@ -20,7 +20,7 @@ targets = [
 # Path that installers should place binaries in
 install-path = "CARGO_HOME"
 # Whether to install an updater program
-install-updater = true
+install-updater = false
 # Generate and dist a source tarball
 source-tarball = false
 # Checksums to generate for each App
