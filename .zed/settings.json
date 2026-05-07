@@ -147,7 +147,8 @@
 		"TSX": {
 			"code_actions_on_format": {
 				"source.fixAll.biome": true,
-				"source.fixAll.oxc": true
+				"source.fixAll.oxc": true,
+				"source.organizeImports.biome": false
 			},
 			"format_on_save": "on",
 			"formatter": [
@@ -165,8 +166,12 @@
 		},
 		"TypeScript": {
 			"code_actions_on_format": {
-				"source.fixAll.biome": true,
-				"source.fixAll.oxc": true
+				"source.fixAll": true,
+				"source.fixAll.oxc": true,
+				"source.fixAllDangerous.oxc": false,
+				"source.format.oxc": true,
+				"source.organizeImports": true,
+				"source.sort.json": true
 			},
 			"format_on_save": "on",
 			"formatter": [

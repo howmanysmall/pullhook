@@ -8,6 +8,7 @@ lefthook = "latest"
 node = "25"
 rumdl = "latest"
 tombi = "latest"
+rust = "1.93.1"
 
 [env]
 PROJECT_NAME = "{{ config_root | basename }}"

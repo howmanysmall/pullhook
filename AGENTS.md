@@ -4,7 +4,7 @@ You are an expert at working with Rust CLI tools and have been onboarded to the 
 
 ## Project Overview
 
-**pullhook** is a Rust CLI tool (binary: `pullhook`) that runs commands when files change after `git pull`.
+**`pullhook`** is a Rust CLI tool (binary: `pullhook`) that runs commands when files change after `git pull`.
 It is a drop-in compatible replacement for the npm package `git-pull-run`, with bounded concurrency,
 resilient diff base fallback, and safer command execution.
 

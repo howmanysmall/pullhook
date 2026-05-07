@@ -1,0 +1,8 @@
+[global]
+disable = [
+	"MD010",    # no hard tabs
+	"MD013",    # line length
+	"MD033",    # no raw HTML
+	"MD052",    # no empty links
+	"MD060"     # no duplicate headers
+]

@@ -1,7 +1,5 @@
 {
 	"compilerOptions": {
-		"declaration": false,
-		"declarationMap": false,
 		"noEmit": true,
 		"paths": {
 			"@constants/*": ["./scripts/shared/constants/*"],
@@ -9,8 +7,8 @@
 			"@utilities/*": ["./scripts/shared/utilities/*"]
 		},
 		"resolveJsonModule": true,
-		"rootDir": "scripts"
+		"rootDir": "."
 	},
 	"extends": "./tsconfig.base.json",
-	"include": ["scripts/**/*.ts"]
+	"include": ["commitlint.config.ts", "scripts/**/*.ts"]
 }

@@ -1,0 +1,147 @@
+{
+	"$schema": "node_modules/oxlint/configuration_schema.json",
+	"categories": {
+		"correctness": "error",
+		"nursery": "error",
+		"pedantic": "error",
+		"perf": "error",
+		"restriction": "error",
+		"style": "error",
+		"suspicious": "error"
+	},
+	"env": {
+		"builtin": true,
+		"node": true
+	},
+	"extends": [],
+	"ignorePatterns": ["**/{node_modules,dist,do-not-sync-ever,target}/**"],
+	"options": {
+		"denyWarnings": true,
+		"maxWarnings": 0,
+		"reportUnusedDisableDirectives": "error",
+		"respectEslintDisableDirectives": true,
+		"typeAware": true,
+		"typeCheck": true
+	},
+	"overrides": [
+		{
+			"files": ["*.config.{js,ts}"],
+			"rules": {
+				"import/no-default-export": "off"
+			}
+		}
+	],
+	"plugins": ["eslint", "import", "jsdoc", "node", "oxc", "promise", "typescript", "unicorn"],
+	"rules": {
+		"curly": ["error", "multi-line"],
+		"eslint/no-continue": "off",
+		"eslint/no-magic-numbers": "off",
+		"func-names": ["error", "as-needed", { "generators": "as-needed" }],
+		"func-style": [
+			"error",
+			"declaration",
+			{
+				"allowArrowFunctions": false,
+				"allowTypeAnnotation": true,
+				"overrides": {
+					"namedExports": "ignore"
+				}
+			}
+		],
+		"id-length": [
+			"error",
+			{
+				"exceptionPatterns": ["^_"],
+				"exceptions": ["_", "x", "y", "z", "a", "b", "$"],
+				"max": 45
+			}
+		],
+		"import/exports-last": "off",
+		"import/group-exports": "off",
+		"import/max-dependencies": "off",
+		"import/no-cycle": [
+			"error",
+			{
+				"allowUnsafeDynamicCyclicDependency": true,
+				"ignoreExternal": false,
+				"ignoreTypes": true,
+				"maxDepth": 4294967295
+			}
+		],
+		"import/no-default-export": "error",
+		"import/no-named-as-default": "error",
+		"import/no-named-export": "off",
+		"import/no-nodejs-modules": "off",
+		"import/no-relative-parent-imports": "off",
+		"import/no-unassigned-import": [
+			"error",
+			{
+				"allow": [
+					"**/*.css",
+					"**/*.scss",
+					"**/*.less",
+					"**/*.sass",
+					"@total-typescript/ts-reset",
+					"@polyfills/bun/bun-nanoseconds",
+					"dotenv/config"
+				]
+			}
+		],
+		"import/prefer-default-export": "off",
+		"new-cap": "off",
+		"no-console": "off",
+		"no-duplicate-imports": "off",
+		"no-ternary": "off",
+		"oxc/no-async-await": "off",
+		"sort-imports": [
+			"error",
+			{
+				"allowSeparatedGroups": true,
+				"ignoreCase": true,
+				"ignoreDeclarationSort": true,
+				"ignoreMemberSort": false
+			}
+		],
+		"sort-keys": [
+			"error",
+			"asc",
+			{
+				"allowLineSeparatedGroups": true,
+				"caseSensitive": false,
+				"minKeys": 2,
+				"natural": true
+			}
+		],
+		"typescript/array-type": [
+			"error",
+			{
+				"default": "generic",
+				"readonly": "generic"
+			}
+		],
+		"typescript/prefer-readonly-parameter-types": [
+			"error",
+			{
+				"allow": [
+					"Promise",
+					{
+						"from": "package",
+						"name": "PathLike",
+						"package": "node:fs"
+					}
+				],
+				"checkParameterProperties": true,
+				"ignoreInferredTypes": false,
+				"treatMethodsAsReadonly": true
+			}
+		]
+	},
+	"settings": {
+		"jsdoc": {
+			"tagNamePreference": {
+				"metadata": "metadata",
+				"rejects": "rejects"
+			}
+		}
+	}
+}
