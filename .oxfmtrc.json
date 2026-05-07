@@ -8,6 +8,7 @@
 	"ignorePatterns": [
 		"**/*.{md,toml}",
 		"**/do-not-sync-ever/**",
+		".github/workflows/release.yml",
 		"**/aube-lock.yaml",
 		"skills-lock.json",
 		".vscode/*.json"

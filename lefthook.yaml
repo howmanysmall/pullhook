@@ -14,7 +14,7 @@ pre-commit:
       globs:
         - "**/*.{js,mjs,cjs,ts,mts,cts,jsx,tsx,json,jsonc}"
         - "**/*.{css,graphql,gql,html}"
-      run: aube run biome check {staged_files}
+      run: aube run biome check --no-errors-on-unmatched {staged_files}
       stage: 1
     cargo-fmt:
       glob: "*.rs"

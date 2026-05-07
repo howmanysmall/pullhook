@@ -39,6 +39,21 @@ const BUN_SPEC: PackageManagerSpec = PackageManagerSpec {
 	watched_files: &["package.json", "bun.lock", "bun.lockb"],
 };
 
+const AUBE_SPEC: PackageManagerSpec = PackageManagerSpec {
+	name: "aube",
+	lock_files: &["aube-lock.yaml"],
+	config_files: &[],
+	watched_files: &[
+		"aube-lock.yaml",
+		"bun.lock",
+		"npm-shrinkwrap.json",
+		"package.json",
+		"package-lock.json",
+		"pnpm-lock.yaml",
+		"yarn.lock",
+	],
+};
+
 const DENO_SPEC: PackageManagerSpec = PackageManagerSpec {
 	name: "deno",
 	lock_files: &["deno.lock"],
@@ -55,7 +70,8 @@ const VLT_SPEC: PackageManagerSpec = PackageManagerSpec {
 
 // TODO: add wally support?
 
-const LOCKFILE_DETECTION_ORDER: [PackageManager; 6] = [
+const LOCKFILE_DETECTION_ORDER: [PackageManager; 7] = [
+	PackageManager::Aube,
 	PackageManager::Bun,
 	PackageManager::Npm,
 	PackageManager::Yarn,
@@ -79,6 +95,8 @@ pub enum PackageManager {
 	Deno,
 	/// vlt
 	Vlt,
+	/// aube
+	Aube,
 }
 
 impl PackageManager {
@@ -90,6 +108,7 @@ impl PackageManager {
 			Self::Bun => &BUN_SPEC,
 			Self::Deno => &DENO_SPEC,
 			Self::Vlt => &VLT_SPEC,
+			Self::Aube => &AUBE_SPEC,
 		}
 	}
 
@@ -208,6 +227,24 @@ mod tests {
 	#[test]
 	fn install_pattern_matches_current_vlt_contract() {
 		assert_eq!(PackageManager::Vlt.install_pattern(), "+(package.json|vlt-lock.json)");
+	}
+
+	#[test]
+	fn install_pattern_matches_current_aube_contract() {
+		assert_eq!(
+			PackageManager::Aube.install_pattern(),
+			"+(aube-lock.yaml|bun.lock|npm-shrinkwrap.json|package.json|package-lock.json|pnpm-lock.yaml|yarn.lock)"
+		);
+	}
+
+	#[test]
+	fn detects_aube_from_aube_lock_file() {
+		let dir = tempdir().expect("tempdir");
+		fs::write(dir.path().join("aube-lock.yaml"), "").expect("write aube lock file");
+		assert_eq!(
+			detect_package_manager(dir.path()).expect("detect"),
+			PackageManager::Aube
+		);
 	}
 
 	#[test]
