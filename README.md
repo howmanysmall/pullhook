@@ -1,4 +1,4 @@
-# pullhook
+# `pullhook`
 
 [![CI](https://github.com/howmanysmall/pullhook/actions/workflows/ci.yaml/badge.svg)](https://github.com/howmanysmall/pullhook/actions/workflows/ci.yaml)
 [![Release](https://github.com/howmanysmall/pullhook/actions/workflows/release.yml/badge.svg)](https://github.com/howmanysmall/pullhook/actions/workflows/release.yml)
@@ -11,17 +11,17 @@ It keeps the familiar `git-pull-run` workflow, with additive improvements:
 - safer command execution (no shell unless `--shell`)
 - bounded parallel jobs (`--jobs`)
 - dry-run previews (`--dry-run`)
-- per-directory de-dupe (`--unique-cwd`)
+- per-directory dedupe (`--unique-cwd`)
 
 ## Install
 
-### From source
+### From Source
 
 ```bash
 cargo install --path .
 ```
 
-### cargo-binstall
+### `cargo-binstall`
 
 ```bash
 cargo binstall pullhook
@@ -40,7 +40,7 @@ cargo build
 cargo build --release
 ```
 
-## Hook setup (`post-merge`)
+## Hook Setup (`post-merge`)
 
 Create `.git/hooks/post-merge`:
 
@@ -58,22 +58,24 @@ chmod +x .git/hooks/post-merge
 ## Usage
 
 ```text
-Usage: pullhook [OPTIONS] [COMMAND]
+Usage: pullhook [OPTIONS]
+       pullhook <COMMAND>
 
 Commands:
   completion  Generate shell completion scripts
   help        Print this message or the help of the given subcommand(s)
 
 Options:
-  -p, --pattern <glob>      Pattern to match files (required unless --install)
-  -c, --command <command>   Command to run for each match
-  -s, --script <script>     Script to run as `npm run-script <script>`
-  -i, --install             Detect package manager and run install (implies --once)
+  -p, --pattern <glob>      Pattern to match files
+  -c, --command <command>   Execute command for each matched file
+  -s, --script <script>     Execute npm script for each matched file
+  -i, --install             Detect package manager and run install
   -m, --message <message>   Message to print once when matches are found
   -d, --debug               Enable debug logging
+      --render <mode>       Control non-debug ANSI styling: auto, always, or never
   -o, --once                Run once in repo root
       --base <rev>          Override diff base revision
-      --jobs <n>            Max parallel jobs (default: min(CPUs, 8))
+      --jobs <n>            Max concurrent jobs
       --shell               Run --command through shell
       --dry-run             Print planned commands and exit
       --unique-cwd          De-dupe per-match working directories
@@ -121,20 +123,23 @@ Limit parallel work:
 pullhook --pattern "packages/*/package-lock.json" --command "npm install" --jobs 4
 ```
 
-## `--install` detection
+## `--install` Detection
 
 `pullhook --install` detects package manager files from repo root:
 
-- npm: `package-lock.json` or fallback `package.json`
-- yarn: `yarn.lock`
-- pnpm: `pnpm-lock.yaml`
-- bun: `bun.lock` or `bun.lockb`
-- deno: `deno.lock`, `deno.json`, or `deno.jsonc`
-- vlt: `vlt-lock.json`
+- `npm`: `package-lock.json` or fallback `package.json`
+- `yarn`: `yarn.lock`
+- `pnpm`: `pnpm-lock.yaml`
+- `bun`: `bun.lock` or `bun.lockb`
+- `aube`: `aube-lock.yaml`
+- `deno`: `deno.lock`, `deno.json`, or `deno.jsonc`
+- `vlt`: `vlt-lock.json`
 
-If conflicting lock files are present, `pullhook` errors and asks for explicit `--pattern`/`--command`.
+If conflicting lockfiles are present, `pullhook` errors and asks for explicit `--pattern`/`--command`.
 
-## Output examples (`--render never`)
+`aube` also watches the common JavaScript lockfiles, since changing any of them can require a fresh `aube install`.
+
+## Output Examples (`--render never`)
 
 These examples show deterministic plain output without ANSI styling.
 
