@@ -66,7 +66,8 @@ CLI parse -> validate -> (--install? detect PM) -> git repo root
 
 ### Module Responsibilities (`src/`)
 
-- **`main.rs`** - Entry point. Sets up tracing and signal handling (`ctrlc`), validates arguments, and orchestrates the full flow.
+- **`main.rs`** - Entry point. Sets up tracing and signal handling (`ctrlc`), validates arguments, and orchestrates the
+  full flow.
 - **`cli.rs`** - `clap` derive-based CLI parsing and validation. `--install` implies `--once` and conflicts with `--pattern`/`--command`.
 - **`git.rs`** - Git operations: repo root discovery, changed files (`diff --name-only`), and diff base resolution.
 - **`matcher.rs`** - Glob matching via `globset` with a shim for bash extglob syntax.

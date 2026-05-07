@@ -1,6 +1,7 @@
 # Release Process
 
-This project uses `cargo-release` to automate version updates, git tagging, and release commits. Releases are published via `cargo-dist` to GitHub Releases, Homebrew, npm, and shell/powershell installers.
+This project uses `cargo-release` to automate version updates, git tagging, and release commits. Releases are published
+via `cargo-dist` to GitHub Releases, Homebrew, npm, and shell/powershell installers.
 
 ## Quick Release (recommended)
 
