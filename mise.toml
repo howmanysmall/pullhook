@@ -7,6 +7,8 @@ gitleaks = "latest"
 lefthook = "latest"
 node = "25"
 oxfmt = "latest"
+rumdl = "latest"
+tombi = "latest"
 
 [env]
 PROJECT_NAME = "{{ config_root | basename }}"

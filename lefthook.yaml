@@ -1,48 +1,112 @@
 commit-msg:
-  commands:
-    commitlint:
-      run: aube run commitlint --edit {1}
+  jobs:
+    - name: commitlint
+      run: aube run commitlint -- --edit {1}
       skip:
         - merge
         - rebase
 
+min_version: 2.1.4
+
+post-merge:
+  jobs:
+    - name: package-install
+      run: aube install
+
 pre-commit:
-  commands:
-    audit:
-      run: cargo audit --quiet
-    biome:
-      globs:
-        - "**/*.{js,mjs,cjs,ts,mts,cts,jsx,tsx,json,jsonc}"
-        - "**/*.{css,graphql,gql,html}"
-      run: aube run biome check --no-errors-on-unmatched {staged_files}
-      stage: 1
-    cargo-fmt:
-      glob: "*.rs"
-      run: cargo fmt -- {staged_files}
-    clippy:
-      run: cargo clippy --all-targets -- -D warnings
-    deny:
-      run: cargo deny check
-    gitleaks:
-      run: gitleaks detect --source .
-    oxfmt:
-      run: aube run format --check --no-error-on-unmatched-pattern {staged_files}
-      stage: 2
-    rumdl:
-      glob: "*.md"
+  jobs:
+    - glob:
+        - "**/*.json"
+        - "**/*.jsonc"
+      name: biome-fix
+      priority: 1
+      run: biome check --write --no-errors-on-unmatched {staged_files}
+      stage_fixed: true
+
+    - glob:
+        - "**/*.css"
+        - "**/*.html"
+        - "**/*.graphql"
+        - "**/*.gql"
+      name: oxfmt-web
+      priority: 1
+      run: oxfmt {staged_files}
+      stage_fixed: true
+
+    - glob:
+        - "**/*.js"
+        - "**/*.jsx"
+        - "**/*.ts"
+        - "**/*.tsx"
+        - "**/*.mjs"
+        - "**/*.mts"
+        - "**/*.cjs"
+        - "**/*.cts"
+      name: oxfmt-js-ts
+      priority: 1
+      run: oxfmt {staged_files}
+      stage_fixed: true
+
+    - glob:
+        - "**/*.yaml"
+        - "**/*.yml"
+      name: oxfmt-yaml
+      priority: 1
+      run: oxfmt {staged_files}
+      stage_fixed: true
+
+    - glob: "**/*.md"
+      name: rumdl-fix
+      priority: 1
       run: |
-        rumdl check {staged_files}
         rumdl fmt {staged_files}
-    shear:
-      run: cargo shear
-    tombi:
-      glob: "*.toml"
+        rumdl check {staged_files}
+      stage_fixed: true
+
+    - glob: "**/*.toml"
+      name: tombi-fix
+      priority: 1
       run: |
-        tombi lint {staged_files}
         tombi format {staged_files}
+        tombi lint {staged_files}
+      stage_fixed: true
+
+    - glob: "**/*.rs"
+      name: rustfmt
+      priority: 1
+      run: cargo fmt -- {staged_files}
+      stage_fixed: true
+
+    - glob:
+        - "**/*.json"
+        - "**/*.jsonc"
+      name: oxfmt-json
+      priority: 2
+      run: oxfmt {staged_files}
+      stage_fixed: true
+
+    - name: audit
+      priority: 3
+      run: cargo audit --quiet
+
+    - name: clippy
+      priority: 3
+      run: cargo clippy --all-targets -- -D warnings
+
+    - name: deny
+      priority: 3
+      run: cargo deny check
+
+    - name: shear
+      priority: 3
+      run: cargo shear
+
+    - name: gitleaks
+      priority: 3
+      run: gitleaks protect --staged
   parallel: true
 
 pre-push:
-  commands:
-    test:
+  jobs:
+    - name: test
       run: cargo nextest run --no-tests=pass

@@ -4,7 +4,6 @@
 	"license": "MIT",
 	"type": "module",
 	"scripts": {
-		"biome": "biome",
 		"commitlint": "commitlint",
 		"format": "oxfmt",
 		"prepare": "lefthook install"
