@@ -1,28 +1,48 @@
+commit-msg:
+  commands:
+    commitlint:
+      run: aube run commitlint --edit {1}
+      skip:
+        - merge
+        - rebase
+
 pre-commit:
   commands:
-    lint-staged:
-      run: bun x --bun lint-staged
-    gitleaks:
-      run: gitleaks detect --source .
-    clippy:
-      run: cargo clippy --all-targets -- -D warnings
     audit:
       run: cargo audit --quiet
+    biome:
+      globs:
+        - "**/*.{js,mjs,cjs,ts,mts,cts,jsx,tsx,json,jsonc}"
+        - "**/*.{css,graphql,gql,html}"
+      run: aube run biome check {staged_files}
+      stage: 1
+    cargo-fmt:
+      glob: "*.rs"
+      run: cargo fmt -- {staged_files}
+    clippy:
+      run: cargo clippy --all-targets -- -D warnings
     deny:
       run: cargo deny check
+    gitleaks:
+      run: gitleaks detect --source .
+    oxfmt:
+      run: aube run format --check --no-error-on-unmatched-pattern {staged_files}
+      stage: 2
+    rumdl:
+      glob: "*.md"
+      run: |
+        rumdl check {staged_files}
+        rumdl fmt {staged_files}
     shear:
       run: cargo shear
+    tombi:
+      glob: "*.toml"
+      run: |
+        tombi lint {staged_files}
+        tombi format {staged_files}
   parallel: true
 
 pre-push:
   commands:
     test:
       run: cargo nextest run --no-tests=pass
-
-commit-msg:
-  commands:
-    commitlint:
-      run: bun run commitlint --edit {1}
-      skip:
-        - merge
-        - rebase

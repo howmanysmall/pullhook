@@ -2,18 +2,38 @@
 	"$schema": "https://biomejs.dev/schemas/latest/schema.json",
 	"assist": {
 		"actions": {
-			"recommended": true,
 			"source": {
-				"organizeImports": "on",
+				"noDuplicateClasses": "on",
+				"organizeImports": "off",
 				"recommended": true,
 				"useSortedAttributes": "on",
+				"useSortedInterfaceMembers": "on",
 				"useSortedKeys": "on",
 				"useSortedProperties": "on"
 			}
 		},
 		"enabled": true,
-		"includes": ["**", "!**/{dist,target,do-not-sync-ever,node_modules}/**", "!skills-lock.json", "!bun.lock"]
+		"includes": ["**", "!package.json", "!skills-lock.json"]
 	},
+
+	"css": {
+		"assist": { "enabled": true },
+		"formatter": {
+			"enabled": true,
+			"indentStyle": "tab",
+			"indentWidth": 4,
+			"lineWidth": 120,
+			"quoteStyle": "double"
+		},
+		"globals": [],
+		"linter": { "enabled": true },
+		"parser": {}
+	},
+
+	"files": {
+		"includes": ["**", "!package.json", "!skills-lock.json"]
+	},
+
 	"formatter": {
 		"attributePosition": "auto",
 		"bracketSameLine": false,
@@ -21,7 +41,11 @@
 		"enabled": true,
 		"expand": "auto",
 		"formatWithErrors": true,
-		"includes": ["**", "!**/{dist,target,do-not-sync-ever,node_modules}/**", "!skills-lock.json", "!bun.lock"],
+		"includes": [
+			"**/*.{json,jsonc,grit,ts,tsx,js,jsx,code-workspace,astro}",
+			"!**/node_modules/**",
+			"!skills-lock.json"
+		],
 		"indentStyle": "tab",
 		"indentWidth": 4,
 		"lineEnding": "lf",
@@ -41,7 +65,8 @@
 			"lineWidth": 120,
 			"trailingCommas": "none"
 		},
-		"linter": { "enabled": true }
+		"linter": { "enabled": true },
+		"parser": {}
 	},
 	"linter": { "enabled": false },
 	"overrides": [
@@ -69,12 +94,49 @@
 					"allowTrailingCommas": true
 				}
 			}
+		},
+
+		{
+			"includes": ["**/.ox*trc.json"],
+			"json": {
+				"formatter": {
+					"enabled": true,
+					"indentStyle": "tab",
+					"indentWidth": 4,
+					"lineWidth": 120,
+					"trailingCommas": "none"
+				},
+				"linter": { "enabled": true },
+				"parser": {
+					"allowComments": true,
+					"allowTrailingCommas": false
+				}
+			}
+		},
+
+		{
+			"includes": [],
+			"json": {
+				"formatter": {
+					"enabled": true,
+					"indentStyle": "tab",
+					"indentWidth": 4,
+					"lineWidth": 120,
+					"trailingCommas": "none"
+				},
+				"linter": { "enabled": true },
+				"parser": {
+					"allowComments": false,
+					"allowTrailingCommas": false
+				}
+			}
 		}
 	],
+
 	"vcs": {
 		"clientKind": "git",
 		"defaultBranch": "main",
 		"enabled": true,
-		"useIgnoreFile": false
+		"useIgnoreFile": true
 	}
 }

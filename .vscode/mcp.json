@@ -22,8 +22,8 @@
 			"url": "https://api.githubcopilot.com/mcp/",
 		},
 		"package-registry": {
-			"args": ["x", "--bun", "package-registry-mcp"],
-			"command": "bun",
+			"args": ["x", "package-registry-mcp"],
+			"command": "aube",
 		},
 	},
 }
