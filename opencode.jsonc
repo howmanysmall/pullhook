@@ -99,7 +99,7 @@
 	},
 	"formatter": {
 		"biome": {
-			"command": ["aube", "run", "biome", "check", "--write", "$FILE"],
+			"command": ["biome", "check", "--write", "$FILE"],
 			"disabled": false,
 			"extensions": [
 				".astro",
@@ -125,7 +125,7 @@
 			],
 		},
 		"oxfmt": {
-			"command": ["aube", "run", "format", "$FILE"],
+			"command": ["oxfmt", "$FILE"],
 			"disabled": false,
 			"environment": {},
 			"extensions": [
@@ -182,7 +182,7 @@
 	"layout": "stretch",
 	"lsp": {
 		"biome": {
-			"command": ["aube", "run", "biome", "lsp-proxy"],
+			"command": ["biome", "lsp-proxy"],
 			"disabled": false,
 			"env": {},
 			"extensions": [
@@ -209,7 +209,7 @@
 			],
 		},
 		"oxfmt": {
-			"command": ["aube", "run", "format", "--lsp"],
+			"command": ["oxfmt", "--lsp"],
 			"disabled": false,
 			"extensions": [
 				".cjs",
@@ -279,7 +279,7 @@
 			"url": "https://mcp.grep.app",
 		},
 		"package-registry": {
-			"command": ["aube", "x", "package-registry-mcp"],
+			"command": ["package-registry-mcp"],
 			"enabled": true,
 			"type": "local",
 		},
