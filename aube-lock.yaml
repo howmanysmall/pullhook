@@ -7,14 +7,6 @@ settings:
 time:
   '@babel/code-frame@7.29.0': 2026-01-31T17:39:09.387Z
   '@babel/helper-validator-identifier@7.28.5': 2025-10-23T15:17:38.203Z
-  '@biomejs/biome@2.4.14': 2026-05-01T19:22:35.577Z
-  '@biomejs/cli-darwin-arm64@2.4.14': 2026-05-01T19:22:42.660Z
-  '@biomejs/cli-linux-arm64-musl@2.4.14': 2026-05-01T19:23:05.638Z
-  '@biomejs/cli-linux-arm64@2.4.14': 2026-05-01T19:22:58.354Z
-  '@biomejs/cli-linux-x64-musl@2.4.14': 2026-05-01T19:23:23.263Z
-  '@biomejs/cli-linux-x64@2.4.14': 2026-05-01T19:23:14.683Z
-  '@biomejs/cli-win32-arm64@2.4.14': 2026-05-01T19:23:30.906Z
-  '@biomejs/cli-win32-x64@2.4.14': 2026-05-01T19:23:39.641Z
   '@commitlint/cli@20.5.3': 2026-04-30T08:16:16.929Z
   '@commitlint/config-conventional@20.5.3': 2026-04-30T08:16:17.227Z
   '@commitlint/config-validator@20.5.0': 2026-03-15T13:08:37.382Z
@@ -33,13 +25,6 @@ time:
   '@commitlint/top-level@20.4.3': 2026-03-03T17:46:46.970Z
   '@commitlint/types@20.5.0': 2026-03-15T13:08:35.313Z
   '@conventional-changelog/git-client@2.7.0': 2026-04-07T20:41:11.487Z
-  '@oxfmt/binding-darwin-arm64@0.48.0': 2026-05-05T13:13:51.731Z
-  '@oxfmt/binding-linux-arm64-gnu@0.48.0': 2026-05-05T13:14:05.653Z
-  '@oxfmt/binding-linux-arm64-musl@0.48.0': 2026-05-05T13:14:10.218Z
-  '@oxfmt/binding-linux-x64-gnu@0.48.0': 2026-05-05T13:15:08.136Z
-  '@oxfmt/binding-linux-x64-musl@0.48.0': 2026-05-05T13:15:12.464Z
-  '@oxfmt/binding-win32-arm64-msvc@0.48.0': 2026-05-05T13:14:00.796Z
-  '@oxfmt/binding-win32-x64-msvc@0.48.0': 2026-05-05T13:14:58.675Z
   '@simple-libs/child-process-utils@1.0.2': 2026-03-01T18:37:07.082Z
   '@simple-libs/stream-utils@1.2.0': 2026-03-01T18:37:03.322Z
   '@types/node@25.6.0': 2026-04-10T03:39:59.421Z
@@ -85,7 +70,6 @@ time:
   lines-and-columns@1.2.4: 2021-11-21T03:31:07.871Z
   meow@13.2.0: 2024-02-06T10:06:22.005Z
   minimist@1.2.8: 2023-02-09T20:59:49.233Z
-  oxfmt@0.48.0: 2026-05-05T13:15:17.501Z
   parent-module@1.0.1: 2019-03-28T11:33:52.331Z
   parse-json@5.2.0: 2021-01-18T11:15:13.459Z
   picocolors@1.1.1: 2024-10-16T18:20:03.921Z
@@ -97,7 +81,6 @@ time:
   string-width@4.2.3: 2021-09-23T17:17:21.341Z
   strip-ansi@6.0.1: 2021-09-23T16:34:41.798Z
   tinyexec@1.1.2: 2026-04-29T07:40:28.138Z
-  tinypool@2.1.0: 2026-01-03T07:37:52.918Z
   typescript@6.0.3: 2026-04-16T23:38:27.905Z
   undici-types@7.19.2: 2026-01-27T20:25:15.804Z
   wrap-ansi@7.0.0: 2020-04-22T16:53:23.889Z
@@ -109,9 +92,6 @@ importers:
 
   .:
     devDependencies:
-      '@biomejs/biome':
-        specifier: ^2.4.14
-        version: 2.4.14
       '@commitlint/config-conventional':
         specifier: ^20.5.3
         version: 20.5.3
@@ -121,9 +101,6 @@ importers:
       commitlint:
         specifier: ^20.5.3
         version: 20.5.3
-      oxfmt:
-        specifier: ^0.48.0
-        version: 0.48.0
 
 packages:
 
@@ -134,75 +111,6 @@ packages:
   '@babel/helper-validator-identifier@7.28.5':
     resolution: {integrity: sha512-qSs4ifwzKJSV39ucNjsvc6WVHs6b7S03sOh2OcHF9UHfVPqWWALUsNUVzhSBiItjRZoLHx7nIarVjqKVusUZ1Q==}
     engines: {node: '>=6.9.0'}
-
-  '@biomejs/biome@2.4.14':
-    resolution: {integrity: sha512-TmAvxOEgrpLypzVGJ8FulIZnlyA9TxrO1hyqYrCz9r+bwma9xXxuLA5IuYnj55XQneFx460KjRbx6SWGLkg3bQ==}
-    engines: {node: '>=14.21.3'}
-    hasBin: true
-
-  '@biomejs/cli-darwin-arm64@2.4.14':
-    resolution: {integrity: sha512-XvgoE9XOawUOQPdmvs4J7wPhi/DLwSCGks3AlPJDmh34O0awRTqCED1HRcRDdpf1Zrp4us4MGOOdIxNpbqNF5Q==}
-    engines: {node: '>=14.21.3'}
-    os:
-    - darwin
-    cpu:
-    - arm64
-
-  '@biomejs/cli-linux-arm64-musl@2.4.14':
-    resolution: {integrity: sha512-/z+6gqAqqUQTHazwStxSXKHg9b8UvqBmDFRp+c4wYbq2KXhELQDon9EoC9RpmQ8JWkqQx/lIUy/cs+MhzDZp6A==}
-    engines: {node: '>=14.21.3'}
-    os:
-    - linux
-    cpu:
-    - arm64
-    libc:
-    - musl
-
-  '@biomejs/cli-linux-arm64@2.4.14':
-    resolution: {integrity: sha512-2TELhZnW5RSLL063l9rc5xLpA0ZIw0Ccwy/0q384rvNAgFw3yI76bd59547yxowdQr5MNPET/xDLrLuvgSeeWQ==}
-    engines: {node: '>=14.21.3'}
-    os:
-    - linux
-    cpu:
-    - arm64
-    libc:
-    - glibc
-
-  '@biomejs/cli-linux-x64-musl@2.4.14':
-    resolution: {integrity: sha512-R6BWgJdQOwW9ulJatuTVrQkjnODjqHZkKNOqb1sz++3Noe5LYd0i3PchnOBUCYAPHoPWHhjJqbdZlHEu0hpjdA==}
-    engines: {node: '>=14.21.3'}
-    os:
-    - linux
-    cpu:
-    - x64
-    libc:
-    - musl
-
-  '@biomejs/cli-linux-x64@2.4.14':
-    resolution: {integrity: sha512-zHrlQZDBDUz4OLAraYpWKcnLS6HOewBFWYOzY91d1ZjdqZwibOyb6BEu6WuWLugyo0P3riCmsbV9UqV1cSXwQg==}
-    engines: {node: '>=14.21.3'}
-    os:
-    - linux
-    cpu:
-    - x64
-    libc:
-    - glibc
-
-  '@biomejs/cli-win32-arm64@2.4.14':
-    resolution: {integrity: sha512-M3EH5hqOI/F/FUA2u4xcLoUgmxd218mvuj/6JL7Hv2toQvr2/AdOvKSpGkoRuWFCtQPVa+ZqkEV3Q5xBA9+XSA==}
-    engines: {node: '>=14.21.3'}
-    os:
-    - win32
-    cpu:
-    - arm64
-
-  '@biomejs/cli-win32-x64@2.4.14':
-    resolution: {integrity: sha512-WL0EG5qE+EAKomGXbf2g6VnSKJhTL3tXC0QRzWRwA5VpjxNYa6H4P7ZWfymbGE4IhZZQi1KXQ2R0YjwInmz2fA==}
-    engines: {node: '>=14.21.3'}
-    os:
-    - win32
-    cpu:
-    - x64
 
   '@commitlint/cli@20.5.3':
     resolution: {integrity: sha512-OJdL0EXWD5y9LPa0nr/geOwzaS8BsdaybKkcloB0JgsguGxNv2R+hC2FTPqrAcprg35zF33KOQerY0x8W1aesA==}
@@ -284,70 +192,6 @@ packages:
         optional: true
       conventional-commits-parser:
         optional: true
-
-  '@oxfmt/binding-darwin-arm64@0.48.0':
-    resolution: {integrity: sha512-IkKp8rnIyQLW6Jt+6jragCbUVYSayk55lapiprLjIVvt4NczLyO/nwX2GgefLQ5iaBdfS8UEAFgCs/pLO6Cl0w==}
-    engines: {node: ^20.19.0 || >=22.12.0}
-    os:
-    - darwin
-    cpu:
-    - arm64
-
-  '@oxfmt/binding-linux-arm64-gnu@0.48.0':
-    resolution: {integrity: sha512-5bVdwSwlm1M8wbYCorLOxWxUBw/8tBvHYyQNIfwWVPwOJaj5vg1APSGJQVpwJfV5VNE9PSrR91UKEpoNwHhqUA==}
-    engines: {node: ^20.19.0 || >=22.12.0}
-    os:
-    - linux
-    cpu:
-    - arm64
-    libc:
-    - glibc
-
-  '@oxfmt/binding-linux-arm64-musl@0.48.0':
-    resolution: {integrity: sha512-vCS3Fk7gFslTqE1lUE2IlroyVV7u/9SmMA/uBqDoshuck2psGWcjW0ePyPZI3rM3+qtf2pDaMVIKMHozraifuw==}
-    engines: {node: ^20.19.0 || >=22.12.0}
-    os:
-    - linux
-    cpu:
-    - arm64
-    libc:
-    - musl
-
-  '@oxfmt/binding-linux-x64-gnu@0.48.0':
-    resolution: {integrity: sha512-oEz1BQwMrV7OMEFx/3VPDU3n9TM0AnxpktDYXjEg5i6nTX87wo18wSfBvkl4tzAICdKtoAQAdBIl7Y7hsPlx5w==}
-    engines: {node: ^20.19.0 || >=22.12.0}
-    os:
-    - linux
-    cpu:
-    - x64
-    libc:
-    - glibc
-
-  '@oxfmt/binding-linux-x64-musl@0.48.0':
-    resolution: {integrity: sha512-g2SKTTurP5mWjd8Ecait0erYqmltL4IqW1EwttM25BxM6NiTt4ubobJYMR1uox1V2QgG4UfHH10CGRvWlUixjw==}
-    engines: {node: ^20.19.0 || >=22.12.0}
-    os:
-    - linux
-    cpu:
-    - x64
-    libc:
-    - musl
-
-  '@oxfmt/binding-win32-arm64-msvc@0.48.0':
-    resolution: {integrity: sha512-zeaWkcxcEULwkGF3I/HgEvcDPN8buYDrxibBUa/IFh5Vmwyge+KpLO+hEwSovW349H0O/C0Z2kaFmEzEDm00/Q==}
-    engines: {node: ^20.19.0 || >=22.12.0}
-    os:
-    - win32
-    cpu:
-    - arm64
-
-  '@oxfmt/binding-win32-x64-msvc@0.48.0':
-    resolution: {integrity: sha512-GSD2+7t2UoVMV2NgxXypa4bKewflPMAjYnF0Xw9/ht82ZfafAHhb8STwrEd7wlH2PFogt5zw3WVCxYJaHUdbeQ==}
-    engines: {node: ^20.19.0 || >=22.12.0}
-    os:
-    - win32
-    cpu:
-    - x64
 
   '@simple-libs/child-process-utils@1.0.2':
     resolution: {integrity: sha512-/4R8QKnd/8agJynkNdJmNw2MBxuFTRcNFnE5Sg/G+jkSsV8/UBgULMzhizWWW42p8L5H7flImV2ATi79Ove2Tw==}
@@ -523,11 +367,6 @@ packages:
   minimist@1.2.8:
     resolution: {integrity: sha512-2yyAR8qBkN3YuheJanUpWC5U3bb5osDywNB8RzDVlDwDHbocAJveqqj1u8+SVD7jkWT4yvsHCpWqqWqAxb0zCA==}
 
-  oxfmt@0.48.0:
-    resolution: {integrity: sha512-AVaLh+7XeGx+R1zfFV+f6VV61nT2MWVJXVUDhbTm5LBWGyNt64xAyh3NYYyjeY2WykNt9AvqSQLPHcbWquYF9g==}
-    engines: {node: ^20.19.0 || >=22.12.0}
-    hasBin: true
-
   parent-module@1.0.1:
     resolution: {integrity: sha512-GQ2EWRpQV8/o+Aw8YqtfZZPfNRWZYkbidE9k5rpl/hC3vtHHBfGm2Ifi6qWV+coDGkrUKZAxE3Lot5kcsRlh+g==}
     engines: {node: '>=6'}
@@ -572,10 +411,6 @@ packages:
     resolution: {integrity: sha512-dAqSqE/RabpBKI8+h26GfLq6Vb3JVXs30XYQjdMjaj/c2tS8IYYMbIzP599KtRj7c57/wYApb3QjgRgXmrCukA==}
     engines: {node: '>=18'}
 
-  tinypool@2.1.0:
-    resolution: {integrity: sha512-Pugqs6M0m7Lv1I7FtxN4aoyToKg1C4tu+/381vH35y8oENM/Ai7f7C4StcoK4/+BSw9ebcS8jRiVrORFKCALLw==}
-    engines: {node: ^20.0.0 || >=22.0.0}
-
   typescript@6.0.3:
     resolution: {integrity: sha512-y2TvuxSZPDyQakkFRPZHKFm+KKVqIisdg9/CZwm9ftvKXLP8NRWj38/ODjNbr43SsoXqNuAisEf1GdCxqWcdBw==}
     engines: {node: '>=14.17'}
@@ -609,30 +444,6 @@ snapshots:
       picocolors: 1.1.1
 
   '@babel/helper-validator-identifier@7.28.5': {}
-
-  '@biomejs/biome@2.4.14':
-    optionalDependencies:
-      '@biomejs/cli-darwin-arm64': 2.4.14
-      '@biomejs/cli-linux-arm64': 2.4.14
-      '@biomejs/cli-linux-arm64-musl': 2.4.14
-      '@biomejs/cli-linux-x64': 2.4.14
-      '@biomejs/cli-linux-x64-musl': 2.4.14
-      '@biomejs/cli-win32-arm64': 2.4.14
-      '@biomejs/cli-win32-x64': 2.4.14
-
-  '@biomejs/cli-darwin-arm64@2.4.14': {}
-
-  '@biomejs/cli-linux-arm64-musl@2.4.14': {}
-
-  '@biomejs/cli-linux-arm64@2.4.14': {}
-
-  '@biomejs/cli-linux-x64-musl@2.4.14': {}
-
-  '@biomejs/cli-linux-x64@2.4.14': {}
-
-  '@biomejs/cli-win32-arm64@2.4.14': {}
-
-  '@biomejs/cli-win32-x64@2.4.14': {}
 
   '@commitlint/cli@20.5.3':
     dependencies:
@@ -739,20 +550,6 @@ snapshots:
       '@simple-libs/stream-utils': 1.2.0
       conventional-commits-parser: 6.4.0
       semver: 7.7.4
-
-  '@oxfmt/binding-darwin-arm64@0.48.0': {}
-
-  '@oxfmt/binding-linux-arm64-gnu@0.48.0': {}
-
-  '@oxfmt/binding-linux-arm64-musl@0.48.0': {}
-
-  '@oxfmt/binding-linux-x64-gnu@0.48.0': {}
-
-  '@oxfmt/binding-linux-x64-musl@0.48.0': {}
-
-  '@oxfmt/binding-win32-arm64-msvc@0.48.0': {}
-
-  '@oxfmt/binding-win32-x64-msvc@0.48.0': {}
 
   '@simple-libs/child-process-utils@1.0.2':
     dependencies:
@@ -899,18 +696,6 @@ snapshots:
 
   minimist@1.2.8: {}
 
-  oxfmt@0.48.0:
-    dependencies:
-      tinypool: 2.1.0
-    optionalDependencies:
-      '@oxfmt/binding-darwin-arm64': 0.48.0
-      '@oxfmt/binding-linux-arm64-gnu': 0.48.0
-      '@oxfmt/binding-linux-arm64-musl': 0.48.0
-      '@oxfmt/binding-linux-x64-gnu': 0.48.0
-      '@oxfmt/binding-linux-x64-musl': 0.48.0
-      '@oxfmt/binding-win32-arm64-msvc': 0.48.0
-      '@oxfmt/binding-win32-x64-msvc': 0.48.0
-
   parent-module@1.0.1:
     dependencies:
       callsites: 3.1.0
@@ -945,8 +730,6 @@ snapshots:
       ansi-regex: 5.0.1
 
   tinyexec@1.1.2: {}
-
-  tinypool@2.1.0: {}
 
   typescript@6.0.3: {}
 

@@ -10,11 +10,9 @@
 		"prepare": "lefthook install"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "^2.4.14",
 		"@commitlint/config-conventional": "^20.5.3",
 		"@commitlint/types": "^20.5.0",
-		"commitlint": "^20.5.3",
-		"oxfmt": "^0.48.0"
+		"commitlint": "^20.5.3"
 	},
 	"packageManager": "aube@1.9.1"
 }
