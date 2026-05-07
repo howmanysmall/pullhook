@@ -6,7 +6,6 @@ biome = "latest"
 gitleaks = "latest"
 lefthook = "latest"
 node = "25"
-oxfmt = "latest"
 rumdl = "latest"
 tombi = "latest"
 

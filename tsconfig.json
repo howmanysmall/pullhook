@@ -1,0 +1,16 @@
+{
+	"compilerOptions": {
+		"declaration": false,
+		"declarationMap": false,
+		"noEmit": true,
+		"paths": {
+			"@constants/*": ["./scripts/shared/constants/*"],
+			"@polyfills/*": ["./scripts/shared/polyfills/*"],
+			"@utilities/*": ["./scripts/shared/utilities/*"]
+		},
+		"resolveJsonModule": true,
+		"rootDir": "scripts"
+	},
+	"extends": "./tsconfig.base.json",
+	"include": ["scripts/**/*.ts"]
+}

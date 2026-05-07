@@ -19,9 +19,7 @@
 			"tsconfig*.json",
 			"*.code-snippets"
 		],
-		"Shell Script": ["zsh", "zshrc", "zprofile", "zshenv", "bashrc", "bash_profile"],
-		"TOML": ["toml"],
-		"YAML": ["*.yml", "*.yaml", ".github/workflows/*.yml", ".github/workflows/*.yaml"]
+		"Shell Script": ["zsh", "zshrc", "zprofile", "zshenv", "bashrc", "bash_profile"]
 	},
 	"format_on_save": "on",
 	"hard_tabs": true,
@@ -42,6 +40,7 @@
 	},
 	"jsx_tag_auto_close": { "enabled": true },
 	"languages": {
+		"JavaScript": { "language_servers": [] },
 		"JSON": {
 			"code_actions_on_format": {
 				"source.fixAll.biome": true,
@@ -57,7 +56,17 @@
 				}
 			],
 			"hard_tabs": true,
-			"language_servers": ["!eslint", "biome", "package-version-server", "oxfmt", "..."],
+			"language_servers": [
+				"dependi",
+				"deputy",
+				"biome",
+				"codebook",
+				"harper-ls",
+				"json-language-server",
+				"oxfmt",
+				"package-version-server",
+				"wakatime"
+			],
 			"prettier": { "allowed": false },
 			"tab_size": 4
 		},
@@ -76,7 +85,17 @@
 				}
 			],
 			"hard_tabs": true,
-			"language_servers": ["!eslint", "biome", "package-version-server", "oxfmt", "..."],
+			"language_servers": [
+				"dependi",
+				"deputy",
+				"biome",
+				"codebook",
+				"harper-ls",
+				"json-language-server",
+				"oxfmt",
+				"package-version-server",
+				"wakatime"
+			],
 			"prettier": { "allowed": false },
 			"tab_size": 4
 		},
@@ -86,7 +105,7 @@
 				"language_server": { "name": "rumdl" }
 			},
 			"hard_tabs": true,
-			"language_servers": ["!marksman", "!markdownlint", "rumdl", "..."],
+			"language_servers": ["codebook", "harper-ls", "rumdl", "wakatime"],
 			"prettier": { "allowed": false },
 			"show_whitespaces": "none",
 			"tab_size": 4
@@ -96,10 +115,14 @@
 			"formatter": {
 				"language_server": { "name": "oxfmt" }
 			},
-			"language_servers": ["!eslint", "oxfmt", "..."],
+			"language_servers": ["codebook", "harper-ls", "oxfmt", "rumdl", "wakatime"],
 			"prettier": { "allowed": false }
 		},
+		"Plain Text": {
+			"language_servers": ["codebook", "dependi", "harper-ls", "wakatime"]
+		},
 		"Rust": {
+			"language_servers": ["codebook", "harper-ls", "rust-analyzer", "wakatime"],
 			"prettier": { "allowed": false }
 		},
 		"Shell Script": {
@@ -111,13 +134,52 @@
 				}
 			},
 			"hard_tabs": true,
-			"language_servers": ["bash-language-server", "..."],
+			"language_servers": ["bash-language-server", "wakatime", "harper-ls", "codebook"],
 			"tab_size": 4
 		},
 		"TOML": {
 			"format_on_save": "on",
 			"formatter": "language_server",
 			"hard_tabs": true,
+			"language_servers": ["dependi", "deputy", "tombi", "wakatime", "harper-ls", "codebook"],
+			"tab_size": 4
+		},
+		"TSX": {
+			"code_actions_on_format": {
+				"source.fixAll.biome": true,
+				"source.fixAll.oxc": true
+			},
+			"format_on_save": "on",
+			"formatter": [
+				{
+					"language_server": { "name": "biome" }
+				},
+				{
+					"language_server": { "name": "oxfmt" }
+				}
+			],
+			"hard_tabs": true,
+			"language_servers": ["!vtsls", "biome", "oxlint", "oxfmt", "tsgo", "wakatime", "harper-ls", "codebook"],
+			"prettier": { "allowed": false },
+			"tab_size": 4
+		},
+		"TypeScript": {
+			"code_actions_on_format": {
+				"source.fixAll.biome": true,
+				"source.fixAll.oxc": true
+			},
+			"format_on_save": "on",
+			"formatter": [
+				{
+					"language_server": { "name": "biome" }
+				},
+				{
+					"language_server": { "name": "oxfmt" }
+				}
+			],
+			"hard_tabs": true,
+			"language_servers": ["!vtsls", "biome", "oxlint", "oxfmt", "tsgo", "wakatime", "harper-ls", "codebook"],
+			"prettier": { "allowed": false },
 			"tab_size": 4
 		},
 		"YAML": {
@@ -126,6 +188,7 @@
 				"language_server": { "name": "oxfmt" }
 			},
 			"hard_tabs": false,
+			"language_servers": ["dependi", "yaml-language-server", "wakatime", "harper-ls", "codebook"],
 			"prettier": { "allowed": false },
 			"tab_size": 2
 		}
@@ -149,6 +212,13 @@
 				"settings": {
 					"configPath": ".oxfmtrc.json",
 					"run": "onSave"
+				}
+			}
+		},
+		"oxlint": {
+			"initialization_options": {
+				"settings": {
+					"fixKind": "safe_fix"
 				}
 			}
 		},
@@ -200,14 +270,17 @@
 			"settings": {
 				"yaml": {
 					"format": { "singleQuote": true },
-					"keyOrdering": true,
+					"keyOrdering": false,
 					"schemas": {
 						"./schemas/kubernetes.yaml": "k8s/**/*.yaml",
 						"~/global-schemas/docker-compose.yaml": "docker-compose*.yml",
-						"https://getcomposer.org/schema.json": ["/*"],
-						"https://raw.githubusercontent.com/rvben/rumdl/main/rumdl.schema.json": [
-							"**/.rumdl.toml",
-							"**/rumdl.toml"
+						"https://json.schemastore.org/dependabot-v2.json": ".github/dependabot.*",
+						"https://json.schemastore.org/github-workflow.json": ".github/workflows/*",
+						"https://raw.githubusercontent.com/evilmartians/lefthook/master/schema.json": [
+							"lefthook.yml",
+							".lefthook.yml",
+							"lefthook.yaml",
+							".lefthook.yaml"
 						]
 					}
 				}

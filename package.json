@@ -1,17 +1,30 @@
 {
-	"name": "pullhook",
-	"private": true,
-	"license": "MIT",
-	"type": "module",
-	"scripts": {
-		"commitlint": "commitlint",
-		"format": "oxfmt",
-		"prepare": "lefthook install"
-	},
-	"devDependencies": {
-		"@commitlint/config-conventional": "^20.5.3",
-		"@commitlint/types": "^20.5.0",
-		"commitlint": "^20.5.3"
-	},
-	"packageManager": "aube@1.9.1"
+  "name": "pullhook",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "biome": "biome",
+    "commitlint": "commitlint",
+    "format": "oxfmt",
+    "lint": "bash -c 'a=$(bash scripts/default-path.sh \"$@\"); aube run oxc $a && aube run biome lint $a' _",
+    "oxc": "oxlint",
+    "prepare": "lefthook install"
+  },
+  "dependencies": {
+    "@cliffy/command": "jsr:^1.1.0",
+    "arktype": "^2.2.0",
+    "confbox": "^0.2.4",
+    "consola": "^3.4.2"
+  },
+  "devDependencies": {
+    "@commitlint/config-conventional": "^20.5.3",
+    "@commitlint/types": "^20.5.0",
+    "@types/node": "^25.6.1",
+    "commitlint": "^20.5.3",
+    "oxfmt": "^0.48.0",
+    "oxlint": "^1.63.0",
+    "oxlint-tsgolint": "^0.22.1"
+  },
+  "packageManager": "aube@1.9.1"
 }

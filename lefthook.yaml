@@ -6,7 +6,7 @@ commit-msg:
         - merge
         - rebase
 
-min_version: 2.1.4
+min_version: 2.1.6
 
 post-merge:
   jobs:
@@ -15,96 +15,80 @@ post-merge:
 
 pre-commit:
   jobs:
-    - glob:
-        - "**/*.json"
-        - "**/*.jsonc"
-      name: biome-fix
-      priority: 1
-      run: biome check --write --no-errors-on-unmatched {staged_files}
-      stage_fixed: true
+    - group:
+        parallel: true
+        jobs:
+          - name: biome-fix
+            glob:
+              - "**/*.json"
+              - "**/*.jsonc"
+            run: biome check --write --no-errors-on-unmatched {staged_files}
+            stage_fixed: true
 
-    - glob:
-        - "**/*.css"
-        - "**/*.html"
-        - "**/*.graphql"
-        - "**/*.gql"
-      name: oxfmt-web
-      priority: 1
-      run: oxfmt {staged_files}
-      stage_fixed: true
+          - name: oxfmt
+            glob:
+              - "**/*.js"
+              - "**/*.jsx"
+              - "**/*.ts"
+              - "**/*.tsx"
+              - "**/*.mjs"
+              - "**/*.mts"
+              - "**/*.cjs"
+              - "**/*.cts"
+              - "**/*.css"
+              - "**/*.html"
+              - "**/*.graphql"
+              - "**/*.gql"
+              - "**/*.yaml"
+              - "**/*.yml"
+            run: oxfmt {staged_files}
+            stage_fixed: true
 
-    - glob:
-        - "**/*.js"
-        - "**/*.jsx"
-        - "**/*.ts"
-        - "**/*.tsx"
-        - "**/*.mjs"
-        - "**/*.mts"
-        - "**/*.cjs"
-        - "**/*.cts"
-      name: oxfmt-js-ts
-      priority: 1
-      run: oxfmt {staged_files}
-      stage_fixed: true
+          - name: rumdl-fix
+            glob: "**/*.md"
+            run: |
+              rumdl fmt {staged_files}
+              rumdl check {staged_files}
+            stage_fixed: true
 
-    - glob:
-        - "**/*.yaml"
-        - "**/*.yml"
-      name: oxfmt-yaml
-      priority: 1
-      run: oxfmt {staged_files}
-      stage_fixed: true
+          - name: tombi-fix
+            glob: "**/*.toml"
+            run: |
+              tombi format {staged_files}
+              tombi lint {staged_files}
+            stage_fixed: true
 
-    - glob: "**/*.md"
-      name: rumdl-fix
-      priority: 1
-      run: |
-        rumdl fmt {staged_files}
-        rumdl check {staged_files}
-      stage_fixed: true
+          - name: rustfmt
+            glob: "**/*.rs"
+            run: cargo fmt -- {staged_files}
+            stage_fixed: true
 
-    - glob: "**/*.toml"
-      name: tombi-fix
-      priority: 1
-      run: |
-        tombi format {staged_files}
-        tombi lint {staged_files}
-      stage_fixed: true
+    - group:
+        jobs:
+          - name: oxfmt-json
+            glob:
+              - "**/*.json"
+              - "**/*.jsonc"
+            run: oxfmt {staged_files}
+            stage_fixed: true
 
-    - glob: "**/*.rs"
-      name: rustfmt
-      priority: 1
-      run: cargo fmt -- {staged_files}
-      stage_fixed: true
+    - group:
+        parallel: true
+        jobs:
+          - name: audit
+            run: cargo audit --quiet
 
-    - glob:
-        - "**/*.json"
-        - "**/*.jsonc"
-      name: oxfmt-json
-      priority: 2
-      run: oxfmt {staged_files}
-      stage_fixed: true
+          - name: clippy
+            run: cargo clippy --all-targets -- -D warnings
 
-    - name: audit
-      priority: 3
-      run: cargo audit --quiet
+          - name: deny
+            run: cargo deny check
 
-    - name: clippy
-      priority: 3
-      run: cargo clippy --all-targets -- -D warnings
+          - name: shear
+            run: cargo shear
 
-    - name: deny
-      priority: 3
-      run: cargo deny check
-
-    - name: shear
-      priority: 3
-      run: cargo shear
-
-    - name: gitleaks
-      priority: 3
-      run: gitleaks protect --staged
-  parallel: true
+          - name: gitleaks
+            run: gitleaks protect --staged
 
 pre-push:
   jobs:
