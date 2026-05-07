@@ -16,5 +16,5 @@
 		"commitlint": "^20.5.3",
 		"oxfmt": "^0.48.0"
 	},
-	"packageManager": "aube@1.9.0"
+	"packageManager": "aube@1.9.1"
 }

@@ -1,20 +1,14 @@
-# mise.toml - pullhook project configuration
-
-# Minimum mise version (must be before [tools])
 min_version = "2024.11.0"
 
 [tools]
-# Development tools
 gitleaks = "latest"
 lefthook = "latest"
-aube = "1.9.0"
+aube = "1.9.1"
 node = "25"
 
 [env]
-# Project name derived from config root
 PROJECT_NAME = "{{ config_root | basename }}"
 
-# Add local bin to PATH
 _.path = ["./node_modules/.bin"]
 
 [tasks]
@@ -26,8 +20,6 @@ fmt = "cargo fmt --all"
 audit = "cargo audit"
 deny = "cargo deny check"
 install = "cargo install --path ."
-
-# Shorthand aliases
 bi = "cargo build"
 br = "cargo build --release"
 ti = "cargo nextest run"
