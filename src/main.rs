@@ -1466,6 +1466,8 @@ fn command_catalog_command(args: &CommandCatalogArgs) -> Result<()> {
 	let categories = collect_command_categories(&commands);
 	let category_count = categories.len();
 	if args.json {
+		let command_values = commands.iter().map(|info| command_info_json(*info)).collect::<Vec<_>>();
+		let example_commands = collect_command_example_commands(&commands);
 		println!(
 			"{}",
 			serde_json::to_string_pretty(&json!({
@@ -1477,10 +1479,11 @@ fn command_catalog_command(args: &CommandCatalogArgs) -> Result<()> {
 					"requiresRepo": repo_requirement_filter(args),
 				},
 				"categories": categories,
-				"commands": commands,
+				"commands": command_values,
 				"summary": {
 					"categories": category_count,
 					"commands": commands.len(),
+					"examples": example_commands.len(),
 					"json": commands.iter().filter(|info| info.json).count(),
 					"scriptFriendly": commands.iter().filter(|info| info.script_friendly).count(),
 				},
@@ -1535,6 +1538,18 @@ fn command_catalog_command(args: &CommandCatalogArgs) -> Result<()> {
 	Ok(())
 }
 
+fn command_info_json(info: CommandInfo) -> serde_json::Value {
+	json!({
+		"name": info.name,
+		"category": info.category,
+		"summary": info.summary,
+		"json": info.json,
+		"requiresRepo": info.requires_repo,
+		"scriptFriendly": info.script_friendly,
+		"exampleCommands": example_commands_for_command(info),
+	})
+}
+
 fn collect_command_categories(commands: &[CommandInfo]) -> Vec<&'static str> {
 	let mut categories = Vec::new();
 	for command in commands {
@@ -1548,16 +1563,21 @@ fn collect_command_categories(commands: &[CommandInfo]) -> Vec<&'static str> {
 fn collect_command_example_commands(commands: &[CommandInfo]) -> Vec<&'static str> {
 	let mut example_commands = Vec::new();
 	for command in commands {
-		for example in EXAMPLE_INFOS
-			.iter()
-			.filter(|example| example.command_name == command.name)
-		{
-			if !example_commands.contains(&example.command) {
-				example_commands.push(example.command);
+		for example_command in example_commands_for_command(*command) {
+			if !example_commands.contains(&example_command) {
+				example_commands.push(example_command);
 			}
 		}
 	}
 	example_commands
+}
+
+fn example_commands_for_command(command: CommandInfo) -> Vec<&'static str> {
+	EXAMPLE_INFOS
+		.iter()
+		.filter(|example| example.command_name == command.name)
+		.map(|example| example.command)
+		.collect()
 }
 
 fn filtered_command_infos(

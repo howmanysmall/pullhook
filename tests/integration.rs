@@ -3347,6 +3347,16 @@ fn commands_json_lists_cli_catalog() {
 			.iter()
 			.any(|entry| entry["name"] == "run" && entry["requiresRepo"] == true)
 	);
+	assert!(commands.iter().any(|entry| {
+		entry["name"] == "run"
+			&& entry["exampleCommands"]
+				.as_array()
+				.expect("run example commands")
+				.iter()
+				.any(|command| command.as_str() == Some("pullhook run --commands-only"))
+	}));
+	assert!(commands.iter().any(|entry| entry["name"] == "schema"
+		&& entry["exampleCommands"] == serde_json::json!(["pullhook schema --output .vscode/pullhook.schema.json"])));
 	assert!(
 		commands
 			.iter()
@@ -3390,6 +3400,10 @@ fn commands_json_lists_cli_catalog() {
 	assert_eq!(
 		value["summary"]["commands"].as_u64().expect("command count"),
 		commands.len() as u64
+	);
+	assert!(
+		value["summary"]["examples"].as_u64().expect("example count") >= 1,
+		"commands summary should count matching examples"
 	);
 	let stderr = stderr_text(&output);
 	assert!(stderr.trim().is_empty(), "commands --json should not write stderr");
