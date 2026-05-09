@@ -350,6 +350,32 @@ fn run_quiet_conflicts_with_json() {
 }
 
 #[test]
+fn config_path_only_conflicts_with_json() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["config", "--path-only", "--json"]);
+
+	assert!(!output.status.success(), "--path-only should conflict with --json");
+	let stderr = stderr_text(&output);
+	assert!(stderr.contains("cannot be used with"));
+	assert!(stderr.contains("--path-only"));
+	assert!(stderr.contains("--json"));
+}
+
+#[test]
+fn rules_names_only_conflicts_with_json() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["rules", "--names-only", "--json"]);
+
+	assert!(!output.status.success(), "--names-only should conflict with --json");
+	let stderr = stderr_text(&output);
+	assert!(stderr.contains("cannot be used with"));
+	assert!(stderr.contains("--names-only"));
+	assert!(stderr.contains("--json"));
+}
+
+#[test]
 fn init_help_lists_generation_examples() {
 	let temp = tempfile::tempdir().expect("create temp dir");
 
