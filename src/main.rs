@@ -200,6 +200,11 @@ fn check_completion_output(
 	};
 	let matches = existing_completion == expected_completion;
 	if json_output {
+		let error = if matches {
+			None
+		} else {
+			Some("completion output is out of date")
+		};
 		println!(
 			"{}",
 			serde_json::to_string_pretty(&generated_file_check_json(
@@ -207,7 +212,7 @@ fn check_completion_output(
 				Some(&shell_label),
 				true,
 				matches,
-				None,
+				error,
 			))?
 		);
 	}
@@ -816,9 +821,14 @@ fn check_schema_output(path: &std::path::Path, json_output: bool) -> Result<()> 
 	};
 	let matches = existing_schema == config::CONFIG_SCHEMA_JSON;
 	if json_output {
+		let error = if matches {
+			None
+		} else {
+			Some("schema output is out of date")
+		};
 		println!(
 			"{}",
-			serde_json::to_string_pretty(&schema_check_json(path, true, matches, None))?
+			serde_json::to_string_pretty(&schema_check_json(path, true, matches, error))?
 		);
 	}
 	if matches {

@@ -391,7 +391,7 @@ fn completion_check_json_reports_match_status() {
 	assert_eq!(value["shell"], "fish");
 	assert_eq!(value["exists"], true);
 	assert_eq!(value["matches"], false);
-	assert_eq!(value["error"], serde_json::Value::Null);
+	assert_eq!(value["error"], "completion output is out of date");
 	let stderr = stderr_text(&output);
 	assert!(stderr.contains("completion out of date"));
 }
@@ -1144,7 +1144,7 @@ fn schema_check_json_reports_match_status() {
 	);
 	assert_eq!(value["exists"], true);
 	assert_eq!(value["matches"], false);
-	assert_eq!(value["error"], serde_json::Value::Null);
+	assert_eq!(value["error"], "schema output is out of date");
 	let stderr = stderr_text(&output);
 	assert!(stderr.contains("schema out of date"));
 }
