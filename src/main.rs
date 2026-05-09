@@ -1110,7 +1110,7 @@ fn filtered_example_infos(command: Option<ExampleCommand>, category: Option<Comm
 }
 
 fn command_catalog_command(args: &CommandCatalogArgs) -> Result<()> {
-	let commands = filtered_command_infos(args.category);
+	let commands = filtered_command_infos(args.category, repo_requirement_filter(args));
 	if args.json {
 		println!(
 			"{}",
@@ -1119,6 +1119,7 @@ fn command_catalog_command(args: &CommandCatalogArgs) -> Result<()> {
 				"code": serde_json::Value::Null,
 				"filters": {
 					"category": args.category.map(CommandCategory::label),
+					"requiresRepo": repo_requirement_filter(args),
 				},
 				"commands": commands,
 				"summary": {
@@ -1143,6 +1144,9 @@ fn command_catalog_command(args: &CommandCatalogArgs) -> Result<()> {
 	if let Some(category) = args.category {
 		println!("filter: category={}", category.label());
 	}
+	if let Some(requires_repo) = repo_requirement_filter(args) {
+		println!("filter: requiresRepo={requires_repo}");
+	}
 	println!();
 	for info in commands {
 		println!("{} [{}] {}", info.name, info.category, info.summary);
@@ -1150,12 +1154,21 @@ fn command_catalog_command(args: &CommandCatalogArgs) -> Result<()> {
 	Ok(())
 }
 
-fn filtered_command_infos(category: Option<CommandCategory>) -> Vec<CommandInfo> {
+fn filtered_command_infos(category: Option<CommandCategory>, requires_repo: Option<bool>) -> Vec<CommandInfo> {
 	COMMAND_INFOS
 		.iter()
 		.copied()
 		.filter(|info| category.is_none_or(|category| info.category == category.label()))
+		.filter(|info| requires_repo.is_none_or(|requires_repo| info.requires_repo == requires_repo))
 		.collect()
+}
+
+const fn repo_requirement_filter(args: &CommandCatalogArgs) -> Option<bool> {
+	match (args.filters.repo_only, args.filters.standalone_only) {
+		(true, false) => Some(true),
+		(false, true) => Some(false),
+		_ => None,
+	}
 }
 
 fn codes_command(args: &CodesArgs) -> Result<()> {

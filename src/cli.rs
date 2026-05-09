@@ -175,6 +175,8 @@ Examples:
   pullhook commands
   pullhook commands --category diagnostic
   pullhook commands --category diagnostic --names-only
+  pullhook commands --repo-only
+  pullhook commands --standalone-only --names-only
   pullhook commands --json";
 
 const EXAMPLES_AFTER_HELP: &str = "\
@@ -1162,6 +1164,9 @@ pub struct CommandCatalogArgs {
 	#[arg(long = "category", value_enum, help_heading = "Filter options")]
 	pub category: Option<CommandCategory>,
 
+	#[command(flatten)]
+	pub filters: CommandCatalogFilterArgs,
+
 	/// Print machine-readable JSON instead of text output.
 	#[arg(
 		long = "json",
@@ -1179,6 +1184,28 @@ pub struct CommandCatalogArgs {
 		help_heading = "Output options"
 	)]
 	pub names_only: bool,
+}
+
+/// Filter arguments for `pullhook commands`.
+#[derive(Debug, Clone, Args)]
+pub struct CommandCatalogFilterArgs {
+	/// Only list commands that require a git repository.
+	#[arg(
+		long = "repo-only",
+		default_value_t = false,
+		conflicts_with = "standalone_only",
+		help_heading = "Filter options"
+	)]
+	pub repo_only: bool,
+
+	/// Only list commands that can run outside a git repository.
+	#[arg(
+		long = "standalone-only",
+		default_value_t = false,
+		conflicts_with = "repo_only",
+		help_heading = "Filter options"
+	)]
+	pub standalone_only: bool,
 }
 
 /// Arguments for `pullhook examples`.

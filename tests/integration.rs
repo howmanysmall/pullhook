@@ -1552,6 +1552,7 @@ fn commands_json_lists_cli_catalog() {
 	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse commands json");
 	assert_eq!(value["status"], "ok");
 	assert_eq!(value["code"], serde_json::Value::Null);
+	assert_eq!(value["filters"]["requiresRepo"], serde_json::Value::Null);
 	let commands = value["commands"].as_array().expect("commands array");
 	assert!(
 		commands
@@ -1613,6 +1614,7 @@ fn commands_category_filter_limits_results() {
 	);
 	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse filtered commands json");
 	assert_eq!(value["filters"]["category"], "diagnostic");
+	assert_eq!(value["filters"]["requiresRepo"], serde_json::Value::Null);
 	let commands = value["commands"].as_array().expect("commands array");
 	assert!(
 		!commands.is_empty(),
@@ -1635,6 +1637,79 @@ fn commands_category_filter_limits_results() {
 	assert!(
 		stderr.trim().is_empty(),
 		"filtered commands --json should not write stderr"
+	);
+}
+
+#[test]
+fn commands_repo_filter_limits_results() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["commands", "--repo-only", "--json"]);
+
+	assert!(output.status.success(), "commands --repo-only --json should succeed");
+	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse repo commands json");
+	assert_eq!(value["filters"]["category"], serde_json::Value::Null);
+	assert_eq!(value["filters"]["requiresRepo"], true);
+	let commands = value["commands"].as_array().expect("commands array");
+	assert!(!commands.is_empty(), "repo filter should keep repo commands");
+	assert!(
+		commands.iter().all(|entry| entry["requiresRepo"] == true),
+		"repo filter should exclude standalone commands"
+	);
+	assert!(commands.iter().any(|entry| entry["name"] == "run"));
+	assert!(commands.iter().any(|entry| entry["name"] == "doctor"));
+	assert!(
+		!commands.iter().any(|entry| entry["name"] == "shells"),
+		"shells is a standalone command, not a repo command"
+	);
+	assert_eq!(
+		value["summary"]["commands"].as_u64().expect("command count"),
+		commands.len() as u64
+	);
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"commands --repo-only --json should not write stderr"
+	);
+}
+
+#[test]
+fn commands_standalone_filter_limits_results() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["commands", "--standalone-only", "--json"]);
+
+	assert!(
+		output.status.success(),
+		"commands --standalone-only --json should succeed"
+	);
+	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse standalone commands json");
+	assert_eq!(value["filters"]["category"], serde_json::Value::Null);
+	assert_eq!(value["filters"]["requiresRepo"], false);
+	let commands = value["commands"].as_array().expect("commands array");
+	assert!(
+		!commands.is_empty(),
+		"standalone filter should keep standalone commands"
+	);
+	assert!(
+		commands.iter().all(|entry| entry["requiresRepo"] == false),
+		"standalone filter should exclude repo commands"
+	);
+	assert!(commands.iter().any(|entry| entry["name"] == "shells"));
+	assert!(commands.iter().any(|entry| entry["name"] == "categories"));
+	assert!(commands.iter().any(|entry| entry["name"] == "commands"));
+	assert!(
+		!commands.iter().any(|entry| entry["name"] == "run"),
+		"run requires a Git repository"
+	);
+	assert_eq!(
+		value["summary"]["commands"].as_u64().expect("command count"),
+		commands.len() as u64
+	);
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"commands --standalone-only --json should not write stderr"
 	);
 }
 
@@ -1669,6 +1744,39 @@ fn commands_names_only_prints_clean_command_names() {
 }
 
 #[test]
+fn commands_standalone_names_only_prints_clean_command_names() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["commands", "--standalone-only", "--names-only"]);
+
+	assert!(
+		output.status.success(),
+		"commands --standalone-only --names-only should succeed"
+	);
+	let stdout = stdout_text(&output);
+	assert_eq!(
+		stdout.lines().collect::<Vec<_>>(),
+		vec![
+			"init",
+			"schema",
+			"completion",
+			"shells",
+			"formats",
+			"managers",
+			"categories",
+			"examples",
+			"commands",
+			"codes"
+		]
+	);
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"commands --standalone-only --names-only should not write stderr"
+	);
+}
+
+#[test]
 fn commands_names_only_conflicts_with_json() {
 	let temp = tempfile::tempdir().expect("create temp dir");
 
@@ -1682,6 +1790,22 @@ fn commands_names_only_conflicts_with_json() {
 	assert!(stderr.contains("cannot be used with"));
 	assert!(stderr.contains("--names-only"));
 	assert!(stderr.contains("--json"));
+}
+
+#[test]
+fn commands_repo_only_conflicts_with_standalone_only() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["commands", "--repo-only", "--standalone-only"]);
+
+	assert!(
+		!output.status.success(),
+		"commands --repo-only should conflict with --standalone-only"
+	);
+	let stderr = stderr_text(&output);
+	assert!(stderr.contains("cannot be used with"));
+	assert!(stderr.contains("--repo-only"));
+	assert!(stderr.contains("--standalone-only"));
 }
 
 #[test]
@@ -2462,6 +2586,8 @@ fn utility_help_groups_options_by_task() {
 	assert!(commands_stdout.contains("Output options:"));
 	assert!(commands_stdout.contains("pullhook commands --category diagnostic"));
 	assert!(commands_stdout.contains("pullhook commands --category diagnostic --names-only"));
+	assert!(commands_stdout.contains("pullhook commands --repo-only"));
+	assert!(commands_stdout.contains("pullhook commands --standalone-only --names-only"));
 }
 
 #[test]

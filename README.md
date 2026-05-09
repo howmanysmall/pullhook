@@ -292,6 +292,8 @@ pullhook examples --json
 pullhook commands
 pullhook commands --category diagnostic
 pullhook commands --category reference --names-only
+pullhook commands --repo-only
+pullhook commands --standalone-only --names-only
 pullhook commands --json
 pullhook codes
 pullhook codes --kind doctor-check
@@ -390,6 +392,7 @@ Use `pullhook commands` to inspect the command catalog in text form, or `pullhoo
 tool needs supported commands, categories, and repo requirements without scraping help text.
 Add `--category workflow`, `--category diagnostic`, `--category generator`, or `--category reference` to narrow
 the catalog.
+Use `--repo-only` or `--standalone-only` to split commands by whether they need to run inside a Git repository.
 Use `pullhook commands --names-only` when a script or completion helper only needs command names.
 Use `pullhook codes` to inspect the stable code catalog in text form, or `pullhook codes --json` when another
 tool needs the catalog without scraping docs. Add `--kind error` or `--kind doctor-check` to narrow the list.
