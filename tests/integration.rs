@@ -2335,6 +2335,12 @@ fn rules_json_reports_rule_inventory() {
 	assert_eq!(value["error"], serde_json::Value::Null);
 	assert_eq!(value["rules"], 2);
 	assert_eq!(value["parallelGroups"], 1);
+	assert_eq!(value["summary"]["entries"], 2);
+	assert_eq!(value["summary"]["rules"], 2);
+	assert_eq!(value["summary"]["parallelGroups"], 1);
+	assert_eq!(value["summary"]["selectors"], 3);
+	assert_eq!(value["summary"]["commands"], 1);
+	assert_eq!(value["summary"]["patterns"], 1);
 	assert_eq!(
 		value["selectors"],
 		serde_json::json!(["checks", "install dependencies", "lint"])

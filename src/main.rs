@@ -1897,18 +1897,41 @@ fn completion_shell_label(shell: clap_complete::Shell) -> String {
 }
 
 fn config_rules_json(config: &Config, kind: RulesKind, selectors: &[String]) -> serde_json::Value {
+	let selectors = collect_rules_output_selectors(config, kind, selectors);
+	let commands = collect_config_rule_commands_for_kind(config, kind);
+	let patterns = collect_config_rule_patterns_for_kind(config, kind);
+	let entries = config
+		.entries
+		.iter()
+		.filter_map(|entry| config_rule_inventory_json(entry, kind))
+		.collect::<Vec<_>>();
+	let rules = count_config_rules_for_kind(config, kind);
+	let parallel_groups = count_config_groups_for_kind(config, kind);
+	let entry_count = entries.len();
+	let selector_count = selectors.len();
+	let command_count = commands.len();
+	let pattern_count = patterns.len();
+
 	json!({
 		"status": "ok",
 		"error": serde_json::Value::Null,
 		"path": config.path.display().to_string(),
 		"onFailure": on_failure_label(config.on_failure),
 		"kind": rules_kind_label(kind),
-		"selectors": collect_rules_output_selectors(config, kind, selectors),
-		"commands": collect_config_rule_commands_for_kind(config, kind),
-		"patterns": collect_config_rule_patterns_for_kind(config, kind),
-		"entries": config.entries.iter().filter_map(|entry| config_rule_inventory_json(entry, kind)).collect::<Vec<_>>(),
-		"rules": count_config_rules_for_kind(config, kind),
-		"parallelGroups": count_config_groups_for_kind(config, kind),
+		"selectors": selectors,
+		"commands": commands,
+		"patterns": patterns,
+		"entries": entries,
+		"rules": rules,
+		"parallelGroups": parallel_groups,
+		"summary": {
+			"entries": entry_count,
+			"rules": rules,
+			"parallelGroups": parallel_groups,
+			"selectors": selector_count,
+			"commands": command_count,
+			"patterns": pattern_count,
+		},
 	})
 }
 
