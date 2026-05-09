@@ -2844,6 +2844,55 @@ fn rules_patterns_only_respects_kind_filter() {
 }
 
 #[test]
+fn rules_patterns_only_respects_rule_selector_filter() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_file(
+		repo_root,
+		Path::new("pullhook.json"),
+		r#"{
+  "rules": [
+    {
+      "name": "format",
+      "changed": "packages/a/package-lock.json",
+      "run": "cargo fmt --all"
+    },
+    {
+      "name": "checks",
+      "parallel": [
+        {
+          "name": "lint",
+          "changed": "packages/b/package-lock.json",
+          "run": "cargo clippy --all-targets"
+        },
+        {
+          "name": "test",
+          "changed": ["src/**/*.rs", "tests/**/*.rs"],
+          "run": "cargo nextest run"
+        }
+      ]
+    }
+  ]
+}
+"#,
+	);
+
+	let output = run_pullhook(repo_root, &["rules", "--rule", "test", "--patterns-only"]);
+
+	assert!(
+		output.status.success(),
+		"rules --rule test --patterns-only should succeed"
+	);
+	let stdout = stdout_text(&output);
+	assert_eq!(stdout, "src/**/*.rs\ntests/**/*.rs\n");
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"rules --rule test --patterns-only should not write stderr"
+	);
+}
+
+#[test]
 fn rules_text_lists_group_members() {
 	let temp = setup_repo_with_merge();
 	let repo_root = temp.path();

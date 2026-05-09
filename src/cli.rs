@@ -91,7 +91,9 @@ Examples:
   pullhook rules --kind install
   pullhook rules --names-only
   pullhook rules --commands-only
+  pullhook rules --rule lint --commands-only
   pullhook rules --patterns-only
+  pullhook rules --rule lint --patterns-only
   pullhook rules --json
   pullhook rules --rule lint --json
   pullhook rules --config config/pullhook.custom.json";
