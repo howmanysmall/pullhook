@@ -541,6 +541,63 @@ fn validate_json_reports_config_summary() {
 }
 
 #[test]
+fn validate_json_reports_invalid_config_as_json() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_file(
+		repo_root,
+		Path::new("pullhook.json"),
+		r#"{
+  "rules": [
+    {
+      "name": "bad copy",
+      "changed": "**/*.rs",
+      "run": "cargo test",
+      "failText": "{sparkle nope}"
+    }
+  ]
+}
+"#,
+	);
+
+	let output = run_pullhook(repo_root, &["validate", "--json"]);
+
+	assert!(!output.status.success(), "invalid config should fail");
+	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse validate json");
+	assert_eq!(value["valid"], false);
+	assert!(value["path"].as_str().expect("path").ends_with("pullhook.json"));
+	assert!(
+		value["error"]
+			.as_str()
+			.expect("error")
+			.contains("unknown style `sparkle`")
+	);
+	let stderr = stderr_text(&output);
+	assert!(stderr.contains("config invalid"));
+}
+
+#[test]
+fn validate_json_reports_missing_config_as_json() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+
+	let output = run_pullhook(repo_root, &["validate", "--json"]);
+
+	assert!(!output.status.success(), "missing config should fail");
+	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse validate json");
+	assert_eq!(value["valid"], false);
+	assert!(value["path"].is_null());
+	assert!(
+		value["error"]
+			.as_str()
+			.expect("error")
+			.contains("no pullhook config found")
+	);
+	let stderr = stderr_text(&output);
+	assert!(stderr.contains("no pullhook config found"));
+}
+
+#[test]
 fn doctor_json_reports_repo_config_diff_base_and_install_detection() {
 	let temp = setup_repo_with_root_manifest_change();
 	let repo_root = temp.path();

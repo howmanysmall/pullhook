@@ -384,13 +384,36 @@ fn explain_config_command(args: &ExplainArgs) -> Result<()> {
 
 fn validate_config_command(args: &ValidateArgs) -> Result<()> {
 	let renderer = Renderer::new(args.render);
-	let (_, _, config) = load_config_from_cwd(args.debug, args.config.as_deref())?;
 
 	if args.json {
+		let cwd = std::env::current_dir().context("failed to read current working directory")?;
+		let repo = GitRepo::discover(&cwd, args.debug).context("failed to resolve repository root")?;
+		let repo_root = repo.root().to_path_buf();
+		let path = match resolve_config_path(&cwd, &repo_root, args.config.as_deref()) {
+			Ok(path) => path,
+			Err(error) => {
+				println!(
+					"{}",
+					serde_json::to_string_pretty(&config_validation_error_json(None, &error.to_string()))?
+				);
+				return Err(error);
+			}
+		};
+		let config = match config::load(&path) {
+			Ok(config) => config,
+			Err(error) => {
+				println!(
+					"{}",
+					serde_json::to_string_pretty(&config_validation_error_json(Some(&path), &error.to_string()))?
+				);
+				return Err(anyhow!("config invalid"));
+			}
+		};
 		println!("{}", serde_json::to_string_pretty(&config_summary_json(&config))?);
 		return Ok(());
 	}
 
+	let (_, _, config) = load_config_from_cwd(args.debug, args.config.as_deref())?;
 	renderer.render_message_stage(&format!("config valid: {}", config.path.display()));
 	renderer.render_message_stage(&format!(
 		"entries: {} | rules: {} | parallel groups: {}",
@@ -966,6 +989,14 @@ fn config_summary_json(config: &Config) -> serde_json::Value {
 		"entries": config.entries.len(),
 		"rules": count_config_rules(config),
 		"parallelGroups": count_config_groups(config),
+	})
+}
+
+fn config_validation_error_json(path: Option<&std::path::Path>, error: &str) -> serde_json::Value {
+	json!({
+		"valid": false,
+		"path": path.map(|path| path.display().to_string()),
+		"error": error,
 	})
 }
 
