@@ -192,6 +192,7 @@ fn check_completion_output(
 						false,
 						false,
 						Some(&format!("failed to read completion file: {error}")),
+						&completion_check_details(path, &shell_label),
 					))?
 				);
 			}
@@ -205,6 +206,7 @@ fn check_completion_output(
 		} else {
 			Some("completion output is out of date")
 		};
+		let details = error.map_or_else(Vec::new, |_| completion_check_details(path, &shell_label));
 		println!(
 			"{}",
 			serde_json::to_string_pretty(&generated_file_check_json(
@@ -213,6 +215,7 @@ fn check_completion_output(
 				true,
 				matches,
 				error,
+				&details,
 			))?
 		);
 	}
@@ -943,6 +946,7 @@ fn check_schema_output(path: &std::path::Path, json_output: bool) -> Result<()> 
 						false,
 						false,
 						Some(&format!("failed to read schema file: {error}")),
+						&schema_check_details(path),
 					))?
 				);
 			}
@@ -956,9 +960,10 @@ fn check_schema_output(path: &std::path::Path, json_output: bool) -> Result<()> 
 		} else {
 			Some("schema output is out of date")
 		};
+		let details = error.map_or_else(Vec::new, |_| schema_check_details(path));
 		println!(
 			"{}",
-			serde_json::to_string_pretty(&schema_check_json(path, true, matches, error))?
+			serde_json::to_string_pretty(&schema_check_json(path, true, matches, error, &details))?
 		);
 	}
 	if matches {
@@ -1866,13 +1871,20 @@ fn init_plan_json(
 	})
 }
 
-fn schema_check_json(path: &std::path::Path, exists: bool, matches: bool, error: Option<&str>) -> serde_json::Value {
+fn schema_check_json(
+	path: &std::path::Path,
+	exists: bool,
+	matches: bool,
+	error: Option<&str>,
+	details: &[String],
+) -> serde_json::Value {
 	json!({
 		"status": if error.is_some() { "error" } else { "ok" },
 		"error": error,
 		"path": path.display().to_string(),
 		"exists": exists,
 		"matches": matches,
+		"details": details,
 	})
 }
 
@@ -1882,6 +1894,7 @@ fn generated_file_check_json(
 	exists: bool,
 	matches: bool,
 	error: Option<&str>,
+	details: &[String],
 ) -> serde_json::Value {
 	json!({
 		"status": if error.is_some() { "error" } else { "ok" },
@@ -1890,7 +1903,19 @@ fn generated_file_check_json(
 		"shell": shell,
 		"exists": exists,
 		"matches": matches,
+		"details": details,
 	})
+}
+
+fn schema_check_details(path: &std::path::Path) -> Vec<String> {
+	vec![format!("rerun `pullhook schema --output {}`", path.display())]
+}
+
+fn completion_check_details(path: &std::path::Path, shell: &str) -> Vec<String> {
+	vec![format!(
+		"rerun `pullhook completion {shell} --output {}`",
+		path.display()
+	)]
 }
 
 fn completion_shell_label(shell: clap_complete::Shell) -> String {
