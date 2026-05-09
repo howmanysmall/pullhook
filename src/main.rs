@@ -431,6 +431,13 @@ const EXAMPLE_INFOS: &[ExampleInfo] = &[
 		summary: "Print configured rule command lines without evaluating changed files.",
 	},
 	ExampleInfo {
+		title: "Count configured rules",
+		category: "diagnostic",
+		command_name: "rules",
+		command: "pullhook rules --count-only",
+		summary: "Print the number of configured rule selectors matching the current filters.",
+	},
+	ExampleInfo {
 		title: "Write JSON Schema",
 		category: "generator",
 		command_name: "schema",
@@ -459,11 +466,25 @@ const EXAMPLE_INFOS: &[ExampleInfo] = &[
 		summary: "Return supported commands and categories for automation.",
 	},
 	ExampleInfo {
+		title: "Count command catalog matches",
+		category: "reference",
+		command_name: "commands",
+		command: "pullhook commands --search config --count-only",
+		summary: "Print the number of command catalog entries matching a search term.",
+	},
+	ExampleInfo {
 		title: "List completion shells",
 		category: "reference",
 		command_name: "shells",
 		command: "pullhook shells --names-only",
 		summary: "Print supported shell completion targets.",
+	},
+	ExampleInfo {
+		title: "Count completion shells",
+		category: "reference",
+		command_name: "shells",
+		command: "pullhook shells --search fish --count-only",
+		summary: "Print the number of supported shell targets matching a search term.",
 	},
 	ExampleInfo {
 		title: "List config formats",
@@ -473,11 +494,25 @@ const EXAMPLE_INFOS: &[ExampleInfo] = &[
 		summary: "Print supported config filenames.",
 	},
 	ExampleInfo {
+		title: "Count config formats",
+		category: "reference",
+		command_name: "formats",
+		command: "pullhook formats --search yaml --count-only",
+		summary: "Print the number of config formats matching a search term.",
+	},
+	ExampleInfo {
 		title: "List package managers",
 		category: "reference",
 		command_name: "managers",
 		command: "pullhook managers --patterns-only",
 		summary: "Print install detection patterns.",
+	},
+	ExampleInfo {
+		title: "Count package managers",
+		category: "reference",
+		command_name: "managers",
+		command: "pullhook managers --search pnpm --count-only",
+		summary: "Print the number of package-manager entries matching a search term.",
 	},
 	ExampleInfo {
 		title: "List command categories",
@@ -487,6 +522,13 @@ const EXAMPLE_INFOS: &[ExampleInfo] = &[
 		summary: "Return command categories with command and example counts.",
 	},
 	ExampleInfo {
+		title: "Count command categories",
+		category: "reference",
+		command_name: "categories",
+		command: "pullhook categories --search workflow --count-only",
+		summary: "Print the number of command categories matching a search term.",
+	},
+	ExampleInfo {
 		title: "List example workflows",
 		category: "reference",
 		command_name: "examples",
@@ -494,11 +536,25 @@ const EXAMPLE_INFOS: &[ExampleInfo] = &[
 		summary: "Return common workflows and copy-ready commands for automation.",
 	},
 	ExampleInfo {
+		title: "Count example workflows",
+		category: "reference",
+		command_name: "examples",
+		command: "pullhook examples --search install --count-only",
+		summary: "Print the number of example workflows matching a search term.",
+	},
+	ExampleInfo {
 		title: "List status codes",
 		category: "reference",
 		command_name: "codes",
 		command: "pullhook codes --codes-only",
 		summary: "Print stable status codes for scripts or completion helpers.",
+	},
+	ExampleInfo {
+		title: "Count status codes",
+		category: "reference",
+		command_name: "codes",
+		command: "pullhook codes --search config --count-only",
+		summary: "Print the number of status-code entries matching a search term.",
 	},
 ];
 

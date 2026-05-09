@@ -2487,14 +2487,14 @@ fn categories_json_lists_command_coverage() {
 	assert!(
 		categories
 			.iter()
-			.any(|entry| entry["name"] == "reference" && entry["commands"] == 7 && entry["examples"] == 7)
+			.any(|entry| entry["name"] == "reference" && entry["commands"] == 7 && entry["examples"] == 14)
 	);
 	assert_eq!(
 		value["summary"]["categories"].as_u64().expect("category count"),
 		categories.len() as u64
 	);
 	assert_eq!(value["summary"]["commands"], 16);
-	assert_eq!(value["summary"]["examples"], 19);
+	assert_eq!(value["summary"]["examples"], 27);
 	let stderr = stderr_text(&output);
 	assert!(stderr.trim().is_empty(), "categories --json should not write stderr");
 }
@@ -2517,7 +2517,7 @@ fn categories_search_filter_limits_results() {
 	assert_eq!(categories[0]["name"], "diagnostic");
 	assert_eq!(value["summary"]["categories"], 1);
 	assert_eq!(value["summary"]["commands"], 4);
-	assert_eq!(value["summary"]["examples"], 4);
+	assert_eq!(value["summary"]["examples"], 5);
 	let stderr = stderr_text(&output);
 	assert!(
 		stderr.trim().is_empty(),
@@ -2893,6 +2893,13 @@ fn examples_json_lists_common_workflows() {
 			.iter()
 			.any(|entry| entry["commandName"] == "rules" && entry["command"] == "pullhook rules --commands-only")
 	);
+	assert!(
+		examples
+			.iter()
+			.any(|entry| entry["commandName"] == "rules" && entry["command"] == "pullhook rules --count-only")
+	);
+	assert!(examples.iter().any(|entry| entry["commandName"] == "commands"
+		&& entry["command"] == "pullhook commands --search config --count-only"));
 	assert!(examples.iter().any(|entry| entry["commandName"] == "completion"
 		&& entry["command"] == "pullhook completion fish --output ~/.config/fish/completions/pullhook.fish"));
 	assert_eq!(
@@ -2950,7 +2957,10 @@ fn examples_command_filter_limits_results() {
 		examples_output.status.success(),
 		"examples --command examples --commands-only should succeed"
 	);
-	assert_eq!(stdout_text(&examples_output), "pullhook examples --json\n");
+	assert_eq!(
+		stdout_text(&examples_output),
+		"pullhook examples --json\npullhook examples --search install --count-only\n"
+	);
 	let stderr = stderr_text(&examples_output);
 	assert!(
 		stderr.trim().is_empty(),
@@ -3127,11 +3137,19 @@ fn examples_category_commands_only_prints_clean_commands() {
 		stdout.lines().collect::<Vec<_>>(),
 		vec![
 			"pullhook commands --json",
+			"pullhook commands --search config --count-only",
 			"pullhook shells --names-only",
+			"pullhook shells --search fish --count-only",
 			"pullhook formats --files-only",
+			"pullhook formats --search yaml --count-only",
 			"pullhook managers --patterns-only",
+			"pullhook managers --search pnpm --count-only",
 			"pullhook categories --json",
-			"pullhook codes --codes-only"
+			"pullhook categories --search workflow --count-only",
+			"pullhook examples --json",
+			"pullhook examples --search install --count-only",
+			"pullhook codes --codes-only",
+			"pullhook codes --search config --count-only"
 		]
 	);
 	let stderr = stderr_text(&output);
@@ -3192,7 +3210,10 @@ fn examples_search_filter_composes_with_command_names_only() {
 		"examples --search install --command-names-only should succeed"
 	);
 	let stdout = stdout_text(&output);
-	assert_eq!(stdout.lines().collect::<Vec<_>>(), vec!["legacy", "managers"]);
+	assert_eq!(
+		stdout.lines().collect::<Vec<_>>(),
+		vec!["legacy", "examples", "managers"]
+	);
 	let stderr = stderr_text(&output);
 	assert!(
 		stderr.trim().is_empty(),
@@ -3215,11 +3236,19 @@ fn examples_titles_only_prints_clean_titles() {
 		stdout.lines().collect::<Vec<_>>(),
 		vec![
 			"List command catalog",
+			"Count command catalog matches",
 			"List completion shells",
+			"Count completion shells",
 			"List config formats",
+			"Count config formats",
 			"List package managers",
+			"Count package managers",
 			"List command categories",
-			"List status codes"
+			"Count command categories",
+			"List example workflows",
+			"Count example workflows",
+			"List status codes",
+			"Count status codes"
 		]
 	);
 	let stderr = stderr_text(&output);
@@ -3247,11 +3276,19 @@ fn examples_summaries_only_prints_clean_summaries() {
 		stdout.lines().collect::<Vec<_>>(),
 		vec![
 			"Return supported commands and categories for automation.",
+			"Print the number of command catalog entries matching a search term.",
 			"Print supported shell completion targets.",
+			"Print the number of supported shell targets matching a search term.",
 			"Print supported config filenames.",
+			"Print the number of config formats matching a search term.",
 			"Print install detection patterns.",
+			"Print the number of package-manager entries matching a search term.",
 			"Return command categories with command and example counts.",
-			"Print stable status codes for scripts or completion helpers."
+			"Print the number of command categories matching a search term.",
+			"Return common workflows and copy-ready commands for automation.",
+			"Print the number of example workflows matching a search term.",
+			"Print stable status codes for scripts or completion helpers.",
+			"Print the number of status-code entries matching a search term."
 		]
 	);
 	let stderr = stderr_text(&output);
@@ -3276,7 +3313,8 @@ fn examples_search_filter_composes_with_summaries_only() {
 		stdout.lines().collect::<Vec<_>>(),
 		vec![
 			"Use legacy one-off mode to detect the package manager and run install.",
-			"Print install detection patterns."
+			"Print install detection patterns.",
+			"Print the number of example workflows matching a search term."
 		]
 	);
 	let stderr = stderr_text(&output);
@@ -3490,9 +3528,17 @@ fn commands_json_lists_cli_catalog() {
 			.iter()
 			.any(|entry| entry["name"] == "categories" && entry["category"] == "reference")
 	);
-	assert!(commands.iter().any(|entry| entry["name"] == "examples"
-		&& entry["category"] == "reference"
-		&& entry["exampleCommands"] == serde_json::json!(["pullhook examples --json"])));
+	assert!(commands.iter().any(|entry| {
+		let example_commands = entry["exampleCommands"].as_array().expect("examples example commands");
+		entry["name"] == "examples"
+			&& entry["category"] == "reference"
+			&& example_commands
+				.iter()
+				.any(|command| command.as_str() == Some("pullhook examples --json"))
+			&& example_commands
+				.iter()
+				.any(|command| command.as_str() == Some("pullhook examples --search install --count-only"))
+	}));
 	assert_eq!(
 		value["topLevelExamples"],
 		serde_json::json!([
@@ -3524,9 +3570,9 @@ fn commands_json_lists_cli_catalog() {
 		value["summary"]["commands"].as_u64().expect("command count"),
 		commands.len() as u64
 	);
-	assert_eq!(value["summary"]["commandExamples"], 18);
+	assert_eq!(value["summary"]["commandExamples"], 26);
 	assert_eq!(value["summary"]["topLevelExamples"], 1);
-	assert_eq!(value["summary"]["examples"], 19);
+	assert_eq!(value["summary"]["examples"], 27);
 	let stderr = stderr_text(&output);
 	assert!(stderr.trim().is_empty(), "commands --json should not write stderr");
 }
@@ -3943,9 +3989,9 @@ fn commands_json_search_counts_top_level_examples() {
 	);
 	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse commands search json");
 	assert_eq!(value["categories"], serde_json::json!(["workflow", "reference"]));
-	assert_eq!(value["summary"]["commandExamples"], 1);
+	assert_eq!(value["summary"]["commandExamples"], 4);
 	assert_eq!(value["summary"]["topLevelExamples"], 1);
-	assert_eq!(value["summary"]["examples"], 2);
+	assert_eq!(value["summary"]["examples"], 5);
 	assert_eq!(
 		value["topLevelExamples"][0]["command"],
 		serde_json::json!("pullhook --install")
