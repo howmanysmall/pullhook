@@ -1581,17 +1581,20 @@ fn doctor_report_json(repo_root: &std::path::Path, checks: &[DoctorCheck], error
 
 fn config_summary_json(config: &Config) -> serde_json::Value {
 	json!({
+		"status": "ok",
 		"valid": true,
 		"path": config.path.display().to_string(),
 		"onFailure": on_failure_label(config.on_failure),
 		"entries": config.entries.len(),
 		"rules": count_config_rules(config),
 		"parallelGroups": count_config_groups(config),
+		"error": null,
 	})
 }
 
 fn config_validation_error_json(path: Option<&std::path::Path>, error: &str) -> serde_json::Value {
 	json!({
+		"status": "error",
 		"valid": false,
 		"path": path.map(|path| path.display().to_string()),
 		"error": error,

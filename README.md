@@ -285,7 +285,7 @@ Add `--require-existing` when that script should fail instead of returning a pla
 `pullhook schema` prints the config JSON Schema, and `pullhook schema --output <path>` writes it for editor setup.
 Use `schema --check --output <path>` in CI when a checked-in schema file must stay current.
 `validate --json` emits a compact config summary for scripts and still prints structured JSON when the
-config is invalid. Use `validate --quiet` when CI only needs the exit code. `doctor` checks repo discovery, config health, diff-base availability, and `--install`
+config is invalid, including `status` and `error` fields. Use `validate --quiet` when CI only needs the exit code. `doctor` checks repo discovery, config health, diff-base availability, and `--install`
 detection in one pass, with a short hint for each check. Use `doctor --strict` when CI should fail on warnings.
 Use `doctor --quiet` to suppress all-ok text output without hiding warnings or errors.
 `doctor --json` includes `status` and `error` fields so automation can read the result without scraping stderr.

@@ -1642,11 +1642,13 @@ fn validate_json_reports_config_summary() {
 
 	assert!(output.status.success(), "validate --json should succeed");
 	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse validate json");
+	assert_eq!(value["status"], "ok");
 	assert_eq!(value["valid"], true);
 	assert_eq!(value["entries"], 2);
 	assert_eq!(value["rules"], 2);
 	assert_eq!(value["parallelGroups"], 1);
 	assert_eq!(value["onFailure"], "stop");
+	assert_eq!(value["error"], serde_json::Value::Null);
 	let stderr = stderr_text(&output);
 	assert!(stderr.trim().is_empty(), "validate --json should not write stderr");
 }
@@ -1675,6 +1677,7 @@ fn validate_json_reports_invalid_config_as_json() {
 
 	assert!(!output.status.success(), "invalid config should fail");
 	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse validate json");
+	assert_eq!(value["status"], "error");
 	assert_eq!(value["valid"], false);
 	assert!(value["path"].as_str().expect("path").ends_with("pullhook.json"));
 	assert!(
@@ -1696,6 +1699,7 @@ fn validate_json_reports_missing_config_as_json() {
 
 	assert!(!output.status.success(), "missing config should fail");
 	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse validate json");
+	assert_eq!(value["status"], "error");
 	assert_eq!(value["valid"], false);
 	assert!(value["path"].is_null());
 	assert!(
