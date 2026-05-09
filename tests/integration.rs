@@ -763,11 +763,59 @@ fn shells_search_filter_composes_with_commands_only() {
 }
 
 #[test]
+fn shells_descriptions_only_prints_clean_descriptions() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["shells", "--descriptions-only"]);
+
+	assert!(output.status.success(), "shells --descriptions-only should succeed");
+	let stdout = stdout_text(&output);
+	assert_eq!(
+		stdout.lines().collect::<Vec<_>>(),
+		vec![
+			"Generate Bash completion script.",
+			"Generate Elvish completion script.",
+			"Generate Fish completion script.",
+			"Generate PowerShell completion script.",
+			"Generate Zsh completion script."
+		]
+	);
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"shells --descriptions-only should not write stderr"
+	);
+}
+
+#[test]
+fn shells_search_filter_composes_with_descriptions_only() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["shells", "--search", "power", "--descriptions-only"]);
+
+	assert!(
+		output.status.success(),
+		"shells --search power --descriptions-only should succeed"
+	);
+	let stdout = stdout_text(&output);
+	assert_eq!(
+		stdout.lines().collect::<Vec<_>>(),
+		vec!["Generate PowerShell completion script."]
+	);
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"shells --search power --descriptions-only should not write stderr"
+	);
+}
+
+#[test]
 fn shells_line_outputs_conflict_with_json() {
 	let temp = tempfile::tempdir().expect("create temp dir");
 	let conflicting_modes: &[&[&str]] = &[
 		&["shells", "--names-only", "--json"],
 		&["shells", "--commands-only", "--json"],
+		&["shells", "--descriptions-only", "--json"],
 	];
 
 	for args in conflicting_modes {
@@ -786,17 +834,22 @@ fn shells_line_outputs_conflict_with_json() {
 #[test]
 fn shells_line_outputs_conflict_with_each_other() {
 	let temp = tempfile::tempdir().expect("create temp dir");
+	let conflicting_modes: &[&[&str]] = &[
+		&["shells", "--names-only", "--commands-only"],
+		&["shells", "--names-only", "--descriptions-only"],
+		&["shells", "--commands-only", "--descriptions-only"],
+	];
 
-	let output = run_pullhook(temp.path(), &["shells", "--names-only", "--commands-only"]);
+	for args in conflicting_modes {
+		let output = run_pullhook(temp.path(), args);
 
-	assert!(
-		!output.status.success(),
-		"shells line-output modes should conflict with each other"
-	);
-	let stderr = stderr_text(&output);
-	assert!(stderr.contains("cannot be used with"));
-	assert!(stderr.contains("--names-only"));
-	assert!(stderr.contains("--commands-only"));
+		assert!(
+			!output.status.success(),
+			"shells line-output modes should conflict with each other for args {args:?}"
+		);
+		let stderr = stderr_text(&output);
+		assert!(stderr.contains("cannot be used with"));
+	}
 }
 
 #[test]
@@ -3990,6 +4043,7 @@ fn utility_help_groups_options_by_task() {
 	assert!(shells_stdout.contains("pullhook shells --search fish"));
 	assert!(shells_stdout.contains("pullhook shells --names-only"));
 	assert!(shells_stdout.contains("pullhook shells --commands-only"));
+	assert!(shells_stdout.contains("pullhook shells --descriptions-only"));
 	assert!(shells_stdout.contains("pullhook shells --json"));
 
 	let formats = run_pullhook(temp.path(), &["formats", "--help"]);

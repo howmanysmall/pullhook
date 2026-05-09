@@ -883,6 +883,13 @@ fn shells_command(args: &ShellsArgs) -> Result<()> {
 		return Ok(());
 	}
 
+	if args.descriptions_only {
+		for shell in shells {
+			println!("{}", shell.description);
+		}
+		return Ok(());
+	}
+
 	println!("Shell completion targets");
 	if let Some(search) = &args.search {
 		println!("filter: search={search}");

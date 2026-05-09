@@ -167,6 +167,7 @@ Generate shell completions:
 ```bash
 pullhook shells
 pullhook shells --names-only
+pullhook shells --descriptions-only
 pullhook completion bash > ~/.local/share/bash-completion/completions/pullhook
 pullhook completion zsh > "${fpath[1]}/_pullhook"
 pullhook completion fish > ~/.config/fish/completions/pullhook.fish
@@ -279,6 +280,7 @@ pullhook shells
 pullhook shells --search fish
 pullhook shells --names-only
 pullhook shells --commands-only
+pullhook shells --descriptions-only
 pullhook shells --json
 pullhook formats
 pullhook formats --search yaml
@@ -365,6 +367,7 @@ when another tool needs shell names and generation commands without scraping hel
 Add `--search <text>` to match shell names, completion commands, or descriptions case-insensitively.
 Use `pullhook shells --names-only` when a script only needs supported shell names.
 Use `pullhook shells --commands-only` when a script only needs shell completion commands.
+Use `pullhook shells --descriptions-only` when a script only needs short shell descriptions.
 Use `pullhook formats` to inspect supported config formats and discovery filenames.
 Add `--search <text>` to match format names, config filenames, descriptions, or init commands.
 Use `pullhook formats --files-only` when a script only needs the config filenames pullhook discovers.

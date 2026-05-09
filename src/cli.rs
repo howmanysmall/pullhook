@@ -147,6 +147,7 @@ Examples:
   pullhook shells --search fish
   pullhook shells --names-only
   pullhook shells --commands-only
+  pullhook shells --descriptions-only
   pullhook shells --json";
 
 const FORMATS_AFTER_HELP: &str = "\
@@ -1063,6 +1064,10 @@ pub struct CompletionArgs {
 
 /// Arguments for `pullhook shells`.
 #[derive(Debug, Clone, Args)]
+#[expect(
+	clippy::struct_excessive_bools,
+	reason = "clap line-output flags are clearer as independent switches"
+)]
 #[command(after_help = SHELLS_AFTER_HELP)]
 pub struct ShellsArgs {
 	/// Only list shells whose name, completion command, or description contains this text.
@@ -1073,7 +1078,7 @@ pub struct ShellsArgs {
 	#[arg(
 		long = "json",
 		default_value_t = false,
-		conflicts_with_all = ["names_only", "commands_only"],
+		conflicts_with_all = ["names_only", "commands_only", "descriptions_only"],
 		help_heading = "Output options"
 	)]
 	pub json: bool,
@@ -1082,7 +1087,7 @@ pub struct ShellsArgs {
 	#[arg(
 		long = "names-only",
 		default_value_t = false,
-		conflicts_with_all = ["json", "commands_only"],
+		conflicts_with_all = ["json", "commands_only", "descriptions_only"],
 		help_heading = "Output options"
 	)]
 	pub names_only: bool,
@@ -1091,10 +1096,19 @@ pub struct ShellsArgs {
 	#[arg(
 		long = "commands-only",
 		default_value_t = false,
-		conflicts_with_all = ["json", "names_only"],
+		conflicts_with_all = ["json", "names_only", "descriptions_only"],
 		help_heading = "Output options"
 	)]
 	pub commands_only: bool,
+
+	/// Print only shell descriptions, one per line.
+	#[arg(
+		long = "descriptions-only",
+		default_value_t = false,
+		conflicts_with_all = ["json", "names_only", "commands_only"],
+		help_heading = "Output options"
+	)]
+	pub descriptions_only: bool,
 }
 
 /// Arguments for `pullhook formats`.
