@@ -2498,6 +2498,17 @@ fn rules_json_rejects_unknown_rule_selector_as_json() {
 	assert_eq!(value["status"], "error");
 	let error = value["error"].as_str().expect("error message");
 	assert!(error.contains("unknown rule selector(s): typcheck (did you mean `typecheck`?)"));
+	assert_eq!(value["unknownSelectors"], serde_json::json!(["typcheck"]));
+	assert_eq!(value["availableSelectors"], serde_json::json!(["typecheck"]));
+	assert_eq!(
+		value["suggestions"],
+		serde_json::json!([
+			{
+				"selector": "typcheck",
+				"suggestion": "typecheck"
+			}
+		])
+	);
 	let stderr = stderr_text(&output);
 	assert!(stderr.contains("unknown rule selector(s): typcheck (did you mean `typecheck`?)"));
 }
@@ -4279,6 +4290,9 @@ fn run_rejects_unknown_rule_selector() {
 	let error = value["error"].as_str().expect("error message");
 	assert!(error.contains("unknown rule selector(s): missing rule"));
 	assert!(error.contains("available: write marker"));
+	assert_eq!(value["unknownSelectors"], serde_json::json!(["missing rule"]));
+	assert_eq!(value["availableSelectors"], serde_json::json!(["write marker"]));
+	assert_eq!(value["suggestions"], serde_json::json!([]));
 	let stderr = stderr_text(&output);
 	assert!(stderr.contains("unknown rule selector(s): missing rule"));
 	assert!(stderr.contains("available: write marker"));
@@ -4301,6 +4315,9 @@ fn explain_json_rejects_unknown_rule_selector_as_json() {
 	let error = value["error"].as_str().expect("error message");
 	assert!(error.contains("unknown rule selector(s): missing rule"));
 	assert!(error.contains("available: write marker"));
+	assert_eq!(value["unknownSelectors"], serde_json::json!(["missing rule"]));
+	assert_eq!(value["availableSelectors"], serde_json::json!(["write marker"]));
+	assert_eq!(value["suggestions"], serde_json::json!([]));
 	let stderr = stderr_text(&output);
 	assert!(stderr.contains("unknown rule selector(s): missing rule"));
 }

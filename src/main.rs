@@ -10,6 +10,7 @@ mod pm;
 mod runner;
 
 use std::collections::BTreeSet;
+use std::fmt;
 use std::io::{Read as _, Write as _};
 
 use anyhow::{Context, Result, anyhow};
@@ -44,6 +45,39 @@ struct InstallPlan {
 	pattern: String,
 	command: String,
 }
+
+#[derive(Debug, Clone)]
+struct UnknownSelectorError {
+	unknown: Vec<String>,
+	available: Vec<String>,
+	show_available: bool,
+}
+
+impl UnknownSelectorError {
+	const fn new(unknown: Vec<String>, available: Vec<String>, show_available: bool) -> Self {
+		Self {
+			unknown,
+			available,
+			show_available,
+		}
+	}
+}
+
+impl fmt::Display for UnknownSelectorError {
+	fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+		write!(
+			formatter,
+			"unknown rule selector(s): {}",
+			format_unknown_selectors(&self.unknown, &self.available)
+		)?;
+		if self.show_available {
+			write!(formatter, " (available: {})", self.available.join(", "))?;
+		}
+		Ok(())
+	}
+}
+
+impl std::error::Error for UnknownSelectorError {}
 
 #[derive(Debug, Clone)]
 struct LegacyJsonContext {
@@ -876,10 +910,7 @@ fn filter_config_rules(mut config: Config, selectors: &[String]) -> Result<Confi
 		.cloned()
 		.collect::<Vec<_>>();
 	if !unknown.is_empty() {
-		return Err(anyhow!(
-			"unknown rule selector(s): {}",
-			format_unknown_selectors(&unknown, &available)
-		));
+		return Err(UnknownSelectorError::new(unknown, available, false).into());
 	}
 
 	config.entries = filter_config_entries_by_selectors(&config.entries, &requested);
@@ -1429,11 +1460,7 @@ fn filter_config_evaluation(evaluation: Vec<EvaluatedEntry>, selectors: &[String
 
 	if !unknown.is_empty() {
 		let available = available.into_iter().collect::<Vec<_>>();
-		return Err(anyhow!(
-			"unknown rule selector(s): {} (available: {})",
-			format_unknown_selectors(&unknown, &available),
-			available.join(", "),
-		));
+		return Err(UnknownSelectorError::new(unknown, available, true).into());
 	}
 
 	Ok(filtered)
@@ -1469,6 +1496,14 @@ fn result_for_output<T>(result: Result<T>, json_output: bool) -> Result<T> {
 
 fn print_json_error(error: &anyhow::Error) -> Result<()> {
 	let details = json_error_details(error);
+	if let Some(selector_error) = error.downcast_ref::<UnknownSelectorError>() {
+		println!(
+			"{}",
+			serde_json::to_string_pretty(&unknown_selector_error_json(selector_error, &details))?
+		);
+		return Ok(());
+	}
+
 	println!(
 		"{}",
 		serde_json::to_string_pretty(&json!({
@@ -1478,6 +1513,32 @@ fn print_json_error(error: &anyhow::Error) -> Result<()> {
 		}))?
 	);
 	Ok(())
+}
+
+fn unknown_selector_error_json(error: &UnknownSelectorError, details: &[String]) -> serde_json::Value {
+	json!({
+		"status": "error",
+		"error": error.to_string(),
+		"details": details,
+		"unknownSelectors": &error.unknown,
+		"availableSelectors": &error.available,
+		"suggestions": unknown_selector_suggestions(error),
+	})
+}
+
+fn unknown_selector_suggestions(error: &UnknownSelectorError) -> Vec<serde_json::Value> {
+	error
+		.unknown
+		.iter()
+		.filter_map(|selector| {
+			closest_selector(selector, &error.available).map(|suggestion| {
+				json!({
+					"selector": selector,
+					"suggestion": suggestion,
+				})
+			})
+		})
+		.collect()
 }
 
 fn json_error_details(error: &anyhow::Error) -> Vec<String> {
