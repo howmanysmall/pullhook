@@ -1222,6 +1222,13 @@ fn categories_command(args: &CategoriesArgs) -> Result<()> {
 		return Ok(());
 	}
 
+	if args.example_commands_only {
+		for command in collect_category_example_commands(&categories) {
+			println!("{command}");
+		}
+		return Ok(());
+	}
+
 	if args.descriptions_only {
 		for category in categories {
 			println!("{}", category.description);
@@ -1278,6 +1285,18 @@ fn collect_category_commands(categories: &[CategoryInfo]) -> Vec<&'static str> {
 		for command in COMMAND_INFOS.iter().filter(|info| info.category == category.name) {
 			if !commands.contains(&command.name) {
 				commands.push(command.name);
+			}
+		}
+	}
+	commands
+}
+
+fn collect_category_example_commands(categories: &[CategoryInfo]) -> Vec<&'static str> {
+	let mut commands = Vec::new();
+	for category in categories {
+		for example in EXAMPLE_INFOS.iter().filter(|example| example.category == category.name) {
+			if !commands.contains(&example.command) {
+				commands.push(example.command);
 			}
 		}
 	}

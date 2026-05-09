@@ -2496,6 +2496,53 @@ fn categories_search_filter_composes_with_commands_only() {
 }
 
 #[test]
+fn categories_example_commands_only_prints_clean_example_commands() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(
+		temp.path(),
+		&["categories", "--search", "generate", "--example-commands-only"],
+	);
+
+	assert!(
+		output.status.success(),
+		"categories --search generate --example-commands-only should succeed"
+	);
+	let stdout = stdout_text(&output);
+	assert_eq!(stdout.lines().collect::<Vec<_>>(), vec!["pullhook init"]);
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"filtered categories --example-commands-only should not write stderr"
+	);
+}
+
+#[test]
+fn categories_search_filter_composes_with_example_commands_only() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(
+		temp.path(),
+		&["categories", "--search", "repository", "--example-commands-only"],
+	);
+
+	assert!(
+		output.status.success(),
+		"categories --search repository --example-commands-only should succeed"
+	);
+	let stdout = stdout_text(&output);
+	assert_eq!(
+		stdout.lines().collect::<Vec<_>>(),
+		vec!["pullhook validate --quiet", "pullhook doctor --strict"]
+	);
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"filtered categories --example-commands-only should not write stderr"
+	);
+}
+
+#[test]
 fn categories_search_filter_composes_with_names_only() {
 	let temp = tempfile::tempdir().expect("create temp dir");
 
@@ -2569,6 +2616,7 @@ fn categories_line_outputs_conflict_with_json() {
 	let conflicting_modes: &[&[&str]] = &[
 		&["categories", "--names-only", "--json"],
 		&["categories", "--commands-only", "--json"],
+		&["categories", "--example-commands-only", "--json"],
 		&["categories", "--descriptions-only", "--json"],
 	];
 
@@ -2591,8 +2639,11 @@ fn categories_line_outputs_conflict_with_each_other() {
 
 	let conflicting_modes: &[&[&str]] = &[
 		&["categories", "--names-only", "--commands-only"],
+		&["categories", "--names-only", "--example-commands-only"],
 		&["categories", "--names-only", "--descriptions-only"],
+		&["categories", "--commands-only", "--example-commands-only"],
 		&["categories", "--commands-only", "--descriptions-only"],
+		&["categories", "--example-commands-only", "--descriptions-only"],
 	];
 
 	for args in conflicting_modes {
@@ -4554,6 +4605,7 @@ fn utility_help_groups_options_by_task() {
 	assert!(categories_stdout.contains("pullhook categories --search workflow"));
 	assert!(categories_stdout.contains("pullhook categories --names-only"));
 	assert!(categories_stdout.contains("pullhook categories --commands-only"));
+	assert!(categories_stdout.contains("pullhook categories --example-commands-only"));
 	assert!(categories_stdout.contains("pullhook categories --descriptions-only"));
 	assert!(categories_stdout.contains("pullhook categories --json"));
 
