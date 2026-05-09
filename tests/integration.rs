@@ -1577,6 +1577,7 @@ fn examples_json_lists_common_workflows() {
 	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse examples json");
 	assert_eq!(value["status"], "ok");
 	assert_eq!(value["code"], serde_json::Value::Null);
+	assert_eq!(value["filters"]["search"], serde_json::Value::Null);
 	let examples = value["examples"].as_array().expect("examples array");
 	assert!(examples.iter().any(|entry| entry["commandName"] == "init"
 		&& entry["category"] == "generator"
@@ -1624,6 +1625,7 @@ fn examples_command_filter_limits_results() {
 	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse filtered examples json");
 	assert_eq!(value["filters"]["command"], "run");
 	assert_eq!(value["filters"]["category"], serde_json::Value::Null);
+	assert_eq!(value["filters"]["search"], serde_json::Value::Null);
 	let examples = value["examples"].as_array().expect("examples array");
 	assert!(!examples.is_empty(), "run filter should keep run examples");
 	assert!(
@@ -1663,6 +1665,7 @@ fn examples_category_filter_limits_results() {
 	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse category examples json");
 	assert_eq!(value["filters"]["command"], serde_json::Value::Null);
 	assert_eq!(value["filters"]["category"], "reference");
+	assert_eq!(value["filters"]["search"], serde_json::Value::Null);
 	let examples = value["examples"].as_array().expect("examples array");
 	assert!(!examples.is_empty(), "reference filter should keep reference examples");
 	assert!(
@@ -1691,6 +1694,65 @@ fn examples_category_filter_limits_results() {
 	assert!(
 		stderr.trim().is_empty(),
 		"category examples --json should not write stderr"
+	);
+}
+
+#[test]
+fn examples_search_filter_limits_results() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["examples", "--search", "INSTALL", "--json"]);
+
+	assert!(
+		output.status.success(),
+		"examples --search INSTALL --json should succeed"
+	);
+	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse searched examples json");
+	assert_eq!(value["filters"]["command"], serde_json::Value::Null);
+	assert_eq!(value["filters"]["category"], serde_json::Value::Null);
+	assert_eq!(value["filters"]["search"], "INSTALL");
+	let examples = value["examples"].as_array().expect("examples array");
+	assert!(!examples.is_empty(), "search filter should keep matching examples");
+	assert!(examples.iter().any(|entry| entry["command"] == "pullhook --install"));
+	assert!(
+		examples
+			.iter()
+			.any(|entry| entry["command"] == "pullhook managers --patterns-only")
+	);
+	assert!(
+		!examples.iter().any(|entry| entry["command"] == "pullhook run"),
+		"plain run example should not match install"
+	);
+	assert_eq!(
+		value["summary"]["examples"].as_u64().expect("example count"),
+		examples.len() as u64
+	);
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"examples --search INSTALL --json should not write stderr"
+	);
+}
+
+#[test]
+fn examples_search_filter_composes_with_command_filter() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(
+		temp.path(),
+		&["examples", "--command", "run", "--search", "dry", "--commands-only"],
+	);
+
+	assert!(
+		output.status.success(),
+		"examples --command run --search dry --commands-only should succeed"
+	);
+	let stdout = stdout_text(&output);
+	assert_eq!(stdout.lines().collect::<Vec<_>>(), vec!["pullhook run --dry-run"]);
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"filtered examples --commands-only should not write stderr"
 	);
 }
 
@@ -2876,6 +2938,7 @@ fn utility_help_groups_options_by_task() {
 	assert!(examples_stdout.contains("Output options:"));
 	assert!(examples_stdout.contains("pullhook examples --command run"));
 	assert!(examples_stdout.contains("pullhook examples --category workflow"));
+	assert!(examples_stdout.contains("pullhook examples --search install"));
 	assert!(examples_stdout.contains("pullhook examples --command run --commands-only"));
 	assert!(examples_stdout.contains("pullhook examples --category reference --commands-only"));
 	assert!(examples_stdout.contains("pullhook examples --json"));

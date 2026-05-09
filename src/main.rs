@@ -1058,7 +1058,7 @@ fn example_count_for_category(category: &str) -> usize {
 }
 
 fn examples_command(args: &ExamplesArgs) -> Result<()> {
-	let examples = filtered_example_infos(args.command, args.category);
+	let examples = filtered_example_infos(args.command, args.category, args.search.as_deref());
 	if args.json {
 		println!(
 			"{}",
@@ -1068,6 +1068,7 @@ fn examples_command(args: &ExamplesArgs) -> Result<()> {
 				"filters": {
 					"command": args.command.map(ExampleCommand::label),
 					"category": args.category.map(CommandCategory::label),
+					"search": args.search.as_deref(),
 				},
 				"examples": examples,
 				"summary": {
@@ -1092,6 +1093,9 @@ fn examples_command(args: &ExamplesArgs) -> Result<()> {
 	if let Some(category) = args.category {
 		println!("filter: category={}", category.label());
 	}
+	if let Some(search) = &args.search {
+		println!("filter: search={search}");
+	}
 	println!();
 	for example in examples {
 		println!("{} [{}]: {}", example.title, example.category, example.command);
@@ -1100,13 +1104,31 @@ fn examples_command(args: &ExamplesArgs) -> Result<()> {
 	Ok(())
 }
 
-fn filtered_example_infos(command: Option<ExampleCommand>, category: Option<CommandCategory>) -> Vec<ExampleInfo> {
+fn filtered_example_infos(
+	command: Option<ExampleCommand>,
+	category: Option<CommandCategory>,
+	search: Option<&str>,
+) -> Vec<ExampleInfo> {
+	let search = search.map(str::to_ascii_lowercase);
 	EXAMPLE_INFOS
 		.iter()
 		.copied()
 		.filter(|example| command.is_none_or(|command| example.command_name == command.label()))
 		.filter(|example| category.is_none_or(|category| example.category == category.label()))
+		.filter(|example| {
+			search
+				.as_deref()
+				.is_none_or(|search| example_info_matches_search(example, search))
+		})
 		.collect()
+}
+
+fn example_info_matches_search(example: &ExampleInfo, search: &str) -> bool {
+	example.title.to_ascii_lowercase().contains(search)
+		|| example.category.contains(search)
+		|| example.command_name.contains(search)
+		|| example.command.to_ascii_lowercase().contains(search)
+		|| example.summary.to_ascii_lowercase().contains(search)
 }
 
 fn command_catalog_command(args: &CommandCatalogArgs) -> Result<()> {

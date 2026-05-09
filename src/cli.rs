@@ -188,6 +188,7 @@ Examples:
   pullhook examples
   pullhook examples --command run
   pullhook examples --category workflow
+  pullhook examples --search install
   pullhook examples --command run --commands-only
   pullhook examples --category reference --commands-only
   pullhook examples --json";
@@ -1256,6 +1257,10 @@ pub struct ExamplesArgs {
 	/// Only list examples for a specific command category.
 	#[arg(long = "category", value_enum, help_heading = "Filter options")]
 	pub category: Option<CommandCategory>,
+
+	/// Only list examples whose title, command, category, or summary contains this text.
+	#[arg(long = "search", value_name = "TEXT", help_heading = "Filter options")]
+	pub search: Option<String>,
 
 	/// Print machine-readable JSON instead of text output.
 	#[arg(
