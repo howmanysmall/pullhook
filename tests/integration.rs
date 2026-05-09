@@ -1083,6 +1083,52 @@ fn managers_search_filter_composes_with_patterns_only() {
 }
 
 #[test]
+fn managers_commands_only_prints_clean_install_commands() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["managers", "--commands-only"]);
+
+	assert!(output.status.success(), "managers --commands-only should succeed");
+	let stdout = stdout_text(&output);
+	assert_eq!(
+		stdout.lines().collect::<Vec<_>>(),
+		vec![
+			"npm install",
+			"yarn install",
+			"pnpm install",
+			"bun install",
+			"deno install",
+			"vlt install",
+			"aube install"
+		]
+	);
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"managers --commands-only should not write stderr"
+	);
+}
+
+#[test]
+fn managers_search_filter_composes_with_commands_only() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["managers", "--search", "aube", "--commands-only"]);
+
+	assert!(
+		output.status.success(),
+		"managers --search aube --commands-only should succeed"
+	);
+	let stdout = stdout_text(&output);
+	assert_eq!(stdout.lines().collect::<Vec<_>>(), vec!["aube install"]);
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"managers --search aube --commands-only should not write stderr"
+	);
+}
+
+#[test]
 fn managers_script_outputs_conflict_with_json() {
 	let temp = tempfile::tempdir().expect("create temp dir");
 
@@ -1107,6 +1153,38 @@ fn managers_script_outputs_conflict_with_json() {
 	assert!(patterns_stderr.contains("cannot be used with"));
 	assert!(patterns_stderr.contains("--patterns-only"));
 	assert!(patterns_stderr.contains("--json"));
+
+	let commands_output = run_pullhook(temp.path(), &["managers", "--commands-only", "--json"]);
+
+	assert!(
+		!commands_output.status.success(),
+		"managers --commands-only should conflict with --json"
+	);
+	let commands_stderr = stderr_text(&commands_output);
+	assert!(commands_stderr.contains("cannot be used with"));
+	assert!(commands_stderr.contains("--commands-only"));
+	assert!(commands_stderr.contains("--json"));
+}
+
+#[test]
+fn managers_line_outputs_conflict_with_each_other() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+	let conflicting_modes: &[&[&str]] = &[
+		&["managers", "--commands-only", "--names-only"],
+		&["managers", "--commands-only", "--patterns-only"],
+		&["managers", "--names-only", "--patterns-only"],
+	];
+
+	for args in conflicting_modes {
+		let output = run_pullhook(temp.path(), args);
+
+		assert!(
+			!output.status.success(),
+			"manager line-output modes should conflict for args {args:?}"
+		);
+		let stderr = stderr_text(&output);
+		assert!(stderr.contains("cannot be used with"));
+	}
 }
 
 #[test]
@@ -3528,6 +3606,7 @@ fn utility_help_groups_options_by_task() {
 	assert!(managers_stdout.contains("pullhook managers --search pnpm"));
 	assert!(managers_stdout.contains("pullhook managers --names-only"));
 	assert!(managers_stdout.contains("pullhook managers --patterns-only"));
+	assert!(managers_stdout.contains("pullhook managers --commands-only"));
 	assert!(managers_stdout.contains("pullhook managers --json"));
 
 	let categories = run_pullhook(temp.path(), &["categories", "--help"]);

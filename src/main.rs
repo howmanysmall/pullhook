@@ -1021,16 +1021,23 @@ fn managers_command(args: &ManagersArgs) -> Result<()> {
 		return Ok(());
 	}
 
-	if args.names_only {
+	if args.output.names_only {
 		for package_manager in managers {
 			println!("{}", package_manager.name());
 		}
 		return Ok(());
 	}
 
-	if args.patterns_only {
+	if args.output.patterns_only {
 		for package_manager in managers {
 			println!("{}", package_manager.install_pattern());
+		}
+		return Ok(());
+	}
+
+	if args.output.commands_only {
+		for package_manager in managers {
+			println!("{}", package_manager.install_command());
 		}
 		return Ok(());
 	}

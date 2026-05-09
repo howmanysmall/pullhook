@@ -158,6 +158,7 @@ Examples:
   pullhook managers --search pnpm
   pullhook managers --names-only
   pullhook managers --patterns-only
+  pullhook managers --commands-only
   pullhook managers --json";
 
 const CATEGORIES_AFTER_HELP: &str = "\
@@ -1108,16 +1109,23 @@ pub struct ManagersArgs {
 	#[arg(
 		long = "json",
 		default_value_t = false,
-		conflicts_with_all = ["names_only", "patterns_only"],
+		conflicts_with_all = ["names_only", "patterns_only", "commands_only"],
 		help_heading = "Output options"
 	)]
 	pub json: bool,
 
+	#[command(flatten)]
+	pub output: ManagersLineOutputArgs,
+}
+
+/// Line-output mode arguments for `pullhook managers`.
+#[derive(Debug, Clone, Args)]
+pub struct ManagersLineOutputArgs {
 	/// Print only package-manager names, one per line.
 	#[arg(
 		long = "names-only",
 		default_value_t = false,
-		conflicts_with_all = ["json", "patterns_only"],
+		conflicts_with_all = ["json", "patterns_only", "commands_only"],
 		help_heading = "Output options"
 	)]
 	pub names_only: bool,
@@ -1126,10 +1134,19 @@ pub struct ManagersArgs {
 	#[arg(
 		long = "patterns-only",
 		default_value_t = false,
-		conflicts_with_all = ["json", "names_only"],
+		conflicts_with_all = ["json", "names_only", "commands_only"],
 		help_heading = "Output options"
 	)]
 	pub patterns_only: bool,
+
+	/// Print only install commands, one per line.
+	#[arg(
+		long = "commands-only",
+		default_value_t = false,
+		conflicts_with_all = ["json", "names_only", "patterns_only"],
+		help_heading = "Output options"
+	)]
+	pub commands_only: bool,
 }
 
 /// Arguments for `pullhook categories`.
