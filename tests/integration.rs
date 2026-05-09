@@ -2168,6 +2168,7 @@ fn validate_json_reports_invalid_config_as_json() {
 			.expect("detail")
 			.contains("rules[0]: invalid `failText`: unknown style `sparkle`")
 	}));
+	assert_eq!(value["validationErrors"], value["details"]);
 	let stderr = stderr_text(&output);
 	assert!(stderr.contains("config invalid"));
 }

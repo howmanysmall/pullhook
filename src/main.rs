@@ -2099,6 +2099,7 @@ fn config_validation_error_json(path: Option<&std::path::Path>, error: &str, det
 		"path": path.map(|path| path.display().to_string()),
 		"error": error,
 		"details": details,
+		"validationErrors": details,
 	})
 }
 
