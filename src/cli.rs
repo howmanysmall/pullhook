@@ -88,6 +88,8 @@ Examples:
   pullhook doctor
   pullhook doctor --quiet
   pullhook doctor --strict
+  pullhook doctor --checks-only
+  pullhook doctor --codes-only
   pullhook doctor --json
   pullhook doctor --config config/pullhook.custom.json";
 
@@ -705,17 +707,40 @@ pub struct DoctorArgs {
 	pub config: Option<PathBuf>,
 
 	/// Print machine-readable JSON instead of text output.
-	#[arg(long = "json", default_value_t = false, help_heading = "Output options")]
+	#[arg(
+		long = "json",
+		default_value_t = false,
+		conflicts_with_all = ["quiet", "checks_only", "codes_only"],
+		help_heading = "Output options"
+	)]
 	pub json: bool,
 
 	/// Suppress text output when all checks pass.
 	#[arg(
 		long = "quiet",
 		default_value_t = false,
-		conflicts_with = "json",
+		conflicts_with_all = ["json", "checks_only", "codes_only"],
 		help_heading = "Output options"
 	)]
 	pub quiet: bool,
+
+	/// Print only doctor check names, one per line.
+	#[arg(
+		long = "checks-only",
+		default_value_t = false,
+		conflicts_with_all = ["json", "quiet", "codes_only"],
+		help_heading = "Output options"
+	)]
+	pub checks_only: bool,
+
+	/// Print only doctor check codes, one per line.
+	#[arg(
+		long = "codes-only",
+		default_value_t = false,
+		conflicts_with_all = ["json", "quiet", "checks_only"],
+		help_heading = "Output options"
+	)]
+	pub codes_only: bool,
 
 	/// Exit non-zero on warnings as well as errors.
 	#[arg(long = "strict", default_value_t = false, help_heading = "Check options")]

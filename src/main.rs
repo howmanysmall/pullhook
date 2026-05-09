@@ -2189,7 +2189,15 @@ fn doctor_command(args: &DoctorArgs) -> Result<()> {
 		None
 	};
 
-	if args.json {
+	if args.checks_only {
+		for check in &checks {
+			println!("{}", check.name);
+		}
+	} else if args.codes_only {
+		for check in &checks {
+			println!("{}", check.code);
+		}
+	} else if args.json {
 		println!(
 			"{}",
 			serde_json::to_string_pretty(&doctor_report_json(&repo_root, &checks, error, args.strict))?

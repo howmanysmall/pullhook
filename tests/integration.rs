@@ -3698,6 +3698,8 @@ fn diagnostic_help_groups_options_by_task() {
 	let doctor_stdout = stdout_text(&doctor);
 	assert!(doctor_stdout.contains("Input options:"));
 	assert!(doctor_stdout.contains("Output options:"));
+	assert!(doctor_stdout.contains("pullhook doctor --checks-only"));
+	assert!(doctor_stdout.contains("pullhook doctor --codes-only"));
 	assert!(doctor_stdout.contains("Check options:"));
 	assert!(doctor_stdout.contains("Display options:"));
 
@@ -4190,6 +4192,32 @@ fn doctor_quiet_conflicts_with_json() {
 	assert!(stderr.contains("cannot be used with"));
 	assert!(stderr.contains("--quiet"));
 	assert!(stderr.contains("--json"));
+}
+
+#[test]
+fn doctor_line_outputs_conflict_with_json_and_quiet() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let cases: &[(&[&str], &[&str])] = &[
+		(&["doctor", "--checks-only", "--json"], &["--checks-only", "--json"]),
+		(&["doctor", "--codes-only", "--json"], &["--codes-only", "--json"]),
+		(&["doctor", "--quiet", "--checks-only"], &["--quiet", "--checks-only"]),
+		(
+			&["doctor", "--checks-only", "--codes-only"],
+			&["--checks-only", "--codes-only"],
+		),
+	];
+
+	for (args, flags) in cases {
+		let output = run_pullhook(temp.path(), args);
+
+		assert!(!output.status.success(), "{args:?} should fail");
+		let stderr = stderr_text(&output);
+		assert!(stderr.contains("cannot be used with"));
+		for flag in *flags {
+			assert!(stderr.contains(flag), "{args:?} stderr should mention {flag}");
+		}
+	}
 }
 
 #[test]
@@ -5643,6 +5671,42 @@ fn doctor_json_reports_repo_config_diff_base_and_install_detection() {
 }
 
 #[test]
+fn doctor_checks_only_prints_clean_check_names() {
+	let temp = setup_repo_with_root_manifest_change();
+	let repo_root = temp.path();
+	write_config_rule(repo_root, "rebuild root", "package-lock.json", "npm test");
+
+	let output = run_pullhook(repo_root, &["doctor", "--checks-only"]);
+
+	assert!(output.status.success(), "doctor --checks-only should succeed");
+	let stdout = stdout_text(&output);
+	assert_eq!(
+		stdout.lines().collect::<Vec<_>>(),
+		vec!["repository", "config", "diff base", "install detection"]
+	);
+	let stderr = stderr_text(&output);
+	assert!(stderr.trim().is_empty(), "doctor --checks-only should not write stderr");
+}
+
+#[test]
+fn doctor_codes_only_prints_clean_check_codes() {
+	let temp = setup_repo_with_root_manifest_change();
+	let repo_root = temp.path();
+	write_config_rule(repo_root, "rebuild root", "package-lock.json", "npm test");
+
+	let output = run_pullhook(repo_root, &["doctor", "--codes-only"]);
+
+	assert!(output.status.success(), "doctor --codes-only should succeed");
+	let stdout = stdout_text(&output);
+	assert_eq!(
+		stdout.lines().collect::<Vec<_>>(),
+		vec!["repository_ok", "config_ok", "diff_base_ok", "package_manager_ok"]
+	);
+	let stderr = stderr_text(&output);
+	assert!(stderr.trim().is_empty(), "doctor --codes-only should not write stderr");
+}
+
+#[test]
 fn doctor_quiet_suppresses_all_ok_output() {
 	let temp = setup_repo_with_root_manifest_change();
 	let repo_root = temp.path();
@@ -5706,6 +5770,27 @@ fn doctor_strict_fails_on_warnings() {
 	assert_eq!(checks[1]["level"], "warn");
 	assert_eq!(checks[2]["code"], "diff_base_ok");
 	assert_eq!(checks[3]["code"], "package_manager_missing");
+	let stderr = stderr_text(&output);
+	assert!(stderr.contains("doctor found warnings in strict mode"));
+}
+
+#[test]
+fn doctor_codes_only_preserves_strict_failure() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+
+	let output = run_pullhook(repo_root, &["doctor", "--strict", "--codes-only"]);
+
+	assert!(
+		!output.status.success(),
+		"doctor --strict --codes-only should fail on warnings"
+	);
+	let stdout = stdout_text(&output);
+	let codes = stdout.lines().collect::<Vec<_>>();
+	assert!(codes.contains(&"repository_ok"));
+	assert!(codes.contains(&"config_missing"));
+	assert!(codes.contains(&"diff_base_ok"));
+	assert!(codes.contains(&"package_manager_missing"));
 	let stderr = stderr_text(&output);
 	assert!(stderr.contains("doctor found warnings in strict mode"));
 }

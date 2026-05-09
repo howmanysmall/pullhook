@@ -277,6 +277,8 @@ pullhook validate --json
 pullhook doctor
 pullhook doctor --quiet
 pullhook doctor --strict
+pullhook doctor --checks-only
+pullhook doctor --codes-only
 pullhook doctor --json
 pullhook shells
 pullhook shells --search fish
@@ -392,6 +394,7 @@ Use `pullhook managers --watched-files-only` when a script only needs the dedupe
 config is invalid, including `status`, stable `code`, `error`, `details`, and `validationErrors` fields. Config parse failures also include a `parseError` object with the config path and parser reason. Use `validate --quiet` when CI only needs the exit code. `doctor` checks repo discovery, config health, diff-base availability, and `--install`
 detection in one pass, with a short hint for each check. Use `doctor --strict` when CI should fail on warnings.
 Use `doctor --quiet` to suppress all-ok text output without hiding warnings or errors.
+Use `doctor --checks-only` or `doctor --codes-only` when scripts only need the check names or stable check codes.
 `doctor --json` includes `status`, stable top-level and per-check `code` values, `strict`, `error`, and summary booleans so automation can read the result without scraping stderr.
 Unsupported config-path JSON errors include a `configPathError` object with the rejected path, extension, reason, and supported config filenames.
 Missing config JSON errors include a `configDiscoveryError` object with the searched repo root and default config filename.
