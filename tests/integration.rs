@@ -359,6 +359,12 @@ fn legacy_json_reports_repo_discovery_errors_as_json() {
 	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse repo discovery json");
 	assert_eq!(value["status"], "error");
 	assert_eq!(value["error"], "failed to resolve repository root");
+	assert_eq!(value["repositoryError"]["kind"], "not_found");
+	let reported_path = PathBuf::from(value["repositoryError"]["path"].as_str().expect("repository path"));
+	assert_eq!(
+		reported_path.canonicalize().expect("canonicalize reported path"),
+		temp.path().canonicalize().expect("canonicalize temp path")
+	);
 	let details = value["details"].as_array().expect("details array");
 	assert!(
 		details

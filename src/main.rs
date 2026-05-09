@@ -1543,6 +1543,13 @@ fn print_json_error(error: &anyhow::Error) -> Result<()> {
 		println!("{}", serde_json::to_string_pretty(&value)?);
 		return Ok(());
 	}
+	if let Some(error::PullhookError::GitOpen { path, .. }) = pullhook_error {
+		println!(
+			"{}",
+			serde_json::to_string_pretty(&repository_error_json(error, &details, path))?
+		);
+		return Ok(());
+	}
 	if let Some(error::PullhookError::Pattern { pattern, reason }) = pullhook_error {
 		println!(
 			"{}",
@@ -1614,6 +1621,18 @@ fn ambiguous_package_managers_json(error: &anyhow::Error, details: &[String], fo
 		"packageManagerError": {
 			"kind": "ambiguous",
 			"found": found,
+		},
+	})
+}
+
+fn repository_error_json(error: &anyhow::Error, details: &[String], path: &str) -> serde_json::Value {
+	json!({
+		"status": "error",
+		"error": error.to_string(),
+		"details": details,
+		"repositoryError": {
+			"kind": "not_found",
+			"path": path,
 		},
 	})
 }
