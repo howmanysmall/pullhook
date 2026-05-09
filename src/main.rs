@@ -159,6 +159,21 @@ fn run_config_command(args: &ConfigRunArgs) -> Result<()> {
 	let evaluation = evaluate_config(&config, &changed_files, base_missing, &repo_root)?;
 	let matched_files = count_config_matched_files(&evaluation);
 
+	if args.json {
+		let planned_commands = count_planned_commands(&evaluation);
+		println!(
+			"{}",
+			serde_json::to_string_pretty(&config_dry_run_json(
+				&config,
+				&changed_files,
+				base_missing,
+				&evaluation,
+				planned_commands,
+			))?
+		);
+		return Ok(());
+	}
+
 	render_config_evaluation(&config, &evaluation, args.all_matches || args.dry_run, args.dry_run);
 
 	if args.dry_run {
@@ -431,6 +446,21 @@ fn config_evaluation_json(
 		"matchedFiles": matched_files,
 		"entries": entries,
 	})
+}
+
+fn config_dry_run_json(
+	config: &Config,
+	changed_files: &[std::path::PathBuf],
+	base_missing: bool,
+	evaluation: &[EvaluatedEntry],
+	planned_commands: usize,
+) -> serde_json::Value {
+	let mut value = config_evaluation_json(config, changed_files, base_missing, evaluation);
+	if let Some(object) = value.as_object_mut() {
+		object.insert("mode".to_owned(), json!("dry-run"));
+		object.insert("plannedCommands".to_owned(), json!(planned_commands));
+	}
+	value
 }
 
 fn config_entry_json(entry: &EvaluatedEntry) -> serde_json::Value {

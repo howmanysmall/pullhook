@@ -107,6 +107,10 @@ pub struct RunArgs {
 
 /// Arguments for `pullhook run`.
 #[derive(Debug, Clone, Args)]
+#[expect(
+	clippy::struct_excessive_bools,
+	reason = "CLI flags are naturally represented as independent booleans"
+)]
 pub struct ConfigRunArgs {
 	/// Override the git base revision.
 	#[arg(long = "base", value_name = "rev")]
@@ -119,6 +123,10 @@ pub struct ConfigRunArgs {
 	/// Print planned commands and exit.
 	#[arg(long = "dry-run", default_value_t = false)]
 	pub dry_run: bool,
+
+	/// Print machine-readable JSON instead of text output. Requires `--dry-run`.
+	#[arg(long = "json", default_value_t = false, requires = "dry_run")]
+	pub json: bool,
 
 	/// Show skipped rules as well as matched rules.
 	#[arg(long = "all-matches", default_value_t = false)]

@@ -376,6 +376,66 @@ fn explain_json_reports_matches_and_skips() {
 }
 
 #[test]
+fn run_dry_run_json_reports_planned_commands() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_file(
+		repo_root,
+		Path::new("pullhook.json"),
+		r#"{
+  "rules": [
+    {
+      "name": "rebuild package a",
+      "changed": "packages/a/package-lock.json",
+      "run": "cargo test -p package-a"
+    },
+    {
+      "name": "skip markdown",
+      "changed": "**/*.md",
+      "run": "cargo test"
+    }
+  ]
+}
+"#,
+	);
+
+	let output = run_pullhook(repo_root, &["run", "--dry-run", "--json"]);
+
+	assert!(output.status.success(), "run --dry-run --json should succeed");
+	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse run json");
+	assert_eq!(value["mode"], "dry-run");
+	assert_eq!(value["plannedCommands"], 1);
+	assert_eq!(
+		value["matchedFiles"],
+		serde_json::json!(["packages/a/package-lock.json"])
+	);
+	let entries = value["entries"].as_array().expect("entries array");
+	assert_eq!(entries[0]["status"], "match");
+	assert_eq!(entries[1]["status"], "skip");
+	let stderr = stderr_text(&output);
+	assert!(stderr.trim().is_empty(), "run --dry-run --json should not write stderr");
+}
+
+#[test]
+fn run_json_requires_dry_run() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_config_rule(
+		repo_root,
+		"rebuild package a",
+		"packages/a/package-lock.json",
+		"cargo test -p package-a",
+	);
+
+	let output = run_pullhook(repo_root, &["run", "--json"]);
+
+	assert!(!output.status.success(), "run --json should fail without --dry-run");
+	let stderr = stderr_text(&output);
+	assert!(stderr.contains("--dry-run"));
+	assert!(stderr.contains("--json"));
+}
+
+#[test]
 fn config_validate_and_dry_run_reject_malformed_run_command() {
 	let temp = setup_repo_with_merge();
 	let repo_root = temp.path();
