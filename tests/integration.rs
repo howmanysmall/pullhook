@@ -246,6 +246,34 @@ fn legacy_run_json_rejects_debug_mode() {
 }
 
 #[test]
+fn config_json_commands_reject_debug_mode() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+	let commands: &[&[&str]] = &[
+		&["explain", "--json", "--debug"],
+		&["validate", "--json", "--debug"],
+		&["doctor", "--json", "--debug"],
+		&["config", "--json", "--debug"],
+		&["rules", "--json", "--debug"],
+	];
+
+	for args in commands {
+		let output = run_pullhook(temp.path(), args);
+
+		assert!(
+			!output.status.success(),
+			"`pullhook {}` should reject --json --debug",
+			args.join(" ")
+		);
+		let stderr = stderr_text(&output);
+		assert!(
+			stderr.contains("--json cannot be used with --debug"),
+			"`pullhook {}` stderr should explain the conflict",
+			args.join(" ")
+		);
+	}
+}
+
+#[test]
 fn completion_command_succeeds_outside_git_repo() {
 	let temp = tempfile::tempdir().expect("create temp dir");
 

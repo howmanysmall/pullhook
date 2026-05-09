@@ -363,6 +363,8 @@ fn run_config_command(args: &ConfigRunArgs) -> Result<()> {
 }
 
 fn explain_config_command(args: &ExplainArgs) -> Result<()> {
+	ensure_json_without_debug(args.json, args.debug)?;
+
 	let (repo, repo_root, config) = load_config_from_cwd(args.debug, args.config.as_deref())?;
 	let explicit_changed_files = collect_explicit_changed_files(
 		&args.changed_files,
@@ -400,6 +402,8 @@ fn explain_config_command(args: &ExplainArgs) -> Result<()> {
 }
 
 fn validate_config_command(args: &ValidateArgs) -> Result<()> {
+	ensure_json_without_debug(args.json, args.debug)?;
+
 	let renderer = Renderer::new(args.render);
 
 	if args.json {
@@ -442,6 +446,8 @@ fn validate_config_command(args: &ValidateArgs) -> Result<()> {
 }
 
 fn doctor_command(args: &DoctorArgs) -> Result<()> {
+	ensure_json_without_debug(args.json, args.debug)?;
+
 	let cwd = std::env::current_dir().context("failed to read current working directory")?;
 	let repo = GitRepo::discover(&cwd, args.debug).context("failed to resolve repository root")?;
 	let repo_root = repo.root().to_path_buf();
@@ -468,6 +474,8 @@ fn doctor_command(args: &DoctorArgs) -> Result<()> {
 }
 
 fn config_command(args: &ConfigArgs) -> Result<()> {
+	ensure_json_without_debug(args.json, args.debug)?;
+
 	let cwd = std::env::current_dir().context("failed to read current working directory")?;
 	let repo = GitRepo::discover(&cwd, args.debug).context("failed to resolve repository root")?;
 	let repo_root = repo.root().to_path_buf();
@@ -503,6 +511,8 @@ fn config_command(args: &ConfigArgs) -> Result<()> {
 }
 
 fn rules_command(args: &RulesArgs) -> Result<()> {
+	ensure_json_without_debug(args.json, args.debug)?;
+
 	let renderer = Renderer::new(args.render);
 	let (_, _, config) = load_config_from_cwd(args.debug, args.config.as_deref())?;
 
@@ -534,6 +544,13 @@ fn rules_command(args: &RulesArgs) -> Result<()> {
 		}
 	}
 
+	Ok(())
+}
+
+fn ensure_json_without_debug(json_output: bool, debug_enabled: bool) -> Result<()> {
+	if json_output && debug_enabled {
+		return Err(anyhow!("--json cannot be used with --debug"));
+	}
 	Ok(())
 }
 
