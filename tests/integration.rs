@@ -1126,6 +1126,29 @@ fn explain_json_reads_changed_files_from_file() {
 }
 
 #[test]
+fn explain_json_reports_missing_changed_files_file_as_json() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_config_rule(repo_root, "docs check", "docs/*.md", "cargo test -p docs");
+
+	let output = run_pullhook(
+		repo_root,
+		&["explain", "--changed-files-file", ".pullhook-missing", "--json"],
+	);
+
+	assert!(
+		!output.status.success(),
+		"explain should fail when changed files file is missing"
+	);
+	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse changed-files error json");
+	assert_eq!(value["status"], "error");
+	let error = value["error"].as_str().expect("error message");
+	assert!(error.contains("failed to read changed files from `.pullhook-missing`"));
+	let stderr = stderr_text(&output);
+	assert!(stderr.contains("failed to read changed files from `.pullhook-missing`"));
+}
+
+#[test]
 fn run_dry_run_json_reports_planned_commands() {
 	let temp = setup_repo_with_merge();
 	let repo_root = temp.path();
@@ -1266,6 +1289,35 @@ fn run_dry_run_json_reads_changed_files_from_file() {
 	assert_eq!(value["plannedCommands"], 1);
 	assert_eq!(value["changedFiles"], serde_json::json!(["docs/guide.md"]));
 	assert_eq!(value["entries"][0]["status"], "match");
+}
+
+#[test]
+fn run_json_reports_missing_changed_files_file_as_json() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_config_rule(repo_root, "docs check", "docs/*.md", "cargo test -p docs");
+
+	let output = run_pullhook(
+		repo_root,
+		&[
+			"run",
+			"--dry-run",
+			"--changed-files-file",
+			".pullhook-missing",
+			"--json",
+		],
+	);
+
+	assert!(
+		!output.status.success(),
+		"run should fail when changed files file is missing"
+	);
+	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse changed-files error json");
+	assert_eq!(value["status"], "error");
+	let error = value["error"].as_str().expect("error message");
+	assert!(error.contains("failed to read changed files from `.pullhook-missing`"));
+	let stderr = stderr_text(&output);
+	assert!(stderr.contains("failed to read changed files from `.pullhook-missing`"));
 }
 
 #[test]

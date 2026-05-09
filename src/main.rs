@@ -297,10 +297,11 @@ fn run_config_command(args: &ConfigRunArgs) -> Result<()> {
 
 	let renderer = Renderer::new(effective_render_mode(args.render, args.no_color));
 	let (repo, repo_root, config) = load_config_from_cwd(args.debug, args.config.as_deref())?;
-	let explicit_changed_files = collect_explicit_changed_files(
+	let explicit_changed_files = collect_explicit_changed_files_for_output(
 		&args.changed_files,
 		args.changed_files_file.as_deref(),
 		args.changed_files_stdin,
+		args.json,
 	)?;
 	let (changed_files, base_missing, changed_files_source) = resolve_config_changed_files(
 		&repo,
@@ -385,10 +386,11 @@ fn explain_config_command(args: &ExplainArgs) -> Result<()> {
 	ensure_json_without_debug(args.json, args.debug)?;
 
 	let (repo, repo_root, config) = load_config_from_cwd(args.debug, args.config.as_deref())?;
-	let explicit_changed_files = collect_explicit_changed_files(
+	let explicit_changed_files = collect_explicit_changed_files_for_output(
 		&args.changed_files,
 		args.changed_files_file.as_deref(),
 		args.changed_files_stdin,
+		args.json,
 	)?;
 	let (changed_files, base_missing, changed_files_source) = resolve_config_changed_files(
 		&repo,
@@ -727,6 +729,23 @@ fn collect_explicit_changed_files(
 	Ok(dedupe_paths_preserving_order(paths))
 }
 
+fn collect_explicit_changed_files_for_output(
+	changed_files: &[std::path::PathBuf],
+	changed_files_file: Option<&std::path::Path>,
+	read_stdin: bool,
+	json_output: bool,
+) -> Result<Vec<std::path::PathBuf>> {
+	match collect_explicit_changed_files(changed_files, changed_files_file, read_stdin) {
+		Ok(paths) => Ok(paths),
+		Err(error) => {
+			if json_output {
+				print_json_error(&error)?;
+			}
+			Err(error)
+		}
+	}
+}
+
 fn extend_changed_files_from_lines(paths: &mut Vec<std::path::PathBuf>, input: &str) {
 	paths.extend(
 		input
@@ -884,17 +903,22 @@ fn filter_config_evaluation_for_output(
 		Ok(evaluation) => Ok(evaluation),
 		Err(error) => {
 			if json_output {
-				println!(
-					"{}",
-					serde_json::to_string_pretty(&json!({
-						"status": "error",
-						"error": error.to_string(),
-					}))?
-				);
+				print_json_error(&error)?;
 			}
 			Err(error)
 		}
 	}
+}
+
+fn print_json_error(error: &anyhow::Error) -> Result<()> {
+	println!(
+		"{}",
+		serde_json::to_string_pretty(&json!({
+			"status": "error",
+			"error": error.to_string(),
+		}))?
+	);
+	Ok(())
 }
 
 fn format_unknown_selectors(unknown: &[String], available: &[String]) -> String {
