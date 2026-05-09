@@ -134,6 +134,7 @@ pullhook run --commands-only
 pullhook run --changed-files-only
 pullhook run --matched-files-only
 pullhook run --matched-rules-only
+pullhook run --require-match --dry-run
 pullhook run --changed-file packages/a/package-lock.json --dry-run
 git diff --name-only HEAD~1 | pullhook run --changed-files-stdin --dry-run
 pullhook run --rule lint --dry-run
@@ -293,6 +294,7 @@ Use `run --commands-only` for the same clean command list from the execution sub
 Use `run --changed-files-only` for the same clean changed-file list from the execution subcommand; it exits before running anything.
 Use `run --matched-files-only` for the same clean matched-file list from the execution subcommand; it exits before running anything.
 Use `run --matched-rules-only` for the same clean matched-rule list from the execution subcommand; it exits before running anything.
+Add `--require-match` to `explain` or `run` when an empty plan should fail the command after printing its normal output.
 `run --dry-run --json` emits the same plan plus `plannedCommands`, which is handy for CI or editor integrations.
 Use `run --quiet` when successful text output would be noise; failures still print the failed task, any `failText`,
 and the final summary.

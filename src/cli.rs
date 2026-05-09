@@ -37,6 +37,7 @@ Examples:
   pullhook run --changed-files-only
   pullhook run --matched-files-only
   pullhook run --matched-rules-only
+  pullhook run --require-match --dry-run
   pullhook run --changed-file packages/a/package-lock.json --dry-run
   pullhook run --changed-files-file .pullhook-changed --dry-run
   git diff --name-only HEAD~1 | pullhook run --changed-files-stdin --dry-run
@@ -56,6 +57,7 @@ Examples:
   pullhook explain --changed-files-only
   pullhook explain --matched-files-only
   pullhook explain --matched-rules-only
+  pullhook explain --require-match
   pullhook explain --json";
 
 const VALIDATE_AFTER_HELP: &str = "\
@@ -316,6 +318,10 @@ pub struct ConfigRunArgs {
 	#[arg(long = "all-matches", default_value_t = false)]
 	pub all_matches: bool,
 
+	/// Exit non-zero when no rules match changed files.
+	#[arg(long = "require-match", default_value_t = false)]
+	pub require_match: bool,
+
 	/// Limit execution to one or more named rules or parallel groups.
 	#[arg(long = "rule", value_name = "name")]
 	pub rules: Vec<String>,
@@ -364,6 +370,10 @@ pub struct ExplainArgs {
 	/// Show skipped rules as well as matched rules.
 	#[arg(long = "all-matches", default_value_t = false)]
 	pub all_matches: bool,
+
+	/// Exit non-zero when no rules match changed files.
+	#[arg(long = "require-match", default_value_t = false)]
+	pub require_match: bool,
 
 	/// Limit output to one or more named rules or parallel groups.
 	#[arg(long = "rule", value_name = "name")]

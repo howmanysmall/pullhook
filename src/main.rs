@@ -350,7 +350,7 @@ fn run_config_command(args: &ConfigRunArgs) -> Result<()> {
 					planned_commands,
 				))?
 			);
-			return Ok(());
+			return ensure_required_config_match(args.require_match, &evaluation);
 		}
 
 		let (counts, executions) = execute_config_entries_json(config.on_failure, &evaluation, &repo_root, args)?;
@@ -370,11 +370,11 @@ fn run_config_command(args: &ConfigRunArgs) -> Result<()> {
 		if failure_count > 0 {
 			return Err(anyhow!("{failure_count} config rule(s) failed"));
 		}
-		return Ok(());
+		return ensure_required_config_match(args.require_match, &evaluation);
 	}
 
 	if render_config_run_planning_only_output(args, &changed_files, base_missing, changed_files_source, &evaluation) {
-		return Ok(());
+		return ensure_required_config_match(args.require_match, &evaluation);
 	}
 
 	if !args.quiet {
@@ -388,7 +388,7 @@ fn run_config_command(args: &ConfigRunArgs) -> Result<()> {
 			task_dirs: planned_commands,
 			planned_commands,
 		});
-		return Ok(());
+		return ensure_required_config_match(args.require_match, &evaluation);
 	}
 
 	let counts = execute_config_entries(&renderer, config.on_failure, &evaluation, &repo_root, args)?;
@@ -406,7 +406,7 @@ fn run_config_command(args: &ConfigRunArgs) -> Result<()> {
 		return Err(anyhow!("{failure_count} config rule(s) failed"));
 	}
 
-	Ok(())
+	ensure_required_config_match(args.require_match, &evaluation)
 }
 
 fn render_config_run_planning_only_output(
@@ -444,6 +444,14 @@ fn render_config_run_planning_only_output(
 	false
 }
 
+fn ensure_required_config_match(require_match: bool, evaluation: &[EvaluatedEntry]) -> Result<()> {
+	if require_match && count_planned_commands(evaluation) == 0 {
+		return Err(anyhow!("no config rules matched changed files"));
+	}
+
+	Ok(())
+}
+
 fn explain_config_command(args: &ExplainArgs) -> Result<()> {
 	ensure_json_without_debug(args.json, args.debug)?;
 
@@ -478,36 +486,36 @@ fn explain_config_command(args: &ExplainArgs) -> Result<()> {
 				&evaluation
 			))?
 		);
-		return Ok(());
+		return ensure_required_config_match(args.require_match, &evaluation);
 	}
 
 	if args.summary_only {
 		render_config_evaluation_summary(&changed_files, base_missing, changed_files_source, &evaluation);
-		return Ok(());
+		return ensure_required_config_match(args.require_match, &evaluation);
 	}
 
 	if args.commands_only {
 		render_config_evaluation_commands(&evaluation);
-		return Ok(());
+		return ensure_required_config_match(args.require_match, &evaluation);
 	}
 
 	if args.changed_files_only {
 		render_path_list(&changed_files);
-		return Ok(());
+		return ensure_required_config_match(args.require_match, &evaluation);
 	}
 
 	if args.matched_files_only {
 		render_config_evaluation_matched_files(&evaluation);
-		return Ok(());
+		return ensure_required_config_match(args.require_match, &evaluation);
 	}
 
 	if args.matched_rules_only {
 		render_config_evaluation_matched_rules(&evaluation);
-		return Ok(());
+		return ensure_required_config_match(args.require_match, &evaluation);
 	}
 
 	render_config_evaluation(&config, &evaluation, args.all_matches, false);
-	Ok(())
+	ensure_required_config_match(args.require_match, &evaluation)
 }
 
 fn validate_config_command(args: &ValidateArgs) -> Result<()> {

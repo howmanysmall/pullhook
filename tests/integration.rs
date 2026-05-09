@@ -352,6 +352,7 @@ fn run_help_lists_json_examples() {
 	assert!(stdout.contains("pullhook run --changed-files-only"));
 	assert!(stdout.contains("pullhook run --matched-files-only"));
 	assert!(stdout.contains("pullhook run --matched-rules-only"));
+	assert!(stdout.contains("pullhook run --require-match --dry-run"));
 	assert!(stdout.contains("pullhook run --config config/pullhook.custom.json --all-matches"));
 	assert!(stdout.contains("--no-color"));
 	assert!(stdout.contains("--quiet"));
@@ -360,6 +361,7 @@ fn run_help_lists_json_examples() {
 	assert!(stdout.contains("--changed-files-only"));
 	assert!(stdout.contains("--matched-files-only"));
 	assert!(stdout.contains("--matched-rules-only"));
+	assert!(stdout.contains("--require-match"));
 }
 
 #[test]
@@ -388,11 +390,13 @@ fn explain_help_lists_summary_only_example() {
 	assert!(stdout.contains("pullhook explain --changed-files-only"));
 	assert!(stdout.contains("pullhook explain --matched-files-only"));
 	assert!(stdout.contains("pullhook explain --matched-rules-only"));
+	assert!(stdout.contains("pullhook explain --require-match"));
 	assert!(stdout.contains("--summary-only"));
 	assert!(stdout.contains("--commands-only"));
 	assert!(stdout.contains("--changed-files-only"));
 	assert!(stdout.contains("--matched-files-only"));
 	assert!(stdout.contains("--matched-rules-only"));
+	assert!(stdout.contains("--require-match"));
 }
 
 #[test]
@@ -2237,6 +2241,52 @@ fn explain_matched_rules_only_reports_matching_rule_names() {
 }
 
 #[test]
+fn explain_require_match_fails_after_printing_empty_summary() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_config_rule(repo_root, "skip markdown", "**/*.md", "cargo test");
+
+	let output = run_pullhook(repo_root, &["explain", "--summary-only", "--require-match"]);
+
+	assert!(
+		!output.status.success(),
+		"explain --require-match should fail when no rules match"
+	);
+	let stdout = stdout_text(&output);
+	assert!(stdout.contains("changedFiles: 2"));
+	assert!(stdout.contains("matchedFiles: 0"));
+	assert!(stdout.contains("plannedCommands: 0"));
+	let stderr = stderr_text(&output);
+	assert!(stderr.contains("no config rules matched changed files"));
+}
+
+#[test]
+fn explain_require_match_succeeds_when_a_rule_matches() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_config_rule(
+		repo_root,
+		"package a",
+		"packages/a/package-lock.json",
+		"cargo test -p package-a",
+	);
+
+	let output = run_pullhook(repo_root, &["explain", "--matched-rules-only", "--require-match"]);
+
+	assert!(
+		output.status.success(),
+		"explain --require-match should succeed when a rule matches"
+	);
+	let stdout = stdout_text(&output);
+	assert_eq!(stdout, "package a\n");
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"successful explain --require-match should not write stderr"
+	);
+}
+
+#[test]
 fn explain_json_filters_to_requested_rule() {
 	let temp = setup_repo_with_merge();
 	let repo_root = temp.path();
@@ -2571,6 +2621,59 @@ fn run_matched_rules_only_reports_matching_rule_names_without_execution() {
 	assert!(
 		stderr.trim().is_empty(),
 		"run --matched-rules-only should not write stderr"
+	);
+}
+
+#[test]
+fn run_require_match_fails_after_printing_empty_json_plan() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_config_rule(repo_root, "skip markdown", "**/*.md", "touch skipped.txt");
+
+	let output = run_pullhook(repo_root, &["run", "--dry-run", "--json", "--require-match"]);
+
+	assert!(
+		!output.status.success(),
+		"run --require-match should fail when no rules match"
+	);
+	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse run json");
+	assert_eq!(value["plannedCommands"], 0);
+	assert_eq!(value["matchedFiles"], serde_json::json!([]));
+	assert!(
+		!repo_root.join("skipped.txt").exists(),
+		"require-match dry-run should not execute skipped commands"
+	);
+	let stderr = stderr_text(&output);
+	assert!(stderr.contains("no config rules matched changed files"));
+}
+
+#[test]
+fn run_require_match_succeeds_when_a_rule_matches_without_execution() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_config_rule(
+		repo_root,
+		"write marker",
+		"packages/a/package-lock.json",
+		"touch marker.txt",
+	);
+
+	let output = run_pullhook(repo_root, &["run", "--matched-rules-only", "--require-match"]);
+
+	assert!(
+		output.status.success(),
+		"run --require-match should succeed when a rule matches"
+	);
+	let stdout = stdout_text(&output);
+	assert_eq!(stdout, "write marker\n");
+	assert!(
+		!repo_root.join("marker.txt").exists(),
+		"matched-rules-only should not execute planned commands"
+	);
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"successful run --require-match should not write stderr"
 	);
 }
 
