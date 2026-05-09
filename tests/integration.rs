@@ -184,6 +184,83 @@ fn init_creates_starter_config() {
 }
 
 #[test]
+fn init_can_generate_yaml_starter_config() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+
+	let output = run_pullhook(repo_root, &["init", "--format", "yaml", "--render", "never"]);
+
+	assert!(output.status.success(), "yaml init should succeed");
+	assert!(predicate::path::is_file().eval(&repo_root.join("pullhook.yaml")));
+	assert!(!predicate::path::is_file().eval(&repo_root.join("pullhook.json")));
+	let config = fs::read_to_string(repo_root.join("pullhook.yaml")).expect("read yaml config");
+	assert!(config.contains("rules:"));
+	assert!(config.contains("install: true"));
+}
+
+#[test]
+fn init_stdout_prints_requested_format_without_writing_file() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+
+	let output = run_pullhook(repo_root, &["init", "--format", "jsonc", "--stdout"]);
+
+	assert!(output.status.success(), "stdout init should succeed");
+	let stdout = stdout_text(&output);
+	assert!(stdout.contains("// pullhook runs each rule once from the repo root"));
+	assert!(stdout.contains("\"install\": true"));
+	assert!(!predicate::path::is_file().eval(&repo_root.join("pullhook.json")));
+	assert!(!predicate::path::is_file().eval(&repo_root.join("pullhook.jsonc")));
+	let stderr = stderr_text(&output);
+	assert!(stderr.trim().is_empty(), "stdout init should not write stderr");
+}
+
+#[test]
+fn init_refuses_to_overwrite_existing_config_without_force() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_file(repo_root, Path::new("pullhook.json"), "{\"rules\":[]}\n");
+
+	let output = run_pullhook(repo_root, &["init", "--render", "never"]);
+
+	assert!(!output.status.success(), "init should reject overwriting config");
+	let stderr = stderr_text(&output);
+	assert!(stderr.contains("pullhook config already exists"));
+	assert!(stderr.contains("--force"));
+}
+
+#[test]
+fn init_force_overwrites_existing_config_in_place() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_file(repo_root, Path::new("pullhook.json"), "{\"rules\":[]}\n");
+
+	let output = run_pullhook(repo_root, &["init", "--force", "--render", "never"]);
+
+	assert!(output.status.success(), "forced init should succeed");
+	let config = fs::read_to_string(repo_root.join("pullhook.json")).expect("read config");
+	assert!(config.contains("\"install\": true"));
+	assert!(config.contains("\"onFailure\": \"stop\""));
+}
+
+#[test]
+fn init_force_rejects_format_change_when_config_already_exists() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_file(repo_root, Path::new("pullhook.json"), "{\"rules\":[]}\n");
+
+	let output = run_pullhook(repo_root, &["init", "--force", "--format", "yaml", "--render", "never"]);
+
+	assert!(
+		!output.status.success(),
+		"forced init should reject format changes in place"
+	);
+	let stderr = stderr_text(&output);
+	assert!(stderr.contains("existing config"));
+	assert!(stderr.contains("rerun without `--format`"));
+}
+
+#[test]
 fn validate_reports_invalid_fail_text() {
 	let temp = setup_repo_with_merge();
 	let repo_root = temp.path();

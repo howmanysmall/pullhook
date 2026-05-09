@@ -138,7 +138,19 @@ Create a starter config:
 pullhook init
 ```
 
-`pullhook init` creates `pullhook.json` by default. Config discovery supports exactly one of:
+`pullhook init` creates `pullhook.json` by default. You can also scaffold another supported format
+or preview the starter config before writing it:
+
+```bash
+pullhook init --format yaml
+pullhook init --format jsonc --stdout
+pullhook init --force
+```
+
+`--force` only overwrites the existing config in place. It will not silently switch an existing repo
+from `pullhook.json` to `pullhook.yaml`.
+
+Config discovery supports exactly one of:
 
 - `pullhook.json`
 - `pullhook.jsonc`

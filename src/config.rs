@@ -48,8 +48,7 @@ const STYLES: &[&str] = &[
 	"underline",
 ];
 
-/// Starter config written by `pullhook init`.
-pub const STARTER_CONFIG: &str = r#"{
+const STARTER_CONFIG_JSON: &str = r#"{
   "$schema": "https://pullhook.dev/schema.json",
   "onFailure": "stop",
   "rules": [
@@ -59,6 +58,34 @@ pub const STARTER_CONFIG: &str = r#"{
     }
   ]
 }
+"#;
+
+const STARTER_CONFIG_JSONC: &str = r#"{
+  // pullhook runs each rule once from the repo root when changed files match.
+  "$schema": "https://pullhook.dev/schema.json",
+  "onFailure": "stop",
+  "rules": [
+    {
+      "name": "install dependencies",
+      "install": true
+    }
+  ]
+}
+"#;
+
+const STARTER_CONFIG_YAML: &str = r"$schema: https://pullhook.dev/schema.json
+onFailure: stop
+rules:
+  - name: install dependencies
+    install: true
+";
+
+const STARTER_CONFIG_TOML: &str = r#"$schema = "https://pullhook.dev/schema.json"
+onFailure = "stop"
+
+[[rules]]
+name = "install dependencies"
+install = true
 "#;
 
 /// Config file format.
@@ -75,7 +102,7 @@ pub enum ConfigFormat {
 }
 
 impl ConfigFormat {
-	fn from_path(path: &Path) -> Result<Self, PullhookError> {
+	pub fn from_path(path: &Path) -> Result<Self, PullhookError> {
 		match path.extension().and_then(|extension| extension.to_str()) {
 			Some("json") => Ok(Self::Json),
 			Some("jsonc") => Ok(Self::Jsonc),
@@ -91,6 +118,28 @@ impl ConfigFormat {
 				"unsupported config extension `.{extension}`"
 			))),
 			None => Err(PullhookError::Message("config path has no extension".to_owned())),
+		}
+	}
+
+	/// Return the default starter file name for the requested format.
+	#[must_use]
+	pub const fn default_name(self) -> &'static str {
+		match self {
+			Self::Json => "pullhook.json",
+			Self::Jsonc => "pullhook.jsonc",
+			Self::Yaml => "pullhook.yaml",
+			Self::Toml => "pullhook.toml",
+		}
+	}
+
+	/// Return the starter config text for the requested format.
+	#[must_use]
+	pub const fn starter_config(self) -> &'static str {
+		match self {
+			Self::Json => STARTER_CONFIG_JSON,
+			Self::Jsonc => STARTER_CONFIG_JSONC,
+			Self::Yaml => STARTER_CONFIG_YAML,
+			Self::Toml => STARTER_CONFIG_TOML,
 		}
 	}
 }

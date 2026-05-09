@@ -204,17 +204,51 @@ fn validate_config_command(args: &ValidateArgs) -> Result<()> {
 }
 
 fn init_config_command(args: &InitArgs) -> Result<()> {
-	let renderer = Renderer::new(args.render);
 	let cwd = std::env::current_dir().context("failed to read current working directory")?;
 	let repo = GitRepo::discover(&cwd, args.debug).context("failed to resolve repository root")?;
 	let repo_root = repo.root();
+	let requested_format = args.format.map_or(config::ConfigFormat::Json, Into::into);
+	let existing_path = config::discover(repo_root)?;
 
-	if let Some(path) = config::discover(repo_root)? {
-		return Err(anyhow!("pullhook config already exists: {}", path.display()));
+	if args.stdout {
+		print!("{}", requested_format.starter_config());
+		return Ok(());
 	}
 
-	let path = repo_root.join("pullhook.json");
-	std::fs::write(&path, config::STARTER_CONFIG)
+	let renderer = Renderer::new(args.render);
+	let (path, format) = match existing_path {
+		Some(path) if !args.force => {
+			return Err(anyhow!(
+				"pullhook config already exists: {} (rerun with `pullhook init --force` to overwrite it)",
+				path.display()
+			));
+		}
+		Some(path) => {
+			let existing_format = config::ConfigFormat::from_path(&path)?;
+			let format = args.format.map_or(existing_format, Into::into);
+			if format != existing_format {
+				return Err(anyhow!(
+					"existing config `{}` is {}; rerun without `--format` to overwrite it in place or remove it first",
+					path.display(),
+					existing_format.default_name()
+				));
+			}
+			(path, format)
+		}
+		None => {
+			let path = repo_root.join(requested_format.default_name());
+			(path, requested_format)
+		}
+	};
+
+	if path.exists() && !args.force {
+		return Err(anyhow!(
+			"refusing to overwrite existing file `{}`; rerun with `pullhook init --force`",
+			path.display()
+		));
+	}
+
+	std::fs::write(&path, format.starter_config())
 		.with_context(|| format!("failed to write config `{}`", path.display()))?;
 	renderer.render_message_stage(&format!("created {}", path.display()));
 	Ok(())

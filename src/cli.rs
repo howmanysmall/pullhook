@@ -2,9 +2,10 @@
 
 use std::num::NonZeroUsize;
 
-use clap::{Args, CommandFactory, Parser, Subcommand};
+use clap::{Args, CommandFactory, Parser, Subcommand, ValueEnum};
 use clap_complete::{Shell, generate};
 
+use crate::config::ConfigFormat;
 use crate::output::RenderMode;
 
 /// Pullhook command line arguments.
@@ -167,6 +168,18 @@ pub struct ValidateArgs {
 /// Arguments for `pullhook init`.
 #[derive(Debug, Clone, Args)]
 pub struct InitArgs {
+	/// Config format to generate.
+	#[arg(long = "format", value_name = "format", value_enum)]
+	pub format: Option<InitFormat>,
+
+	/// Print the starter config to stdout instead of writing a file.
+	#[arg(long = "stdout", default_value_t = false)]
+	pub stdout: bool,
+
+	/// Overwrite an existing pullhook config file in place.
+	#[arg(long = "force", default_value_t = false)]
+	pub force: bool,
+
 	/// Enable debug logging.
 	#[arg(short = 'd', long = "debug", default_value_t = false)]
 	pub debug: bool,
@@ -174,6 +187,30 @@ pub struct InitArgs {
 	/// Control non-debug ANSI styling (`auto`, `always`, `never`).
 	#[arg(long = "render", value_name = "mode", value_enum, default_value_t = RenderMode::Auto)]
 	pub render: RenderMode,
+}
+
+/// Supported starter config formats for `pullhook init`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum InitFormat {
+	/// JSON (`pullhook.json`).
+	Json,
+	/// JSON with comments (`pullhook.jsonc`).
+	Jsonc,
+	/// YAML (`pullhook.yaml`).
+	Yaml,
+	/// TOML (`pullhook.toml`).
+	Toml,
+}
+
+impl From<InitFormat> for ConfigFormat {
+	fn from(value: InitFormat) -> Self {
+		match value {
+			InitFormat::Json => Self::Json,
+			InitFormat::Jsonc => Self::Jsonc,
+			InitFormat::Yaml => Self::Yaml,
+			InitFormat::Toml => Self::Toml,
+		}
+	}
 }
 
 impl Cli {
