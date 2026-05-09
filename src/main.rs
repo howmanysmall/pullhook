@@ -70,6 +70,23 @@ impl DoctorLevel {
 	}
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ChangedFilesSource {
+	Git,
+	Explicit,
+	BaseMissing,
+}
+
+impl ChangedFilesSource {
+	const fn label(self) -> &'static str {
+		match self {
+			Self::Git => "git",
+			Self::Explicit => "explicit",
+			Self::BaseMissing => "base-missing",
+		}
+	}
+}
+
 #[derive(Debug, Clone)]
 struct DoctorCheck {
 	name: &'static str,
@@ -285,7 +302,7 @@ fn run_config_command(args: &ConfigRunArgs) -> Result<()> {
 		args.changed_files_file.as_deref(),
 		args.changed_files_stdin,
 	)?;
-	let (changed_files, base_missing) = resolve_config_changed_files(
+	let (changed_files, base_missing, changed_files_source) = resolve_config_changed_files(
 		&repo,
 		&config,
 		args.base.as_deref(),
@@ -308,6 +325,7 @@ fn run_config_command(args: &ConfigRunArgs) -> Result<()> {
 					&config,
 					&changed_files,
 					base_missing,
+					changed_files_source,
 					&evaluation,
 					planned_commands,
 				))?
@@ -323,6 +341,7 @@ fn run_config_command(args: &ConfigRunArgs) -> Result<()> {
 				&config,
 				&changed_files,
 				base_missing,
+				changed_files_source,
 				&evaluation,
 				counts,
 				executions,
@@ -371,7 +390,7 @@ fn explain_config_command(args: &ExplainArgs) -> Result<()> {
 		args.changed_files_file.as_deref(),
 		args.changed_files_stdin,
 	)?;
-	let (changed_files, base_missing) = resolve_config_changed_files(
+	let (changed_files, base_missing, changed_files_source) = resolve_config_changed_files(
 		&repo,
 		&config,
 		args.base.as_deref(),
@@ -391,6 +410,7 @@ fn explain_config_command(args: &ExplainArgs) -> Result<()> {
 				&config,
 				&changed_files,
 				base_missing,
+				changed_files_source,
 				&evaluation
 			))?
 		);
@@ -724,7 +744,7 @@ fn resolve_config_changed_files(
 	base: Option<&str>,
 	explicit_changed_files: &[std::path::PathBuf],
 	debug_enabled: bool,
-) -> Result<(Vec<std::path::PathBuf>, bool)> {
+) -> Result<(Vec<std::path::PathBuf>, bool, ChangedFilesSource)> {
 	if !explicit_changed_files.is_empty() {
 		if debug_enabled {
 			debug!(
@@ -732,7 +752,7 @@ fn resolve_config_changed_files(
 				"using explicit config changed files"
 			);
 		}
-		return Ok((explicit_changed_files.to_vec(), false));
+		return Ok((explicit_changed_files.to_vec(), false, ChangedFilesSource::Explicit));
 	}
 
 	match repo.resolve_base_and_changed_files(base, debug_enabled) {
@@ -740,7 +760,7 @@ fn resolve_config_changed_files(
 			if debug_enabled {
 				debug!(base = %resolved_base, changed = changed_files.len(), "resolved config changed files");
 			}
-			Ok((changed_files, false))
+			Ok((changed_files, false, ChangedFilesSource::Git))
 		}
 		Err(error)
 			if config_allows_base_missing(config) && matches!(error, error::PullhookError::DiffBaseUnavailable) =>
@@ -748,7 +768,7 @@ fn resolve_config_changed_files(
 			if debug_enabled {
 				debug!("diff base missing; evaluating runIfBaseMissing rules");
 			}
-			Ok((Vec::new(), true))
+			Ok((Vec::new(), true, ChangedFilesSource::BaseMissing))
 		}
 		Err(error) => Err(error).context("failed to resolve diff base or read changed files"),
 	}
@@ -1188,6 +1208,7 @@ fn config_evaluation_json(
 	config: &Config,
 	changed_files: &[std::path::PathBuf],
 	base_missing: bool,
+	changed_files_source: ChangedFilesSource,
 	evaluation: &[EvaluatedEntry],
 ) -> serde_json::Value {
 	let entries = evaluation.iter().map(config_entry_json).collect::<Vec<_>>();
@@ -1200,6 +1221,7 @@ fn config_evaluation_json(
 		"path": config.path.display().to_string(),
 		"onFailure": on_failure_label(config.on_failure),
 		"baseMissing": base_missing,
+		"changedFilesSource": changed_files_source.label(),
 		"changedFiles": changed_files.iter().map(|path| path.display().to_string()).collect::<Vec<_>>(),
 		"matchedFiles": matched_files,
 		"entries": entries,
@@ -1210,10 +1232,11 @@ fn config_dry_run_json(
 	config: &Config,
 	changed_files: &[std::path::PathBuf],
 	base_missing: bool,
+	changed_files_source: ChangedFilesSource,
 	evaluation: &[EvaluatedEntry],
 	planned_commands: usize,
 ) -> serde_json::Value {
-	let mut value = config_evaluation_json(config, changed_files, base_missing, evaluation);
+	let mut value = config_evaluation_json(config, changed_files, base_missing, changed_files_source, evaluation);
 	if let Some(object) = value.as_object_mut() {
 		object.insert("mode".to_owned(), json!("dry-run"));
 		object.insert("plannedCommands".to_owned(), json!(planned_commands));
@@ -1225,11 +1248,12 @@ fn config_run_json(
 	config: &Config,
 	changed_files: &[std::path::PathBuf],
 	base_missing: bool,
+	changed_files_source: ChangedFilesSource,
 	evaluation: &[EvaluatedEntry],
 	counts: TaskCounters,
 	executions: Vec<serde_json::Value>,
 ) -> serde_json::Value {
-	let mut value = config_evaluation_json(config, changed_files, base_missing, evaluation);
+	let mut value = config_evaluation_json(config, changed_files, base_missing, changed_files_source, evaluation);
 	if let Some(object) = value.as_object_mut() {
 		object.insert("mode".to_owned(), json!("run"));
 		object.insert(

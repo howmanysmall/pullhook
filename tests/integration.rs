@@ -1060,6 +1060,7 @@ fn explain_json_uses_explicit_changed_files() {
 
 	assert!(output.status.success(), "explain with --changed-file should succeed");
 	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse explain json");
+	assert_eq!(value["changedFilesSource"], "explicit");
 	assert_eq!(value["changedFiles"], serde_json::json!(["docs/guide.md"]));
 	assert_eq!(value["matchedFiles"], serde_json::json!(["docs/guide.md"]));
 	assert_eq!(value["entries"][0]["status"], "match");
@@ -1139,6 +1140,7 @@ fn run_dry_run_json_reports_planned_commands() {
 	assert!(output.status.success(), "run --dry-run --json should succeed");
 	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse run json");
 	assert_eq!(value["mode"], "dry-run");
+	assert_eq!(value["changedFilesSource"], "git");
 	assert_eq!(value["plannedCommands"], 1);
 	assert_eq!(
 		value["matchedFiles"],
@@ -1683,6 +1685,38 @@ fn config_run_if_base_missing_runs_rule_without_diff_base() {
 	let stdout = stdout_text(&output);
 	assert!(stdout.contains("[match] recover without base"));
 	assert!(stdout.contains("matched files: 1"));
+}
+
+#[test]
+fn config_run_if_base_missing_json_reports_changed_file_source() {
+	let temp = setup_repo_without_diff_base();
+	let repo_root = temp.path();
+	write_file(
+		repo_root,
+		Path::new("pullhook.json"),
+		r#"{
+  "rules": [
+    {
+      "name": "recover without base",
+      "changed": "packages/*/package-lock.json",
+      "runIfBaseMissing": true,
+      "run": "true"
+    }
+  ]
+}
+"#,
+	);
+
+	let output = run_pullhook(repo_root, &["run", "--dry-run", "--json"]);
+
+	assert!(
+		output.status.success(),
+		"runIfBaseMissing dry run should succeed without a diff base"
+	);
+	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse run json");
+	assert_eq!(value["baseMissing"], true);
+	assert_eq!(value["changedFilesSource"], "base-missing");
+	assert_eq!(value["entries"][0]["matches"], serde_json::json!(["."]));
 }
 
 #[test]
