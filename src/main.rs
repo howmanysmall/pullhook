@@ -759,12 +759,56 @@ fn filter_config_evaluation(evaluation: Vec<EvaluatedEntry>, selectors: &[String
 		let available = available.into_iter().collect::<Vec<_>>();
 		return Err(anyhow!(
 			"unknown rule selector(s): {} (available: {})",
-			unknown.join(", "),
+			format_unknown_selectors(&unknown, &available),
 			available.join(", "),
 		));
 	}
 
 	Ok(filtered)
+}
+
+fn format_unknown_selectors(unknown: &[String], available: &[String]) -> String {
+	unknown
+		.iter()
+		.map(|selector| {
+			closest_selector(selector, available).map_or_else(
+				|| selector.clone(),
+				|suggestion| format!("{selector} (did you mean `{suggestion}`?)"),
+			)
+		})
+		.collect::<Vec<_>>()
+		.join(", ")
+}
+
+fn closest_selector<'a>(selector: &str, available: &'a [String]) -> Option<&'a str> {
+	let max_distance = (selector.chars().count() / 3).max(2);
+	available
+		.iter()
+		.map(|candidate| (edit_distance(selector, candidate), candidate.as_str()))
+		.filter(|(distance, _)| *distance <= max_distance)
+		.min_by(|(left_distance, left), (right_distance, right)| {
+			left_distance.cmp(right_distance).then_with(|| left.cmp(right))
+		})
+		.map(|(_, candidate)| candidate)
+}
+
+fn edit_distance(left: &str, right: &str) -> usize {
+	let right_chars = right.chars().collect::<Vec<_>>();
+	let mut previous = (0..=right_chars.len()).collect::<Vec<_>>();
+	let mut current = vec![0; right_chars.len() + 1];
+
+	for (left_index, left_char) in left.chars().enumerate() {
+		current[0] = left_index + 1;
+		for (right_index, right_char) in right_chars.iter().enumerate() {
+			let substitution_cost = usize::from(left_char != *right_char);
+			current[right_index + 1] = (previous[right_index + 1] + 1)
+				.min(current[right_index] + 1)
+				.min(previous[right_index] + substitution_cost);
+		}
+		std::mem::swap(&mut previous, &mut current);
+	}
+
+	previous[right_chars.len()]
 }
 
 fn render_config_evaluation(config: &Config, evaluation: &[EvaluatedEntry], all_matches: bool, dry_run: bool) {

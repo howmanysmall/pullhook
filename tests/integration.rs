@@ -1255,6 +1255,21 @@ fn run_rejects_unknown_rule_selector() {
 }
 
 #[test]
+fn run_suggests_nearby_rule_selector_for_typos() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_config_rule(repo_root, "typecheck", "packages/a/package-lock.json", "true");
+
+	let output = run_pullhook(repo_root, &["run", "--dry-run", "--rule", "typcheck"]);
+
+	assert!(!output.status.success(), "run should fail for a mistyped selector");
+	let stderr = stderr_text(&output);
+	assert!(stderr.contains("unknown rule selector(s): typcheck"));
+	assert!(stderr.contains("did you mean `typecheck`?"));
+	assert!(stderr.contains("available: typecheck"));
+}
+
+#[test]
 fn run_json_rejects_debug_mode() {
 	let temp = setup_repo_with_merge();
 	let repo_root = temp.path();
