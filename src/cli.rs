@@ -173,7 +173,9 @@ const EXAMPLES_AFTER_HELP: &str = "\
 Examples:
   pullhook examples
   pullhook examples --command run
+  pullhook examples --category workflow
   pullhook examples --command run --commands-only
+  pullhook examples --category reference --commands-only
   pullhook examples --json";
 
 /// Pullhook command line arguments.
@@ -1153,6 +1155,10 @@ pub struct ExamplesArgs {
 	/// Only list examples for a specific command.
 	#[arg(long = "command", value_enum, help_heading = "Filter options")]
 	pub command: Option<ExampleCommand>,
+
+	/// Only list examples for a specific command category.
+	#[arg(long = "category", value_enum, help_heading = "Filter options")]
+	pub category: Option<CommandCategory>,
 
 	/// Print machine-readable JSON instead of text output.
 	#[arg(

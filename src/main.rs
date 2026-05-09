@@ -185,6 +185,7 @@ struct CommandInfo {
 #[serde(rename_all = "camelCase")]
 struct ExampleInfo {
 	title: &'static str,
+	category: &'static str,
 	command_name: &'static str,
 	command: &'static str,
 	summary: &'static str,
@@ -334,78 +335,91 @@ const COMMAND_INFOS: &[CommandInfo] = &[
 const EXAMPLE_INFOS: &[ExampleInfo] = &[
 	ExampleInfo {
 		title: "Create a config",
+		category: "generator",
 		command_name: "init",
 		command: "pullhook init",
 		summary: "Write a starter pullhook.json in the current repository.",
 	},
 	ExampleInfo {
 		title: "Preview configured rules",
+		category: "workflow",
 		command_name: "explain",
 		command: "pullhook explain --all-matches",
 		summary: "Inspect changed files, matched rules, and planned commands without running anything.",
 	},
 	ExampleInfo {
 		title: "Run configured rules",
+		category: "workflow",
 		command_name: "run",
 		command: "pullhook run",
 		summary: "Evaluate the git diff and execute matching pullhook rules.",
 	},
 	ExampleInfo {
 		title: "Dry-run execution",
+		category: "workflow",
 		command_name: "run",
 		command: "pullhook run --dry-run",
 		summary: "Show the commands that would run without executing them.",
 	},
 	ExampleInfo {
 		title: "Script-friendly command list",
+		category: "workflow",
 		command_name: "run",
 		command: "pullhook run --commands-only",
 		summary: "Print planned command lines only, one per line.",
 	},
 	ExampleInfo {
 		title: "Validate config in CI",
+		category: "diagnostic",
 		command_name: "validate",
 		command: "pullhook validate --quiet",
 		summary: "Exit non-zero for invalid config while keeping successful output silent.",
 	},
 	ExampleInfo {
 		title: "Inspect repository readiness",
+		category: "diagnostic",
 		command_name: "doctor",
 		command: "pullhook doctor --strict",
 		summary: "Check repository, config, diff-base, and package-manager readiness.",
 	},
 	ExampleInfo {
 		title: "Install after lockfile changes",
+		category: "workflow",
 		command_name: "legacy",
 		command: "pullhook --install",
 		summary: "Use legacy one-off mode to detect the package manager and run install.",
 	},
 	ExampleInfo {
 		title: "List command catalog",
+		category: "reference",
 		command_name: "commands",
 		command: "pullhook commands --json",
 		summary: "Return supported commands and categories for automation.",
 	},
 	ExampleInfo {
 		title: "List completion shells",
+		category: "reference",
 		command_name: "shells",
 		command: "pullhook shells --names-only",
 		summary: "Print supported shell completion targets.",
 	},
 	ExampleInfo {
 		title: "List config formats",
+		category: "reference",
 		command_name: "formats",
 		command: "pullhook formats --files-only",
 		summary: "Print supported config filenames.",
 	},
 	ExampleInfo {
 		title: "List package managers",
+		category: "reference",
 		command_name: "managers",
 		command: "pullhook managers --patterns-only",
 		summary: "Print install detection patterns.",
 	},
 	ExampleInfo {
 		title: "List status codes",
+		category: "reference",
 		command_name: "codes",
 		command: "pullhook codes --codes-only",
 		summary: "Print stable status codes for scripts or completion helpers.",
@@ -941,7 +955,7 @@ fn list_or_none(values: &[&str]) -> String {
 }
 
 fn examples_command(args: &ExamplesArgs) -> Result<()> {
-	let examples = filtered_example_infos(args.command);
+	let examples = filtered_example_infos(args.command, args.category);
 	if args.json {
 		println!(
 			"{}",
@@ -950,6 +964,7 @@ fn examples_command(args: &ExamplesArgs) -> Result<()> {
 				"code": serde_json::Value::Null,
 				"filters": {
 					"command": args.command.map(ExampleCommand::label),
+					"category": args.category.map(CommandCategory::label),
 				},
 				"examples": examples,
 				"summary": {
@@ -971,19 +986,23 @@ fn examples_command(args: &ExamplesArgs) -> Result<()> {
 	if let Some(command) = args.command {
 		println!("filter: command={}", command.label());
 	}
+	if let Some(category) = args.category {
+		println!("filter: category={}", category.label());
+	}
 	println!();
 	for example in examples {
-		println!("{}: {}", example.title, example.command);
+		println!("{} [{}]: {}", example.title, example.category, example.command);
 		println!("  {}", example.summary);
 	}
 	Ok(())
 }
 
-fn filtered_example_infos(command: Option<ExampleCommand>) -> Vec<ExampleInfo> {
+fn filtered_example_infos(command: Option<ExampleCommand>, category: Option<CommandCategory>) -> Vec<ExampleInfo> {
 	EXAMPLE_INFOS
 		.iter()
 		.copied()
 		.filter(|example| command.is_none_or(|command| example.command_name == command.label()))
+		.filter(|example| category.is_none_or(|category| example.category == category.label()))
 		.collect()
 }
 

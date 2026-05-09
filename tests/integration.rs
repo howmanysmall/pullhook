@@ -1224,12 +1224,12 @@ fn examples_text_lists_common_workflows() {
 	assert!(output.status.success(), "examples should succeed outside a git repo");
 	let stdout = stdout_text(&output);
 	assert!(stdout.contains("Pullhook examples"));
-	assert!(stdout.contains("Create a config: pullhook init"));
-	assert!(stdout.contains("Preview configured rules: pullhook explain --all-matches"));
-	assert!(stdout.contains("List completion shells: pullhook shells --names-only"));
-	assert!(stdout.contains("List config formats: pullhook formats --files-only"));
-	assert!(stdout.contains("List package managers: pullhook managers --patterns-only"));
-	assert!(stdout.contains("List status codes: pullhook codes --codes-only"));
+	assert!(stdout.contains("Create a config [generator]: pullhook init"));
+	assert!(stdout.contains("Preview configured rules [workflow]: pullhook explain --all-matches"));
+	assert!(stdout.contains("List completion shells [reference]: pullhook shells --names-only"));
+	assert!(stdout.contains("List config formats [reference]: pullhook formats --files-only"));
+	assert!(stdout.contains("List package managers [reference]: pullhook managers --patterns-only"));
+	assert!(stdout.contains("List status codes [reference]: pullhook codes --codes-only"));
 	let stderr = stderr_text(&output);
 	assert!(stderr.trim().is_empty(), "examples should not write stderr");
 }
@@ -1248,11 +1248,9 @@ fn examples_json_lists_common_workflows() {
 	assert_eq!(value["status"], "ok");
 	assert_eq!(value["code"], serde_json::Value::Null);
 	let examples = value["examples"].as_array().expect("examples array");
-	assert!(
-		examples
-			.iter()
-			.any(|entry| entry["commandName"] == "init" && entry["command"] == "pullhook init")
-	);
+	assert!(examples.iter().any(|entry| entry["commandName"] == "init"
+		&& entry["category"] == "generator"
+		&& entry["command"] == "pullhook init"));
 	assert!(
 		examples
 			.iter()
@@ -1290,6 +1288,7 @@ fn examples_command_filter_limits_results() {
 	assert!(output.status.success(), "examples --command run --json should succeed");
 	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse filtered examples json");
 	assert_eq!(value["filters"]["command"], "run");
+	assert_eq!(value["filters"]["category"], serde_json::Value::Null);
 	let examples = value["examples"].as_array().expect("examples array");
 	assert!(!examples.is_empty(), "run filter should keep run examples");
 	assert!(
@@ -1317,6 +1316,73 @@ fn examples_command_filter_limits_results() {
 }
 
 #[test]
+fn examples_category_filter_limits_results() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["examples", "--category", "reference", "--json"]);
+
+	assert!(
+		output.status.success(),
+		"examples --category reference --json should succeed"
+	);
+	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse category examples json");
+	assert_eq!(value["filters"]["command"], serde_json::Value::Null);
+	assert_eq!(value["filters"]["category"], "reference");
+	let examples = value["examples"].as_array().expect("examples array");
+	assert!(!examples.is_empty(), "reference filter should keep reference examples");
+	assert!(
+		examples.iter().all(|entry| entry["category"] == "reference"),
+		"reference filter should exclude non-reference examples"
+	);
+	assert!(
+		examples
+			.iter()
+			.any(|entry| entry["commandName"] == "managers" && entry["command"] == "pullhook managers --patterns-only")
+	);
+	assert!(
+		!examples.iter().any(|entry| entry["command"] == "pullhook run"),
+		"run is not a reference example"
+	);
+	assert_eq!(
+		value["summary"]["examples"].as_u64().expect("example count"),
+		examples.len() as u64
+	);
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"category examples --json should not write stderr"
+	);
+}
+
+#[test]
+fn examples_command_and_category_filters_intersect() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(
+		temp.path(),
+		&["examples", "--command", "run", "--category", "reference", "--json"],
+	);
+
+	assert!(
+		output.status.success(),
+		"examples command/category intersection should succeed"
+	);
+	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse intersected examples json");
+	assert_eq!(value["filters"]["command"], "run");
+	assert_eq!(value["filters"]["category"], "reference");
+	assert!(
+		value["examples"].as_array().expect("examples array").is_empty(),
+		"run examples are workflow examples, not reference examples"
+	);
+	assert_eq!(value["summary"]["examples"], 0);
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"intersected examples --json should not write stderr"
+	);
+}
+
+#[test]
 fn examples_commands_only_prints_clean_commands() {
 	let temp = tempfile::tempdir().expect("create temp dir");
 
@@ -1335,6 +1401,34 @@ fn examples_commands_only_prints_clean_commands() {
 	assert!(
 		stderr.trim().is_empty(),
 		"examples --commands-only should not write stderr"
+	);
+}
+
+#[test]
+fn examples_category_commands_only_prints_clean_commands() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["examples", "--category", "reference", "--commands-only"]);
+
+	assert!(
+		output.status.success(),
+		"examples --category reference --commands-only should succeed"
+	);
+	let stdout = stdout_text(&output);
+	assert_eq!(
+		stdout.lines().collect::<Vec<_>>(),
+		vec![
+			"pullhook commands --json",
+			"pullhook shells --names-only",
+			"pullhook formats --files-only",
+			"pullhook managers --patterns-only",
+			"pullhook codes --codes-only"
+		]
+	);
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"examples --category --commands-only should not write stderr"
 	);
 }
 
@@ -2236,7 +2330,9 @@ fn utility_help_groups_options_by_task() {
 	assert!(examples_stdout.contains("Filter options:"));
 	assert!(examples_stdout.contains("Output options:"));
 	assert!(examples_stdout.contains("pullhook examples --command run"));
+	assert!(examples_stdout.contains("pullhook examples --category workflow"));
 	assert!(examples_stdout.contains("pullhook examples --command run --commands-only"));
+	assert!(examples_stdout.contains("pullhook examples --category reference --commands-only"));
 	assert!(examples_stdout.contains("pullhook examples --json"));
 
 	let codes = run_pullhook(temp.path(), &["codes", "--help"]);

@@ -280,6 +280,8 @@ pullhook managers
 pullhook managers --patterns-only
 pullhook managers --json
 pullhook examples
+pullhook examples --category reference
+pullhook examples --category reference --commands-only
 pullhook examples --command run
 pullhook examples --command run --commands-only
 pullhook examples --json
@@ -375,7 +377,9 @@ Legacy command-parse JSON errors include a `commandParse` object with the reject
 Use `pullhook examples` to inspect common workflows in text form, or `pullhook examples --json` when another
 tool needs example commands without scraping docs.
 Add `--command run`, `--command explain`, `--command validate`, `--command doctor`, `--command init`,
-`--command commands`, `--command codes`, or `--command legacy` to focus the example list.
+`--command commands`, `--command shells`, `--command formats`, `--command managers`, `--command codes`,
+or `--command legacy` to focus the example list.
+Use `pullhook examples --category reference` to narrow examples by command category.
 Use `pullhook examples --commands-only` when a script or completion helper only needs example command lines.
 Use `pullhook commands` to inspect the command catalog in text form, or `pullhook commands --json` when another
 tool needs supported commands, categories, and repo requirements without scraping help text.
