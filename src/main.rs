@@ -497,7 +497,7 @@ fn doctor_command(args: &DoctorArgs) -> Result<()> {
 				"summary": doctor_summary_json(&checks),
 			}))?
 		);
-	} else {
+	} else if !args.quiet || checks.iter().any(|check| check.level != DoctorLevel::Ok) {
 		render_doctor_checks(&checks, &repo_root);
 	}
 

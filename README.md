@@ -231,6 +231,7 @@ pullhook validate
 pullhook validate --quiet
 pullhook validate --json
 pullhook doctor
+pullhook doctor --quiet
 pullhook doctor --strict
 pullhook doctor --json
 pullhook schema
@@ -266,6 +267,7 @@ Add `--require-existing` when that script should fail instead of returning a pla
 `validate --json` emits a compact config summary for scripts and still prints structured JSON when the
 config is invalid. Use `validate --quiet` when CI only needs the exit code. `doctor` checks repo discovery, config health, diff-base availability, and `--install`
 detection in one pass, with a short hint for each check. Use `doctor --strict` when CI should fail on warnings.
+Use `doctor --quiet` to suppress all-ok text output without hiding warnings or errors.
 `explain --json` emits the evaluated rule plan,
 including changed files, their source (`git`, `explicit`, or `base-missing`), matched files, commands, and
 skip reasons. `run --json` adds real execution results, captured stdout/stderr, and a final summary.

@@ -58,6 +58,7 @@ Examples:
 const DOCTOR_AFTER_HELP: &str = "\
 Examples:
   pullhook doctor
+  pullhook doctor --quiet
   pullhook doctor --strict
   pullhook doctor --json
   pullhook doctor --config config/pullhook.custom.json";
@@ -378,6 +379,10 @@ pub struct DoctorArgs {
 	/// Print machine-readable JSON instead of text output.
 	#[arg(long = "json", default_value_t = false)]
 	pub json: bool,
+
+	/// Suppress text output when all checks pass.
+	#[arg(long = "quiet", default_value_t = false, conflicts_with = "json")]
+	pub quiet: bool,
 
 	/// Exit non-zero on warnings as well as errors.
 	#[arg(long = "strict", default_value_t = false)]

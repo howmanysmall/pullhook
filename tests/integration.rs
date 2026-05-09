@@ -376,6 +376,19 @@ fn validate_quiet_conflicts_with_json() {
 }
 
 #[test]
+fn doctor_quiet_conflicts_with_json() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["doctor", "--quiet", "--json"]);
+
+	assert!(!output.status.success(), "--quiet should conflict with --json");
+	let stderr = stderr_text(&output);
+	assert!(stderr.contains("cannot be used with"));
+	assert!(stderr.contains("--quiet"));
+	assert!(stderr.contains("--json"));
+}
+
+#[test]
 fn init_stdout_conflicts_with_force() {
 	let temp = tempfile::tempdir().expect("create temp dir");
 
@@ -1024,6 +1037,45 @@ fn doctor_json_reports_repo_config_diff_base_and_install_detection() {
 	assert_eq!(checks[3]["hint"], "use `install: true` for dependency-recovery rules");
 	let stderr = stderr_text(&output);
 	assert!(stderr.trim().is_empty(), "doctor --json should not write stderr");
+}
+
+#[test]
+fn doctor_quiet_suppresses_all_ok_output() {
+	let temp = setup_repo_with_root_manifest_change();
+	let repo_root = temp.path();
+	write_config_rule(repo_root, "rebuild root", "package-lock.json", "npm test");
+
+	let output = run_pullhook(repo_root, &["doctor", "--quiet"]);
+
+	assert!(
+		output.status.success(),
+		"doctor --quiet should succeed when all checks pass"
+	);
+	let stdout = stdout_text(&output);
+	assert!(stdout.trim().is_empty(), "quiet all-ok doctor should not write stdout");
+	let stderr = stderr_text(&output);
+	assert!(stderr.trim().is_empty(), "quiet all-ok doctor should not write stderr");
+}
+
+#[test]
+fn doctor_quiet_still_reports_warnings() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+
+	let output = run_pullhook(repo_root, &["doctor", "--quiet", "--render", "never"]);
+
+	assert!(
+		output.status.success(),
+		"doctor warnings should stay non-blocking without --strict"
+	);
+	let stdout = stdout_text(&output);
+	assert!(stdout.contains("Doctor"));
+	assert!(stdout.contains("[warn] config"));
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"non-strict doctor warnings should not write stderr"
+	);
 }
 
 #[test]
