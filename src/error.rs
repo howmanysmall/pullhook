@@ -27,6 +27,13 @@ pub enum PullhookError {
 		source: Box<dyn StdError + Send + Sync>,
 	},
 
+	/// Explicit base revision was not found.
+	#[error("base revision `{revision}` could not be resolved")]
+	BaseRevisionNotFound {
+		/// Revision specification that failed.
+		revision: String,
+	},
+
 	/// Git diff computation failed.
 	#[error("failed to diff `{base}` against `HEAD`: {source}")]
 	GitDiff {
@@ -35,6 +42,20 @@ pub enum PullhookError {
 		/// Underlying git error.
 		#[source]
 		source: Box<dyn StdError + Send + Sync>,
+	},
+
+	/// No usable diff base could be resolved automatically.
+	#[error("unable to resolve diff base; use --base <rev> to override")]
+	DiffBaseUnavailable,
+
+	/// Package manager detection failed while resolving install behavior.
+	#[error("{context}: {source}")]
+	PackageManagerDetection {
+		/// Human-friendly command context.
+		context: String,
+		/// Underlying package manager detection error.
+		#[source]
+		source: Box<Self>,
 	},
 
 	/// Glob pattern parsing or compilation error.
@@ -67,6 +88,44 @@ pub enum PullhookError {
 		command: String,
 		/// Parse failure reason.
 		reason: String,
+	},
+
+	/// Config file could not be parsed.
+	#[error("failed to parse config `{path}`: {reason}")]
+	ConfigParse {
+		/// Config path.
+		path: String,
+		/// Parse failure reason.
+		reason: String,
+	},
+
+	/// Config file path does not use a supported format.
+	#[error("{reason}")]
+	ConfigFormat {
+		/// Config path.
+		path: String,
+		/// Unsupported or missing extension.
+		extension: Option<String>,
+		/// Human-friendly failure reason.
+		reason: String,
+	},
+
+	/// No config file was found in the repository.
+	#[error("no pullhook config found; run `pullhook init` to create {default_config}")]
+	ConfigMissing {
+		/// Repository root searched for config files.
+		repo_root: String,
+		/// Default config file name suggested to the user.
+		default_config: &'static str,
+	},
+
+	/// Config validation failed.
+	#[error("invalid config `{path}`:\n{details}")]
+	ConfigValidation {
+		/// Config path.
+		path: String,
+		/// Validation details.
+		details: String,
 	},
 
 	/// Command failed to start.

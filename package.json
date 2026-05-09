@@ -1,18 +1,23 @@
 {
-	"devDependencies": {
-		"@biomejs/biome": "^2.4.6",
-		"@commitlint/config-conventional": "^20.4.3",
-		"@commitlint/types": "^20.4.3",
-		"commitlint": "^20.4.3",
-		"lint-staged": "^16.3.2"
-	},
-	"license": "MIT",
 	"name": "pullhook",
 	"private": true,
+	"license": "MIT",
+	"type": "module",
 	"scripts": {
+		"biome": "biome",
 		"commitlint": "commitlint",
-		"lint-staged": "lint-staged",
+		"format": "oxfmt",
 		"prepare": "lefthook install"
 	},
-	"type": "module"
+	"devDependencies": {
+		"@commitlint/config-conventional": "^20.5.3",
+		"@commitlint/types": "^20.5.0",
+		"@types/node": "^25.6.1",
+		"commitlint": "^20.5.3",
+		"oxfmt": "^0.48.0",
+		"oxlint": "^1.63.0",
+		"oxlint-tsgolint": "^0.22.1",
+		"package-registry-mcp": "^2.1.0"
+	},
+	"packageManager": "aube@1.9.1"
 }

@@ -24,7 +24,7 @@ pub enum RenderMode {
 }
 
 impl RenderMode {
-	fn effective(self) -> Self {
+	pub(crate) fn effective(self) -> Self {
 		env::var(RENDER_MODE_ENV)
 			.ok()
 			.and_then(|value| Self::from_env_value(&value))
@@ -40,7 +40,7 @@ impl RenderMode {
 		}
 	}
 
-	fn use_style(self) -> bool {
+	pub(crate) fn use_style(self) -> bool {
 		match self {
 			Self::Auto => {
 				if env::var_os("NO_COLOR").is_some() || env_var_is_zero("CLICOLOR") {

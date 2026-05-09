@@ -159,7 +159,7 @@ pub fn run_tasks(
 	if tasks.len() <= 1 || jobs <= 1 {
 		return Ok(tasks
 			.iter()
-			.map(|cwd| run_task(cwd, invocations, shell, debug_enabled))
+			.map(|cwd| run_task_dir(cwd, invocations, shell, debug_enabled))
 			.collect());
 	}
 
@@ -171,7 +171,7 @@ pub fn run_tasks(
 	let results = pool.install(|| {
 		tasks
 			.par_iter()
-			.map(|cwd| run_task(cwd, invocations, shell, debug_enabled))
+			.map(|cwd| run_task_dir(cwd, invocations, shell, debug_enabled))
 			.collect::<Vec<_>>()
 	});
 
@@ -187,7 +187,9 @@ pub fn relative_cwd_label(cwd: &Path, repo_root: &Path) -> String {
 		.map_or_else(|| ".".to_owned(), |path| path.display().to_string())
 }
 
-fn run_task(cwd: &Path, invocations: &[Invocation], shell: bool, debug_enabled: bool) -> TaskResult {
+/// Execute one task directory with the provided invocations.
+#[must_use]
+pub fn run_task_dir(cwd: &Path, invocations: &[Invocation], shell: bool, debug_enabled: bool) -> TaskResult {
 	let mut outputs = Vec::new();
 
 	for invocation in invocations {

@@ -2,7 +2,8 @@
 
 ## Purpose
 
-Define deterministic, testable non-debug output behavior for `pullhook` after hard cutover to a `git-pull-run`-like staged UX with improved visual quality.
+Define deterministic, testable non-debug output behavior for `pullhook` after hard cutover to a `git-pull-run`-like
+staged UX with improved visual quality.
 
 ## Global Rules
 

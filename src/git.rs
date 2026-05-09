@@ -62,18 +62,12 @@ impl GitRepo {
 		explicit: Option<&str>,
 		debug_enabled: bool,
 	) -> Result<(String, Vec<PathBuf>), PullhookError> {
-		let repo = self.repo.to_thread_local();
-		let base = resolve_base(&repo, explicit, debug_enabled)?;
-		let changes = diff_changes(&repo, &base)?;
-		let files = changes
-			.into_iter()
-			.map(|change| relative_path_from_bstr(change.location()))
-			.collect();
-		Ok((base.name, files))
+		let (base, _count, files) = self.resolve_filtered_matches(explicit, |_| true, debug_enabled)?;
+		Ok((base, files))
 	}
 
-	/// Resolve base and collect install matches without materializing all changed paths.
-	pub fn resolve_install_matches<F>(
+	/// Resolve base and collect changed paths that satisfy the provided filter.
+	pub fn resolve_filtered_matches<F>(
 		&self,
 		explicit: Option<&str>,
 		mut is_match: F,
@@ -111,8 +105,9 @@ fn resolve_base<'repo>(
 	debug_enabled: bool,
 ) -> Result<ResolvedBase<'repo>, PullhookError> {
 	if let Some(base) = explicit {
-		let tree = try_resolve_tree(repo, base)?
-			.ok_or_else(|| PullhookError::Message(format!("base revision `{base}` could not be resolved")))?;
+		let tree = try_resolve_tree(repo, base)?.ok_or_else(|| PullhookError::BaseRevisionNotFound {
+			revision: base.to_owned(),
+		})?;
 
 		if debug_enabled {
 			debug!(%base, "using explicit base revision");
@@ -137,9 +132,7 @@ fn resolve_base<'repo>(
 		});
 	}
 
-	Err(PullhookError::Message(
-		"unable to resolve diff base; use --base <rev> to override".to_owned(),
-	))
+	Err(PullhookError::DiffBaseUnavailable)
 }
 
 fn try_resolve_tree<'repo>(
@@ -149,9 +142,9 @@ fn try_resolve_tree<'repo>(
 	let Ok(spec) = repo.rev_parse(revision) else {
 		return Ok(None);
 	};
-	let id = spec
-		.single()
-		.ok_or_else(|| PullhookError::Message(format!("base revision `{revision}` could not be resolved")))?;
+	let id = spec.single().ok_or_else(|| PullhookError::BaseRevisionNotFound {
+		revision: revision.to_owned(),
+	})?;
 	let object = id.object().map_err(|source| PullhookError::GitRevision {
 		revision: revision.to_owned(),
 		source: Box::new(source),
@@ -277,20 +270,20 @@ mod tests {
 
 		assert!(matches!(
 			error,
-			PullhookError::Message(message)
-			if message == "base revision `definitely-not-a-ref` could not be resolved"
+			PullhookError::BaseRevisionNotFound { revision }
+			if revision == "definitely-not-a-ref"
 		));
 	}
 
 	#[test]
-	fn install_fast_path_uses_full_relative_path_matching() {
+	fn filtered_match_collection_uses_full_relative_path_matching() {
 		let temp = setup_repo_with_nested_manifest_change();
 		let repo = GitRepo::discover(temp.path(), false).expect("discover repo");
 		let matcher = matcher::compile("+(package.json|package-lock.json)").expect("compile matcher");
 
 		let (base, changed_count, matched_files) = repo
-			.resolve_install_matches(None, |path| matcher.is_match(path), false)
-			.expect("resolve install matches");
+			.resolve_filtered_matches(None, |path| matcher.is_match(path), false)
+			.expect("resolve filtered matches");
 
 		assert_eq!(base, "HEAD@{1}");
 		assert_eq!(changed_count, 1);
@@ -298,14 +291,14 @@ mod tests {
 	}
 
 	#[test]
-	fn install_fast_path_matches_repo_root_manifest_changes() {
+	fn filtered_match_collection_matches_repo_root_manifest_changes() {
 		let temp = setup_repo_with_root_manifest_change();
 		let repo = GitRepo::discover(temp.path(), false).expect("discover repo");
 		let matcher = matcher::compile("+(package.json|package-lock.json)").expect("compile matcher");
 
 		let (base, changed_count, matched_files) = repo
-			.resolve_install_matches(None, |path| matcher.is_match(path), false)
-			.expect("resolve install matches");
+			.resolve_filtered_matches(None, |path| matcher.is_match(path), false)
+			.expect("resolve filtered matches");
 
 		assert_eq!(base, "HEAD@{1}");
 		assert_eq!(changed_count, 1);

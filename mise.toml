@@ -1,0 +1,29 @@
+min_version = "2024.11.0"
+
+[tools]
+aube = "1.9.1"
+biome = "latest"
+gitleaks = "latest"
+lefthook = "latest"
+node = "25"
+rumdl = "latest"
+tombi = "latest"
+rust = "1.93.1"
+
+[env]
+PROJECT_NAME = "{{ config_root | basename }}"
+_.path = ["./node_modules/.bin"]
+
+[tasks]
+audit = "cargo audit"
+build = "cargo build"
+build-release = "cargo build --release"
+deny = "cargo deny check"
+fmt = "cargo fmt --all"
+install = "cargo install --path ."
+lint = "cargo clippy --all-targets -- -D warnings"
+test = "cargo nextest run"
+
+bi = "cargo build"
+br = "cargo build --release"
+ti = "cargo nextest run"

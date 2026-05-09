@@ -1,6 +1,7 @@
 //! Pullhook CLI entry point.
 
 mod cli;
+mod config;
 mod error;
 mod git;
 mod matcher;
@@ -8,94 +9,2239 @@ mod output;
 mod pm;
 mod runner;
 
+use std::collections::BTreeSet;
+use std::fmt;
+use std::io::{Read as _, Write as _};
+
 use anyhow::{Context, Result, anyhow};
-use clap::Parser;
+use clap::{Parser, ValueEnum};
+use rayon::prelude::*;
+use serde::Serialize;
+use serde_json::json;
 use tracing::debug;
 use tracing_subscriber::EnvFilter;
 
-use crate::cli::{Cli, Commands, RunArgs};
+use crate::cli::{
+	CategoriesArgs, Cli, CodeKind, CodesArgs, CommandCatalogArgs, CommandCategory, Commands, CompletionArgs,
+	ConfigArgs, ConfigRunArgs, DoctorArgs, ExampleCommand, ExamplesArgs, ExplainArgs, FormatsArgs, InitArgs,
+	ManagersArgs, RulesArgs, RulesKind, RunArgs, SchemaArgs, ShellsArgs, ValidateArgs,
+};
+use crate::config::{
+	Config, Entry, EvaluatedEntry, EvaluatedGroup, EvaluatedRule, FailTextContext, OnFailure, Pattern,
+};
 use crate::git::GitRepo;
-use crate::output::{DryRunSummary, NonSuccessReport, Renderer, Summary, TaskBlock};
-use crate::pm::{PackageManager, detect_package_manager};
+use crate::output::{DryRunSummary, NonSuccessReport, RenderMode, Renderer, Summary, TaskBlock};
+use crate::pm::{PackageManager, detect_package_manager, package_managers};
 
 #[derive(Debug, Clone)]
 struct RunConfig {
-	match_strategy: MatchStrategy,
+	pattern: String,
 	command: Option<String>,
 	script: Option<String>,
 	once: bool,
 }
 
-impl RunConfig {
-	fn pattern(&self) -> &str {
-		self.match_strategy.pattern()
+#[derive(Debug, Clone)]
+struct InstallPlan {
+	package_manager: &'static str,
+	pattern: String,
+	command: String,
+}
+
+#[derive(Debug, Clone)]
+struct UnknownSelectorError {
+	unknown: Vec<String>,
+	available: Vec<String>,
+	show_available: bool,
+}
+
+impl UnknownSelectorError {
+	const fn new(unknown: Vec<String>, available: Vec<String>, show_available: bool) -> Self {
+		Self {
+			unknown,
+			available,
+			show_available,
+		}
+	}
+}
+
+impl fmt::Display for UnknownSelectorError {
+	fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+		write!(
+			formatter,
+			"unknown rule selector(s): {}",
+			format_unknown_selectors(&self.unknown, &self.available)
+		)?;
+		if self.show_available {
+			write!(formatter, " (available: {})", self.available.join(", "))?;
+		}
+		Ok(())
+	}
+}
+
+impl std::error::Error for UnknownSelectorError {}
+
+#[derive(Debug)]
+struct ChangedFilesFileError {
+	path: String,
+	source: std::io::Error,
+}
+
+impl ChangedFilesFileError {
+	fn new(path: &std::path::Path, source: std::io::Error) -> Self {
+		Self {
+			path: path.display().to_string(),
+			source,
+		}
+	}
+}
+
+impl fmt::Display for ChangedFilesFileError {
+	fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+		write!(formatter, "failed to read changed files from `{}`", self.path)
+	}
+}
+
+impl std::error::Error for ChangedFilesFileError {
+	fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+		Some(&self.source)
 	}
 }
 
 #[derive(Debug, Clone)]
-enum MatchStrategy {
-	Glob(String),
-	Install { pattern: String },
+struct LegacyJsonContext {
+	changed_count: usize,
+	run_config: RunConfig,
+	matched_files: Vec<std::path::PathBuf>,
+	invocations: Vec<runner::Invocation>,
+	tasks: Vec<std::path::PathBuf>,
 }
 
-impl MatchStrategy {
-	fn from_package_manager(package_manager: PackageManager) -> Self {
-		Self::Install {
-			pattern: package_manager.install_pattern(),
-		}
-	}
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DoctorLevel {
+	Ok,
+	Warn,
+	Error,
+}
 
-	fn pattern(&self) -> &str {
+impl DoctorLevel {
+	const fn label(self) -> &'static str {
 		match self {
-			Self::Glob(pattern) | Self::Install { pattern, .. } => pattern,
+			Self::Ok => "ok",
+			Self::Warn => "warn",
+			Self::Error => "error",
 		}
 	}
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ChangedFilesSource {
+	Git,
+	Explicit,
+	BaseMissing,
+}
+
+impl ChangedFilesSource {
+	const fn label(self) -> &'static str {
+		match self {
+			Self::Git => "git",
+			Self::Explicit => "explicit",
+			Self::BaseMissing => "base-missing",
+		}
+	}
+}
+
+#[derive(Debug, Clone)]
+struct DoctorCheck {
+	name: &'static str,
+	code: &'static str,
+	level: DoctorLevel,
+	summary: String,
+	details: Vec<String>,
+	hint: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct JsonCodeInfo {
+	code: &'static str,
+	surface: &'static str,
+	kind: &'static str,
+	description: &'static str,
+}
+
+#[derive(Debug, Clone, Copy, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct CommandInfo {
+	name: &'static str,
+	category: &'static str,
+	summary: &'static str,
+	json: bool,
+	requires_repo: bool,
+	script_friendly: bool,
+}
+
+#[derive(Debug, Clone, Copy, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ExampleInfo {
+	title: &'static str,
+	category: &'static str,
+	command_name: &'static str,
+	command: &'static str,
+	summary: &'static str,
+}
+
+#[derive(Debug, Clone, Copy, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ShellInfo {
+	name: &'static str,
+	completion_command: &'static str,
+	description: &'static str,
+}
+
+#[derive(Debug, Clone, Copy, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct FormatInfo {
+	name: &'static str,
+	default_file: &'static str,
+	alternate_file: Option<&'static str>,
+	description: &'static str,
+	init_command: &'static str,
+}
+
+#[derive(Debug, Clone, Copy, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct CategoryInfo {
+	name: &'static str,
+	description: &'static str,
+}
+
+const CATEGORY_INFOS: &[CategoryInfo] = &[
+	CategoryInfo {
+		name: "workflow",
+		description: "Commands that evaluate or run configured workflows.",
+	},
+	CategoryInfo {
+		name: "diagnostic",
+		description: "Commands that inspect repository or config state.",
+	},
+	CategoryInfo {
+		name: "generator",
+		description: "Commands that generate files or shell output.",
+	},
+	CategoryInfo {
+		name: "reference",
+		description: "Commands that describe pullhook's own CLI surface.",
+	},
+];
+
+const COMMAND_INFOS: &[CommandInfo] = &[
+	CommandInfo {
+		name: "run",
+		category: "workflow",
+		summary: "Run configured pullhook rules.",
+		json: true,
+		requires_repo: true,
+		script_friendly: true,
+	},
+	CommandInfo {
+		name: "explain",
+		category: "workflow",
+		summary: "Explain which configured rules match changed files.",
+		json: true,
+		requires_repo: true,
+		script_friendly: true,
+	},
+	CommandInfo {
+		name: "validate",
+		category: "diagnostic",
+		summary: "Validate the pullhook config file.",
+		json: true,
+		requires_repo: true,
+		script_friendly: true,
+	},
+	CommandInfo {
+		name: "doctor",
+		category: "diagnostic",
+		summary: "Inspect repository and config readiness.",
+		json: true,
+		requires_repo: true,
+		script_friendly: true,
+	},
+	CommandInfo {
+		name: "config",
+		category: "diagnostic",
+		summary: "Show the resolved pullhook config path.",
+		json: true,
+		requires_repo: true,
+		script_friendly: true,
+	},
+	CommandInfo {
+		name: "rules",
+		category: "diagnostic",
+		summary: "List configured rule and group names.",
+		json: true,
+		requires_repo: true,
+		script_friendly: true,
+	},
+	CommandInfo {
+		name: "init",
+		category: "generator",
+		summary: "Create a starter pullhook config file.",
+		json: true,
+		requires_repo: false,
+		script_friendly: true,
+	},
+	CommandInfo {
+		name: "schema",
+		category: "generator",
+		summary: "Print or write the pullhook JSON Schema.",
+		json: true,
+		requires_repo: false,
+		script_friendly: true,
+	},
+	CommandInfo {
+		name: "completion",
+		category: "generator",
+		summary: "Generate shell completion scripts.",
+		json: true,
+		requires_repo: false,
+		script_friendly: true,
+	},
+	CommandInfo {
+		name: "shells",
+		category: "reference",
+		summary: "List supported shell completion targets.",
+		json: true,
+		requires_repo: false,
+		script_friendly: true,
+	},
+	CommandInfo {
+		name: "formats",
+		category: "reference",
+		summary: "List supported config formats and filenames.",
+		json: true,
+		requires_repo: false,
+		script_friendly: true,
+	},
+	CommandInfo {
+		name: "managers",
+		category: "reference",
+		summary: "List supported package-manager install detection.",
+		json: true,
+		requires_repo: false,
+		script_friendly: true,
+	},
+	CommandInfo {
+		name: "categories",
+		category: "reference",
+		summary: "List command categories and their coverage.",
+		json: true,
+		requires_repo: false,
+		script_friendly: true,
+	},
+	CommandInfo {
+		name: "examples",
+		category: "reference",
+		summary: "Show common pullhook workflows and commands.",
+		json: true,
+		requires_repo: false,
+		script_friendly: true,
+	},
+	CommandInfo {
+		name: "commands",
+		category: "reference",
+		summary: "List pullhook commands for humans or automation.",
+		json: true,
+		requires_repo: false,
+		script_friendly: true,
+	},
+	CommandInfo {
+		name: "codes",
+		category: "reference",
+		summary: "List stable JSON status codes for automation.",
+		json: true,
+		requires_repo: false,
+		script_friendly: true,
+	},
+];
+
+const EXAMPLE_INFOS: &[ExampleInfo] = &[
+	ExampleInfo {
+		title: "Create a config",
+		category: "generator",
+		command_name: "init",
+		command: "pullhook init",
+		summary: "Write a starter pullhook.json in the current repository.",
+	},
+	ExampleInfo {
+		title: "Preview configured rules",
+		category: "workflow",
+		command_name: "explain",
+		command: "pullhook explain --all-matches",
+		summary: "Inspect changed files, matched rules, and planned commands without running anything.",
+	},
+	ExampleInfo {
+		title: "Run configured rules",
+		category: "workflow",
+		command_name: "run",
+		command: "pullhook run",
+		summary: "Evaluate the git diff and execute matching pullhook rules.",
+	},
+	ExampleInfo {
+		title: "Dry-run execution",
+		category: "workflow",
+		command_name: "run",
+		command: "pullhook run --dry-run",
+		summary: "Show the commands that would run without executing them.",
+	},
+	ExampleInfo {
+		title: "Script-friendly command list",
+		category: "workflow",
+		command_name: "run",
+		command: "pullhook run --commands-only",
+		summary: "Print planned command lines only, one per line.",
+	},
+	ExampleInfo {
+		title: "Validate config in CI",
+		category: "diagnostic",
+		command_name: "validate",
+		command: "pullhook validate --quiet",
+		summary: "Exit non-zero for invalid config while keeping successful output silent.",
+	},
+	ExampleInfo {
+		title: "Inspect repository readiness",
+		category: "diagnostic",
+		command_name: "doctor",
+		command: "pullhook doctor --strict",
+		summary: "Check repository, config, diff-base, and package-manager readiness.",
+	},
+	ExampleInfo {
+		title: "Print resolved config path",
+		category: "diagnostic",
+		command_name: "config",
+		command: "pullhook config --path-only",
+		summary: "Print the config path pullhook would use without parsing the file.",
+	},
+	ExampleInfo {
+		title: "List configured rule commands",
+		category: "diagnostic",
+		command_name: "rules",
+		command: "pullhook rules --commands-only",
+		summary: "Print configured rule command lines without evaluating changed files.",
+	},
+	ExampleInfo {
+		title: "Count configured rules",
+		category: "diagnostic",
+		command_name: "rules",
+		command: "pullhook rules --count-only",
+		summary: "Print the number of configured rule selectors matching the current filters.",
+	},
+	ExampleInfo {
+		title: "Search configured rules",
+		category: "diagnostic",
+		command_name: "rules",
+		command: "pullhook rules --search lint --names-only",
+		summary: "Find configured rule selectors by name, kind, command, patterns, or fail text.",
+	},
+	ExampleInfo {
+		title: "Write JSON Schema",
+		category: "generator",
+		command_name: "schema",
+		command: "pullhook schema --output .vscode/pullhook.schema.json",
+		summary: "Write the pullhook config schema for editor validation.",
+	},
+	ExampleInfo {
+		title: "Write fish completion",
+		category: "generator",
+		command_name: "completion",
+		command: "pullhook completion fish --output ~/.config/fish/completions/pullhook.fish",
+		summary: "Generate shell completion output for a supported shell.",
+	},
+	ExampleInfo {
+		title: "Install after lockfile changes",
+		category: "workflow",
+		command_name: "legacy",
+		command: "pullhook --install",
+		summary: "Use legacy one-off mode to detect the package manager and run install.",
+	},
+	ExampleInfo {
+		title: "List command catalog",
+		category: "reference",
+		command_name: "commands",
+		command: "pullhook commands --json",
+		summary: "Return supported commands and categories for automation.",
+	},
+	ExampleInfo {
+		title: "Count command catalog matches",
+		category: "reference",
+		command_name: "commands",
+		command: "pullhook commands --search config --count-only",
+		summary: "Print the number of command catalog entries matching a search term.",
+	},
+	ExampleInfo {
+		title: "List completion shells",
+		category: "reference",
+		command_name: "shells",
+		command: "pullhook shells --names-only",
+		summary: "Print supported shell completion targets.",
+	},
+	ExampleInfo {
+		title: "Count completion shells",
+		category: "reference",
+		command_name: "shells",
+		command: "pullhook shells --search fish --count-only",
+		summary: "Print the number of supported shell targets matching a search term.",
+	},
+	ExampleInfo {
+		title: "List config formats",
+		category: "reference",
+		command_name: "formats",
+		command: "pullhook formats --files-only",
+		summary: "Print supported config filenames.",
+	},
+	ExampleInfo {
+		title: "Count config formats",
+		category: "reference",
+		command_name: "formats",
+		command: "pullhook formats --search yaml --count-only",
+		summary: "Print the number of config formats matching a search term.",
+	},
+	ExampleInfo {
+		title: "List package managers",
+		category: "reference",
+		command_name: "managers",
+		command: "pullhook managers --patterns-only",
+		summary: "Print install detection patterns.",
+	},
+	ExampleInfo {
+		title: "Count package managers",
+		category: "reference",
+		command_name: "managers",
+		command: "pullhook managers --search pnpm --count-only",
+		summary: "Print the number of package-manager entries matching a search term.",
+	},
+	ExampleInfo {
+		title: "List command categories",
+		category: "reference",
+		command_name: "categories",
+		command: "pullhook categories --json",
+		summary: "Return command categories with command and example counts.",
+	},
+	ExampleInfo {
+		title: "Count command categories",
+		category: "reference",
+		command_name: "categories",
+		command: "pullhook categories --search workflow --count-only",
+		summary: "Print the number of command categories matching a search term.",
+	},
+	ExampleInfo {
+		title: "List example workflows",
+		category: "reference",
+		command_name: "examples",
+		command: "pullhook examples --json",
+		summary: "Return common workflows and copy-ready commands for automation.",
+	},
+	ExampleInfo {
+		title: "Count example workflows",
+		category: "reference",
+		command_name: "examples",
+		command: "pullhook examples --search install --count-only",
+		summary: "Print the number of example workflows matching a search term.",
+	},
+	ExampleInfo {
+		title: "List status codes",
+		category: "reference",
+		command_name: "codes",
+		command: "pullhook codes --codes-only",
+		summary: "Print stable status codes for scripts or completion helpers.",
+	},
+	ExampleInfo {
+		title: "Count status codes",
+		category: "reference",
+		command_name: "codes",
+		command: "pullhook codes --search config --count-only",
+		summary: "Print the number of status-code entries matching a search term.",
+	},
+];
+
+const SHELL_INFOS: &[ShellInfo] = &[
+	ShellInfo {
+		name: "bash",
+		completion_command: "pullhook completion bash",
+		description: "Generate Bash completion script.",
+	},
+	ShellInfo {
+		name: "elvish",
+		completion_command: "pullhook completion elvish",
+		description: "Generate Elvish completion script.",
+	},
+	ShellInfo {
+		name: "fish",
+		completion_command: "pullhook completion fish",
+		description: "Generate Fish completion script.",
+	},
+	ShellInfo {
+		name: "powershell",
+		completion_command: "pullhook completion powershell",
+		description: "Generate PowerShell completion script.",
+	},
+	ShellInfo {
+		name: "zsh",
+		completion_command: "pullhook completion zsh",
+		description: "Generate Zsh completion script.",
+	},
+];
+
+const FORMAT_INFOS: &[FormatInfo] = &[
+	FormatInfo {
+		name: "json",
+		default_file: "pullhook.json",
+		alternate_file: Some(".pullhook.json"),
+		description: "JSON config file.",
+		init_command: "pullhook init --format json",
+	},
+	FormatInfo {
+		name: "jsonc",
+		default_file: "pullhook.jsonc",
+		alternate_file: Some(".pullhook.jsonc"),
+		description: "JSON config file with comments.",
+		init_command: "pullhook init --format jsonc",
+	},
+	FormatInfo {
+		name: "yaml",
+		default_file: "pullhook.yaml",
+		alternate_file: Some(".pullhook.yaml"),
+		description: "YAML config file; .yml is not supported.",
+		init_command: "pullhook init --format yaml",
+	},
+	FormatInfo {
+		name: "toml",
+		default_file: "pullhook.toml",
+		alternate_file: Some(".pullhook.toml"),
+		description: "TOML config file.",
+		init_command: "pullhook init --format toml",
+	},
+];
+
+const JSON_CODE_INFOS: &[JsonCodeInfo] = &[
+	JsonCodeInfo {
+		code: "changed_files_file",
+		surface: "explain/run",
+		kind: "error",
+		description: "A --changed-files-file path could not be read.",
+	},
+	JsonCodeInfo {
+		code: "command_failed",
+		surface: "legacy run",
+		kind: "error",
+		description: "One or more legacy-mode task commands failed.",
+	},
+	JsonCodeInfo {
+		code: "command_io",
+		surface: "legacy run",
+		kind: "error",
+		description: "A command could not be started or waited on.",
+	},
+	JsonCodeInfo {
+		code: "command_parse",
+		surface: "legacy run",
+		kind: "error",
+		description: "A configured command could not be parsed.",
+	},
+	JsonCodeInfo {
+		code: "completion_error",
+		surface: "completion --check",
+		kind: "error",
+		description: "Completion output check failed for an unexpected reason.",
+	},
+	JsonCodeInfo {
+		code: "completion_missing",
+		surface: "completion --check",
+		kind: "error",
+		description: "The checked completion output file is missing or unreadable.",
+	},
+	JsonCodeInfo {
+		code: "completion_out_of_date",
+		surface: "completion --check",
+		kind: "error",
+		description: "The checked completion output file is stale.",
+	},
+	JsonCodeInfo {
+		code: "config_discovery_failed",
+		surface: "doctor",
+		kind: "doctor-check",
+		description: "Doctor could not complete config discovery.",
+	},
+	JsonCodeInfo {
+		code: "config_evaluation_error",
+		surface: "explain/run",
+		kind: "error",
+		description: "Config rule evaluation failed for an uncategorized reason.",
+	},
+	JsonCodeInfo {
+		code: "config_invalid",
+		surface: "doctor",
+		kind: "doctor-check",
+		description: "Doctor found an invalid config file.",
+	},
+	JsonCodeInfo {
+		code: "config_missing",
+		surface: "config/validate/explain/run/rules/doctor",
+		kind: "error",
+		description: "No pullhook config file was found.",
+	},
+	JsonCodeInfo {
+		code: "config_ok",
+		surface: "doctor",
+		kind: "doctor-check",
+		description: "Doctor found a valid config file.",
+	},
+	JsonCodeInfo {
+		code: "config_parse",
+		surface: "validate/run/explain/rules",
+		kind: "error",
+		description: "The config file could not be parsed.",
+	},
+	JsonCodeInfo {
+		code: "config_path_missing",
+		surface: "config --require-existing",
+		kind: "error",
+		description: "The resolved config path does not exist.",
+	},
+	JsonCodeInfo {
+		code: "config_path_missing_extension",
+		surface: "config/init",
+		kind: "error",
+		description: "A config path has no supported file extension.",
+	},
+	JsonCodeInfo {
+		code: "config_path_unsupported_format",
+		surface: "config/init",
+		kind: "error",
+		description: "A config path uses an unsupported file extension.",
+	},
+	JsonCodeInfo {
+		code: "config_rule_failed",
+		surface: "run --json",
+		kind: "error",
+		description: "One or more config-mode rules failed.",
+	},
+	JsonCodeInfo {
+		code: "config_validation",
+		surface: "validate/run/explain/rules",
+		kind: "error",
+		description: "The config parsed but failed validation.",
+	},
+	JsonCodeInfo {
+		code: "diff_base_error",
+		surface: "run/explain/doctor",
+		kind: "error",
+		description: "Changed-file discovery failed while diffing against the base revision.",
+	},
+	JsonCodeInfo {
+		code: "diff_base_ok",
+		surface: "doctor",
+		kind: "doctor-check",
+		description: "Doctor resolved the diff base and changed-file list.",
+	},
+	JsonCodeInfo {
+		code: "diff_base_revision_error",
+		surface: "run/explain",
+		kind: "error",
+		description: "Git rejected the configured base revision.",
+	},
+	JsonCodeInfo {
+		code: "diff_base_revision_not_found",
+		surface: "run/explain",
+		kind: "error",
+		description: "The configured base revision does not exist.",
+	},
+	JsonCodeInfo {
+		code: "diff_base_unavailable",
+		surface: "run/explain/doctor",
+		kind: "error",
+		description: "No diff base could be resolved from reflog, ORIG_HEAD, or HEAD~1.",
+	},
+	JsonCodeInfo {
+		code: "doctor_blocking_issues",
+		surface: "doctor --json",
+		kind: "error",
+		description: "Doctor found at least one blocking issue.",
+	},
+	JsonCodeInfo {
+		code: "doctor_error",
+		surface: "doctor --json",
+		kind: "error",
+		description: "Doctor failed for an uncategorized reason.",
+	},
+	JsonCodeInfo {
+		code: "doctor_warnings",
+		surface: "doctor --strict --json",
+		kind: "error",
+		description: "Doctor found warnings while strict mode was enabled.",
+	},
+	JsonCodeInfo {
+		code: "error",
+		surface: "all JSON errors",
+		kind: "error",
+		description: "Fallback code for uncategorized errors.",
+	},
+	JsonCodeInfo {
+		code: "init_refusing_overwrite",
+		surface: "init --json",
+		kind: "error",
+		description: "Init refused to overwrite an existing config without --force.",
+	},
+	JsonCodeInfo {
+		code: "invalid_pattern",
+		surface: "legacy run",
+		kind: "error",
+		description: "A changed-file glob pattern is invalid.",
+	},
+	JsonCodeInfo {
+		code: "json_debug_conflict",
+		surface: "all JSON commands",
+		kind: "error",
+		description: "--json was combined with --debug, which would contaminate machine output.",
+	},
+	JsonCodeInfo {
+		code: "message",
+		surface: "all JSON errors",
+		kind: "error",
+		description: "A generic pullhook message was converted to JSON.",
+	},
+	JsonCodeInfo {
+		code: "missing_required_argument",
+		surface: "legacy run",
+		kind: "error",
+		description: "Legacy mode was invoked without a runnable mode.",
+	},
+	JsonCodeInfo {
+		code: "no_rules_matched",
+		surface: "explain/run --require-match",
+		kind: "error",
+		description: "--require-match was set and no configured rules matched.",
+	},
+	JsonCodeInfo {
+		code: "package_manager_ambiguous",
+		surface: "legacy --install/doctor",
+		kind: "error",
+		description: "Package-manager detection found conflicting repo-root markers.",
+	},
+	JsonCodeInfo {
+		code: "package_manager_error",
+		surface: "doctor",
+		kind: "doctor-check",
+		description: "Doctor could not complete package-manager detection.",
+	},
+	JsonCodeInfo {
+		code: "package_manager_missing",
+		surface: "doctor",
+		kind: "doctor-check",
+		description: "Doctor did not find package-manager markers.",
+	},
+	JsonCodeInfo {
+		code: "package_manager_not_found",
+		surface: "legacy --install",
+		kind: "error",
+		description: "Package-manager detection found no supported repo-root markers.",
+	},
+	JsonCodeInfo {
+		code: "package_manager_ok",
+		surface: "doctor",
+		kind: "doctor-check",
+		description: "Doctor detected a package manager.",
+	},
+	JsonCodeInfo {
+		code: "repository_not_found",
+		surface: "all repo commands",
+		kind: "error",
+		description: "The current directory is not inside a Git repository.",
+	},
+	JsonCodeInfo {
+		code: "repository_ok",
+		surface: "doctor",
+		kind: "doctor-check",
+		description: "Doctor found the Git repository root.",
+	},
+	JsonCodeInfo {
+		code: "schema_error",
+		surface: "schema --check",
+		kind: "error",
+		description: "Schema output check failed for an unexpected reason.",
+	},
+	JsonCodeInfo {
+		code: "schema_missing",
+		surface: "schema --check",
+		kind: "error",
+		description: "The checked schema output file is missing or unreadable.",
+	},
+	JsonCodeInfo {
+		code: "schema_out_of_date",
+		surface: "schema --check",
+		kind: "error",
+		description: "The checked schema output file is stale.",
+	},
+	JsonCodeInfo {
+		code: "unknown_selector",
+		surface: "run/explain/rules",
+		kind: "error",
+		description: "One or more requested rule selectors do not exist.",
+	},
+];
 
 fn main() {
 	let cli = Cli::parse();
 
-	if let Some(Commands::Completion { shell }) = cli.command.as_ref() {
-		print_completion(*shell);
-		return;
-	}
+	let result = match cli.command.as_ref() {
+		Some(Commands::Completion(args)) => completion_command(args),
+		Some(Commands::Shells(args)) => shells_command(args),
+		Some(Commands::Formats(args)) => formats_command(args),
+		Some(Commands::Managers(args)) => managers_command(args),
+		Some(Commands::Categories(args)) => categories_command(args),
+		Some(Commands::Examples(args)) => examples_command(args),
+		Some(Commands::CommandCatalog(args)) => command_catalog_command(args),
+		Some(Commands::Codes(args)) => codes_command(args),
+		Some(Commands::Run(args)) => {
+			init_tracing(args.debug);
+			run_config_command(args)
+		}
+		Some(Commands::Explain(args)) => {
+			init_tracing(args.debug);
+			explain_config_command(args)
+		}
+		Some(Commands::Validate(args)) => {
+			init_tracing(args.debug);
+			validate_config_command(args)
+		}
+		Some(Commands::Doctor(args)) => {
+			init_tracing(args.debug);
+			doctor_command(args)
+		}
+		Some(Commands::Config(args)) => {
+			init_tracing(args.debug);
+			config_command(args)
+		}
+		Some(Commands::Rules(args)) => {
+			init_tracing(args.debug);
+			rules_command(args)
+		}
+		Some(Commands::Schema(args)) => {
+			init_tracing(false);
+			schema_command(args)
+		}
+		Some(Commands::Init(args)) => {
+			init_tracing(args.debug);
+			init_config_command(args)
+		}
+		None => {
+			init_tracing(cli.run.debug);
+			run_legacy(&cli.run)
+		}
+	};
 
-	init_tracing(cli.run.debug);
-
-	if let Err(error) = run(&cli.run) {
+	if let Err(error) = result {
 		eprintln!("error: {error:#}");
 		std::process::exit(1);
 	}
 }
 
-fn print_completion(shell: clap_complete::Shell) {
-	Cli::print_completion(shell);
+fn shells_command(args: &ShellsArgs) -> Result<()> {
+	let shells = filtered_shell_infos(args.search.as_deref());
+	if args.json {
+		println!(
+			"{}",
+			serde_json::to_string_pretty(&json!({
+				"status": "ok",
+				"code": serde_json::Value::Null,
+				"filters": {
+					"search": args.search.as_deref(),
+				},
+				"searchFields": ["name", "completionCommand", "description"],
+				"shells": shells,
+				"summary": {
+					"shells": shells.len(),
+				},
+			}))?
+		);
+		return Ok(());
+	}
+
+	if args.markdown {
+		render_shells_markdown(&shells);
+		return Ok(());
+	}
+
+	if args.count_only {
+		println!("{}", shells.len());
+		return Ok(());
+	}
+
+	if args.names_only {
+		for shell in shells {
+			println!("{}", shell.name);
+		}
+		return Ok(());
+	}
+
+	if args.commands_only {
+		for shell in shells {
+			println!("{}", shell.completion_command);
+		}
+		return Ok(());
+	}
+
+	if args.descriptions_only {
+		for shell in shells {
+			println!("{}", shell.description);
+		}
+		return Ok(());
+	}
+
+	println!("Shell completion targets");
+	if let Some(search) = &args.search {
+		println!("filter: search={search}");
+	}
+	println!();
+	for shell in shells {
+		println!("{}: {}", shell.name, shell.completion_command);
+		println!("  {}", shell.description);
+	}
+	Ok(())
 }
 
-fn run(cli: &RunArgs) -> Result<()> {
-	let renderer = Renderer::new(cli.render);
-	let cwd = std::env::current_dir().context("failed to read current working directory")?;
-	let repo = GitRepo::discover(&cwd, cli.debug).context("failed to resolve repository root")?;
+fn render_shells_markdown(shells: &[ShellInfo]) {
+	println!("| Shell | Completion command | Description |");
+	println!("| --- | --- | --- |");
+	for shell in shells {
+		println!(
+			"| `{}` | `{}` | {} |",
+			markdown_table_escape(shell.name),
+			markdown_table_escape(shell.completion_command),
+			markdown_table_escape(shell.description)
+		);
+	}
+}
+
+fn filtered_shell_infos(search: Option<&str>) -> Vec<ShellInfo> {
+	let search = search.map(str::to_ascii_lowercase);
+	SHELL_INFOS
+		.iter()
+		.copied()
+		.filter(|shell| {
+			search
+				.as_deref()
+				.is_none_or(|search| shell_info_matches_search(*shell, search))
+		})
+		.collect()
+}
+
+fn shell_info_matches_search(shell: ShellInfo, search: &str) -> bool {
+	shell.name.contains(search)
+		|| shell.completion_command.contains(search)
+		|| shell.description.to_ascii_lowercase().contains(search)
+}
+
+fn formats_command(args: &FormatsArgs) -> Result<()> {
+	let formats = filtered_format_infos(args.search.as_deref());
+	let config_names = config_names_for_formats(&formats);
+	if args.json {
+		println!(
+			"{}",
+			serde_json::to_string_pretty(&json!({
+				"status": "ok",
+				"code": serde_json::Value::Null,
+				"filters": {
+					"search": args.search.as_deref(),
+				},
+				"searchFields": ["name", "defaultFile", "alternateFile", "description", "initCommand"],
+				"formats": formats,
+				"discoveryOrder": config_names,
+				"summary": {
+					"formats": formats.len(),
+					"configNames": config_names.len(),
+				},
+			}))?
+		);
+		return Ok(());
+	}
+
+	if args.markdown {
+		render_formats_markdown(&formats);
+		return Ok(());
+	}
+
+	if args.output.count_only {
+		println!("{}", formats.len());
+		return Ok(());
+	}
+
+	if args.output.names_only {
+		for format in formats {
+			println!("{}", format.name);
+		}
+		return Ok(());
+	}
+
+	if args.output.files_only {
+		for name in config_names {
+			println!("{name}");
+		}
+		return Ok(());
+	}
+
+	if args.output.init_commands_only {
+		for format in formats {
+			println!("{}", format.init_command);
+		}
+		return Ok(());
+	}
+
+	if args.output.descriptions_only {
+		for format in formats {
+			println!("{}", format.description);
+		}
+		return Ok(());
+	}
+
+	println!("Config formats");
+	println!("discovery order:");
+	for name in config_names {
+		println!("  {name}");
+	}
+	if let Some(search) = &args.search {
+		println!("filter: search={search}");
+	}
+	println!();
+	for format in formats {
+		println!("{}: {}", format.name, format.default_file);
+		if let Some(alternate_file) = format.alternate_file {
+			println!("  alternate: {alternate_file}");
+		}
+		println!("  {}", format.description);
+		println!("  {}", format.init_command);
+	}
+	Ok(())
+}
+
+fn render_formats_markdown(formats: &[FormatInfo]) {
+	println!("| Format | Default file | Alternate file | Init command | Description |");
+	println!("| --- | --- | --- | --- | --- |");
+	for format in formats {
+		println!(
+			"| `{}` | `{}` | {} | `{}` | {} |",
+			markdown_table_escape(format.name),
+			markdown_table_escape(format.default_file),
+			format.alternate_file.map_or_else(
+				|| "none".to_owned(),
+				|file| format!("`{}`", markdown_table_escape(file))
+			),
+			markdown_table_escape(format.init_command),
+			markdown_table_escape(format.description)
+		);
+	}
+}
+
+fn filtered_format_infos(search: Option<&str>) -> Vec<FormatInfo> {
+	let search = search.map(str::to_ascii_lowercase);
+	FORMAT_INFOS
+		.iter()
+		.copied()
+		.filter(|format| {
+			search
+				.as_deref()
+				.is_none_or(|search| format_info_matches_search(*format, search))
+		})
+		.collect()
+}
+
+fn format_info_matches_search(format: FormatInfo, search: &str) -> bool {
+	format.name.contains(search)
+		|| format.default_file.contains(search)
+		|| format.alternate_file.is_some_and(|file| file.contains(search))
+		|| format.description.to_ascii_lowercase().contains(search)
+		|| format.init_command.contains(search)
+}
+
+fn config_names_for_formats(formats: &[FormatInfo]) -> Vec<&'static str> {
+	config::config_names()
+		.iter()
+		.copied()
+		.filter(|config_name| {
+			formats.iter().any(|format| {
+				format.default_file == *config_name || format.alternate_file.is_some_and(|file| file == *config_name)
+			})
+		})
+		.collect()
+}
+
+fn managers_command(args: &ManagersArgs) -> Result<()> {
+	let managers = filtered_package_managers(args.search.as_deref());
+	if args.json {
+		let managers = managers
+			.iter()
+			.map(|package_manager| manager_info_json(*package_manager))
+			.collect::<Vec<_>>();
+		println!(
+			"{}",
+			serde_json::to_string_pretty(&json!({
+				"status": "ok",
+				"code": serde_json::Value::Null,
+				"filters": {
+					"search": args.search.as_deref(),
+				},
+				"searchFields": ["name", "installCommand", "installPattern", "lockFiles", "configFiles", "watchedFiles"],
+				"managers": managers,
+				"summary": {
+					"managers": managers.len(),
+				},
+			}))?
+		);
+		return Ok(());
+	}
+
+	if args.markdown {
+		render_managers_markdown(&managers);
+		return Ok(());
+	}
+
+	if args.output.count_only {
+		println!("{}", managers.len());
+		return Ok(());
+	}
+
+	if args.output.names_only {
+		for package_manager in managers {
+			println!("{}", package_manager.name());
+		}
+		return Ok(());
+	}
+
+	if args.output.patterns_only {
+		for package_manager in managers {
+			println!("{}", package_manager.install_pattern());
+		}
+		return Ok(());
+	}
+
+	if args.output.commands_only {
+		for package_manager in managers {
+			println!("{}", package_manager.install_command());
+		}
+		return Ok(());
+	}
+
+	if args.output.lock_files_only {
+		for lock_file in lock_files_for_managers(&managers) {
+			println!("{lock_file}");
+		}
+		return Ok(());
+	}
+
+	if args.output.config_files_only {
+		for config_file in config_files_for_managers(&managers) {
+			println!("{config_file}");
+		}
+		return Ok(());
+	}
+
+	if args.output.watched_files_only {
+		for watched_file in watched_files_for_managers(&managers) {
+			println!("{watched_file}");
+		}
+		return Ok(());
+	}
+
+	println!("Package managers");
+	println!("lock files win over config files; multiple lock-file managers are ambiguous");
+	if let Some(search) = &args.search {
+		println!("filter: search={search}");
+	}
+	println!();
+	for package_manager in managers {
+		println!("{}: {}", package_manager.name(), package_manager.install_command());
+		println!("  pattern: {}", package_manager.install_pattern());
+		println!("  lock files: {}", list_or_none(package_manager.lock_files()));
+		println!("  config files: {}", list_or_none(package_manager.config_files()));
+		println!("  watched files: {}", package_manager.watched_files().join(", "));
+	}
+	Ok(())
+}
+
+fn render_managers_markdown(managers: &[PackageManager]) {
+	println!("| Manager | Install command | Detection pattern | Lock files | Config files | Watched files |");
+	println!("| --- | --- | --- | --- | --- | --- |");
+	for package_manager in managers {
+		let install_command = package_manager.install_command();
+		let install_pattern = package_manager.install_pattern();
+		println!(
+			"| `{}` | `{}` | `{}` | {} | {} | {} |",
+			markdown_table_escape(package_manager.name()),
+			markdown_table_escape(&install_command),
+			markdown_table_escape(&install_pattern),
+			markdown_inline_list(package_manager.lock_files()),
+			markdown_inline_list(package_manager.config_files()),
+			markdown_inline_list(package_manager.watched_files())
+		);
+	}
+}
+
+fn markdown_inline_list(values: &[&str]) -> String {
+	if values.is_empty() {
+		return "none".to_owned();
+	}
+
+	values
+		.iter()
+		.map(|value| format!("`{}`", markdown_table_escape(value)))
+		.collect::<Vec<_>>()
+		.join("<br>")
+}
+
+fn markdown_pattern_cell<'a>(values: impl Iterator<Item = &'a str>) -> String {
+	let values = values.map(markdown_code_cell).collect::<Vec<_>>();
+	if values.is_empty() {
+		String::new()
+	} else {
+		values.join("<br>")
+	}
+}
+
+fn markdown_code_cell(value: &str) -> String {
+	if value.is_empty() {
+		String::new()
+	} else {
+		format!("`{}`", markdown_table_escape(value))
+	}
+}
+
+fn filtered_package_managers(search: Option<&str>) -> Vec<PackageManager> {
+	let search = search.map(str::to_ascii_lowercase);
+	package_managers()
+		.iter()
+		.copied()
+		.filter(|package_manager| {
+			search
+				.as_deref()
+				.is_none_or(|search| package_manager_matches_search(*package_manager, search))
+		})
+		.collect()
+}
+
+fn package_manager_matches_search(package_manager: PackageManager, search: &str) -> bool {
+	package_manager.name().contains(search)
+		|| package_manager.install_command().contains(search)
+		|| package_manager.install_pattern().contains(search)
+		|| package_manager
+			.lock_files()
+			.iter()
+			.any(|value| value.to_ascii_lowercase().contains(search))
+		|| package_manager
+			.config_files()
+			.iter()
+			.any(|value| value.to_ascii_lowercase().contains(search))
+		|| package_manager
+			.watched_files()
+			.iter()
+			.any(|value| value.to_ascii_lowercase().contains(search))
+}
+
+fn manager_info_json(package_manager: PackageManager) -> serde_json::Value {
+	json!({
+		"name": package_manager.name(),
+		"installCommand": package_manager.install_command(),
+		"installPattern": package_manager.install_pattern(),
+		"lockFiles": package_manager.lock_files(),
+		"configFiles": package_manager.config_files(),
+		"watchedFiles": package_manager.watched_files(),
+	})
+}
+
+fn lock_files_for_managers(package_managers: &[PackageManager]) -> Vec<&'static str> {
+	dedup_package_manager_files(package_managers, PackageManager::lock_files)
+}
+
+fn config_files_for_managers(package_managers: &[PackageManager]) -> Vec<&'static str> {
+	dedup_package_manager_files(package_managers, PackageManager::config_files)
+}
+
+fn watched_files_for_managers(package_managers: &[PackageManager]) -> Vec<&'static str> {
+	dedup_package_manager_files(package_managers, PackageManager::watched_files)
+}
+
+fn dedup_package_manager_files(
+	package_managers: &[PackageManager],
+	files_for_manager: impl Fn(PackageManager) -> &'static [&'static str],
+) -> Vec<&'static str> {
+	let mut watched_files = Vec::new();
+	for package_manager in package_managers {
+		for watched_file in files_for_manager(*package_manager) {
+			if !watched_files.contains(watched_file) {
+				watched_files.push(*watched_file);
+			}
+		}
+	}
+	watched_files
+}
+
+fn list_or_none(values: &[&str]) -> String {
+	if values.is_empty() {
+		return "none".to_owned();
+	}
+
+	values.join(", ")
+}
+
+fn categories_command(args: &CategoriesArgs) -> Result<()> {
+	let categories = filtered_category_infos(args.search.as_deref());
+	if args.json {
+		let categories = categories
+			.iter()
+			.map(|category| category_info_json(*category))
+			.collect::<Vec<_>>();
+		let command_count = categories
+			.iter()
+			.filter_map(|category| category["commands"].as_u64())
+			.sum::<u64>();
+		let example_count = categories
+			.iter()
+			.filter_map(|category| category["examples"].as_u64())
+			.sum::<u64>();
+		println!(
+			"{}",
+			serde_json::to_string_pretty(&json!({
+				"status": "ok",
+				"code": serde_json::Value::Null,
+				"filters": {
+					"search": args.search.as_deref(),
+				},
+				"searchFields": ["name", "description"],
+				"categories": categories,
+				"summary": {
+					"categories": categories.len(),
+					"commands": command_count,
+					"examples": example_count,
+				},
+			}))?
+		);
+		return Ok(());
+	}
+
+	if args.markdown {
+		render_categories_markdown(&categories);
+		return Ok(());
+	}
+
+	if args.count_only {
+		println!("{}", categories.len());
+		return Ok(());
+	}
+
+	if args.names_only {
+		for category in categories {
+			println!("{}", category.name);
+		}
+		return Ok(());
+	}
+
+	if args.commands_only {
+		for command in collect_category_commands(&categories) {
+			println!("{command}");
+		}
+		return Ok(());
+	}
+
+	if args.example_commands_only {
+		for command in collect_category_example_commands(&categories) {
+			println!("{command}");
+		}
+		return Ok(());
+	}
+
+	if args.descriptions_only {
+		for category in categories {
+			println!("{}", category.description);
+		}
+		return Ok(());
+	}
+
+	println!("Command categories");
+	if let Some(search) = &args.search {
+		println!("filter: search={search}");
+	}
+	println!();
+	for category in categories {
+		let command_count = command_count_for_category(category.name);
+		let example_count = example_count_for_category(category.name);
+		println!(
+			"{}: {} command(s), {} example(s)",
+			category.name, command_count, example_count
+		);
+		println!("  {}", category.description);
+	}
+	Ok(())
+}
+
+fn render_categories_markdown(categories: &[CategoryInfo]) {
+	println!("| Category | Commands | Examples | Description |");
+	println!("| --- | --- | --- | --- |");
+	for category in categories {
+		println!(
+			"| `{}` | {} | {} | {} |",
+			markdown_table_escape(category.name),
+			command_count_for_category(category.name),
+			example_count_for_category(category.name),
+			markdown_table_escape(category.description)
+		);
+	}
+}
+
+fn filtered_category_infos(search: Option<&str>) -> Vec<CategoryInfo> {
+	let search = search.map(str::to_ascii_lowercase);
+	CATEGORY_INFOS
+		.iter()
+		.copied()
+		.filter(|category| {
+			search
+				.as_deref()
+				.is_none_or(|search| category_info_matches_search(*category, search))
+		})
+		.collect()
+}
+
+fn category_info_matches_search(category: CategoryInfo, search: &str) -> bool {
+	category.name.contains(search) || category.description.to_ascii_lowercase().contains(search)
+}
+
+fn category_info_json(category: CategoryInfo) -> serde_json::Value {
+	json!({
+		"name": category.name,
+		"description": category.description,
+		"commands": command_count_for_category(category.name),
+		"examples": example_count_for_category(category.name),
+	})
+}
+
+fn collect_category_commands(categories: &[CategoryInfo]) -> Vec<&'static str> {
+	let mut commands = Vec::new();
+	for category in categories {
+		for command in COMMAND_INFOS.iter().filter(|info| info.category == category.name) {
+			if !commands.contains(&command.name) {
+				commands.push(command.name);
+			}
+		}
+	}
+	commands
+}
+
+fn collect_category_example_commands(categories: &[CategoryInfo]) -> Vec<&'static str> {
+	let mut commands = Vec::new();
+	for category in categories {
+		for example in EXAMPLE_INFOS.iter().filter(|example| example.category == category.name) {
+			if !commands.contains(&example.command) {
+				commands.push(example.command);
+			}
+		}
+	}
+	commands
+}
+
+fn command_count_for_category(category: &str) -> usize {
+	COMMAND_INFOS.iter().filter(|info| info.category == category).count()
+}
+
+fn example_count_for_category(category: &str) -> usize {
+	EXAMPLE_INFOS
+		.iter()
+		.filter(|example| example.category == category)
+		.count()
+}
+
+fn examples_command(args: &ExamplesArgs) -> Result<()> {
+	let examples = filtered_example_infos(args.command, args.category, args.search.as_deref());
+	let categories = collect_example_categories(&examples);
+	let category_count = categories.len();
+	if args.json {
+		println!(
+			"{}",
+			serde_json::to_string_pretty(&json!({
+				"status": "ok",
+				"code": serde_json::Value::Null,
+				"filters": {
+					"command": args.command.map(ExampleCommand::label),
+					"category": args.category.map(CommandCategory::label),
+					"search": args.search.as_deref(),
+				},
+				"searchFields": ["title", "category", "commandName", "command", "summary"],
+				"categories": categories,
+				"examples": examples,
+				"summary": {
+					"categories": category_count,
+					"examples": examples.len(),
+				},
+			}))?
+		);
+		return Ok(());
+	}
+
+	if args.markdown {
+		render_examples_markdown(&examples);
+		return Ok(());
+	}
+
+	if args.output.count_only {
+		println!("{}", examples.len());
+		return Ok(());
+	}
+
+	if args.output.commands_only {
+		for example in examples {
+			println!("{}", example.command);
+		}
+		return Ok(());
+	}
+
+	if args.output.command_names_only {
+		for command_name in collect_example_command_names(&examples) {
+			println!("{command_name}");
+		}
+		return Ok(());
+	}
+
+	if args.output.titles_only {
+		for example in examples {
+			println!("{}", example.title);
+		}
+		return Ok(());
+	}
+
+	if args.output.summaries_only {
+		for example in examples {
+			println!("{}", example.summary);
+		}
+		return Ok(());
+	}
+
+	if args.output.categories_only {
+		for category in categories {
+			println!("{category}");
+		}
+		return Ok(());
+	}
+
+	println!("Pullhook examples");
+	if let Some(command) = args.command {
+		println!("filter: command={}", command.label());
+	}
+	if let Some(category) = args.category {
+		println!("filter: category={}", category.label());
+	}
+	if let Some(search) = &args.search {
+		println!("filter: search={search}");
+	}
+	println!();
+	for example in examples {
+		println!("{} [{}]: {}", example.title, example.category, example.command);
+		println!("  {}", example.summary);
+	}
+	Ok(())
+}
+
+fn collect_example_command_names(examples: &[ExampleInfo]) -> Vec<&'static str> {
+	ExampleCommand::value_variants()
+		.iter()
+		.filter_map(|command| {
+			examples
+				.iter()
+				.any(|example| example.command_name == command.label())
+				.then_some(command.label())
+		})
+		.collect()
+}
+
+fn render_examples_markdown(examples: &[ExampleInfo]) {
+	println!("| Title | Category | Command | Summary |");
+	println!("| --- | --- | --- | --- |");
+	for example in examples {
+		println!(
+			"| {} | `{}` | `{}` | {} |",
+			markdown_table_escape(example.title),
+			markdown_table_escape(example.category),
+			markdown_table_escape(example.command),
+			markdown_table_escape(example.summary)
+		);
+	}
+}
+
+fn collect_example_categories(examples: &[ExampleInfo]) -> Vec<&'static str> {
+	CATEGORY_INFOS
+		.iter()
+		.filter_map(|category| {
+			examples
+				.iter()
+				.any(|example| example.category == category.name)
+				.then_some(category.name)
+		})
+		.collect()
+}
+
+fn filtered_example_infos(
+	command: Option<ExampleCommand>,
+	category: Option<CommandCategory>,
+	search: Option<&str>,
+) -> Vec<ExampleInfo> {
+	let search = search.map(str::to_ascii_lowercase);
+	EXAMPLE_INFOS
+		.iter()
+		.copied()
+		.filter(|example| command.is_none_or(|command| example.command_name == command.label()))
+		.filter(|example| category.is_none_or(|category| example.category == category.label()))
+		.filter(|example| {
+			search
+				.as_deref()
+				.is_none_or(|search| example_info_matches_search(example, search))
+		})
+		.collect()
+}
+
+fn example_info_matches_search(example: &ExampleInfo, search: &str) -> bool {
+	example.title.to_ascii_lowercase().contains(search)
+		|| example.category.contains(search)
+		|| example.command_name.contains(search)
+		|| example.command.to_ascii_lowercase().contains(search)
+		|| example.summary.to_ascii_lowercase().contains(search)
+}
+
+fn command_catalog_command(args: &CommandCatalogArgs) -> Result<()> {
+	let commands = filtered_command_infos(args.category, args.search.as_deref(), repo_requirement_filter(args));
+	let top_level_examples =
+		filtered_top_level_example_infos(args.category, args.search.as_deref(), repo_requirement_filter(args));
+	let categories = collect_command_catalog_categories(&commands, &top_level_examples);
+	let category_count = categories.len();
+	if args.json {
+		let command_values = commands.iter().map(|info| command_info_json(*info)).collect::<Vec<_>>();
+		let example_commands = collect_command_example_commands(&commands);
+		let top_level_example_count = top_level_examples.len();
+		println!(
+			"{}",
+			serde_json::to_string_pretty(&json!({
+				"status": "ok",
+				"code": serde_json::Value::Null,
+				"filters": {
+					"category": args.category.map(CommandCategory::label),
+					"search": args.search.as_deref(),
+					"requiresRepo": repo_requirement_filter(args),
+				},
+				"searchFields": ["name", "category", "summary", "exampleCommands"],
+				"categories": categories,
+				"commands": command_values,
+				"topLevelExamples": top_level_examples,
+				"summary": {
+					"categories": category_count,
+					"commands": commands.len(),
+					"commandExamples": example_commands.len(),
+					"examples": example_commands.len() + top_level_example_count,
+					"json": commands.iter().filter(|info| info.json).count(),
+					"scriptFriendly": commands.iter().filter(|info| info.script_friendly).count(),
+					"topLevelExamples": top_level_example_count,
+				},
+			}))?
+		);
+		return Ok(());
+	}
+
+	if args.markdown {
+		render_command_catalog_markdown(&commands, &top_level_examples);
+		return Ok(());
+	}
+
+	if args.output.count_only {
+		println!("{}", commands.len());
+		return Ok(());
+	}
+
+	if args.output.names_only {
+		for info in commands {
+			println!("{}", info.name);
+		}
+		return Ok(());
+	}
+
+	if args.output.summaries_only {
+		for info in commands {
+			println!("{}", info.summary);
+		}
+		return Ok(());
+	}
+
+	if args.output.categories_only {
+		for category in categories {
+			println!("{category}");
+		}
+		return Ok(());
+	}
+
+	if args.output.example_commands_only {
+		for example in top_level_examples {
+			println!("{}", example.command);
+		}
+		for command in collect_command_example_commands(&commands) {
+			println!("{command}");
+		}
+		return Ok(());
+	}
+
+	println!("Pullhook commands");
+	println!("legacy one-off mode is available through top-level options");
+	for example in &top_level_examples {
+		println!("  example: {}", example.command);
+	}
+	if let Some(category) = args.category {
+		println!("filter: category={}", category.label());
+	}
+	if let Some(search) = &args.search {
+		println!("filter: search={search}");
+	}
+	if let Some(requires_repo) = repo_requirement_filter(args) {
+		println!("filter: requiresRepo={requires_repo}");
+	}
+	println!();
+	for info in commands {
+		println!("{} [{}] {}", info.name, info.category, info.summary);
+		for example in example_commands_for_command(info) {
+			println!("  example: {example}");
+		}
+	}
+	Ok(())
+}
+
+fn command_info_json(info: CommandInfo) -> serde_json::Value {
+	json!({
+		"name": info.name,
+		"category": info.category,
+		"summary": info.summary,
+		"json": info.json,
+		"requiresRepo": info.requires_repo,
+		"scriptFriendly": info.script_friendly,
+		"exampleCommands": example_commands_for_command(info),
+	})
+}
+
+fn render_command_catalog_markdown(commands: &[CommandInfo], top_level_examples: &[ExampleInfo]) {
+	println!("| Command | Category | Repo required | Summary | Examples |");
+	println!("| --- | --- | --- | --- | --- |");
+	for info in commands {
+		let examples = example_commands_for_command(*info);
+		println!(
+			"| `{}` | `{}` | {} | {} | {} |",
+			markdown_table_escape(info.name),
+			markdown_table_escape(info.category),
+			if info.requires_repo { "yes" } else { "no" },
+			markdown_table_escape(info.summary),
+			markdown_example_commands(&examples)
+		);
+	}
+	if top_level_examples.is_empty() {
+		return;
+	}
+
+	println!();
+	println!("Top-level examples:");
+	for example in top_level_examples {
+		println!(
+			"- `{}`: {}",
+			markdown_table_escape(example.command),
+			markdown_table_escape(example.summary)
+		);
+	}
+}
+
+fn markdown_example_commands(commands: &[&str]) -> String {
+	if commands.is_empty() {
+		return "none".to_owned();
+	}
+
+	commands
+		.iter()
+		.map(|command| format!("`{}`", markdown_table_escape(command)))
+		.collect::<Vec<_>>()
+		.join("<br>")
+}
+
+fn markdown_table_escape(value: &str) -> String {
+	value.replace('|', r"\|")
+}
+
+fn collect_command_catalog_categories(
+	commands: &[CommandInfo],
+	top_level_examples: &[ExampleInfo],
+) -> Vec<&'static str> {
+	CATEGORY_INFOS
+		.iter()
+		.filter_map(|category| {
+			(commands.iter().any(|command| command.category == category.name)
+				|| top_level_examples
+					.iter()
+					.any(|example| example.category == category.name))
+			.then_some(category.name)
+		})
+		.collect()
+}
+
+fn collect_command_example_commands(commands: &[CommandInfo]) -> Vec<&'static str> {
+	let mut example_commands = Vec::new();
+	for command in commands {
+		for example_command in example_commands_for_command(*command) {
+			if !example_commands.contains(&example_command) {
+				example_commands.push(example_command);
+			}
+		}
+	}
+	example_commands
+}
+
+fn example_commands_for_command(command: CommandInfo) -> Vec<&'static str> {
+	EXAMPLE_INFOS
+		.iter()
+		.filter(|example| example.command_name == command.name)
+		.map(|example| example.command)
+		.collect()
+}
+
+fn filtered_top_level_example_infos(
+	category: Option<CommandCategory>,
+	search: Option<&str>,
+	requires_repo: Option<bool>,
+) -> Vec<ExampleInfo> {
+	let search = search.map(str::to_ascii_lowercase);
+	EXAMPLE_INFOS
+		.iter()
+		.copied()
+		.filter(|example| example.command_name == "legacy")
+		.filter(|example| category.is_none_or(|category| example.category == category.label()))
+		.filter(|_| requires_repo != Some(false))
+		.filter(|example| {
+			search
+				.as_deref()
+				.is_none_or(|search| example_info_matches_search(example, search))
+		})
+		.collect()
+}
+
+fn filtered_command_infos(
+	category: Option<CommandCategory>,
+	search: Option<&str>,
+	requires_repo: Option<bool>,
+) -> Vec<CommandInfo> {
+	let search = search.map(str::to_ascii_lowercase);
+	COMMAND_INFOS
+		.iter()
+		.copied()
+		.filter(|info| category.is_none_or(|category| info.category == category.label()))
+		.filter(|info| {
+			search
+				.as_deref()
+				.is_none_or(|search| command_info_matches_search(info, search))
+		})
+		.filter(|info| requires_repo.is_none_or(|requires_repo| info.requires_repo == requires_repo))
+		.collect()
+}
+
+fn command_info_matches_search(info: &CommandInfo, search: &str) -> bool {
+	info.name.contains(search)
+		|| info.category.contains(search)
+		|| info.summary.to_ascii_lowercase().contains(search)
+		|| example_commands_for_command(*info)
+			.iter()
+			.any(|command| command.to_ascii_lowercase().contains(search))
+}
+
+const fn repo_requirement_filter(args: &CommandCatalogArgs) -> Option<bool> {
+	match (args.filters.repo_only, args.filters.standalone_only) {
+		(true, false) => Some(true),
+		(false, true) => Some(false),
+		_ => None,
+	}
+}
+
+fn codes_command(args: &CodesArgs) -> Result<()> {
+	let codes = filtered_json_code_infos(args.kind, args.surface.as_deref(), args.search.as_deref());
+	if args.json {
+		println!(
+			"{}",
+			serde_json::to_string_pretty(&json!({
+				"status": "ok",
+				"code": serde_json::Value::Null,
+				"successCode": serde_json::Value::Null,
+				"filters": {
+					"kind": args.kind.map(CodeKind::label),
+					"surface": args.surface.as_deref(),
+					"search": args.search.as_deref(),
+				},
+				"searchFields": ["code", "surface", "kind", "description"],
+				"codes": codes,
+				"summary": {
+					"codes": codes.len(),
+					"kinds": unique_code_kinds(&codes).len(),
+					"surfaces": unique_code_surfaces(&codes).len(),
+				},
+			}))?
+		);
+		return Ok(());
+	}
+
+	if args.markdown {
+		render_codes_markdown(&codes);
+		return Ok(());
+	}
+
+	if args.output.values.count_only {
+		println!("{}", codes.len());
+		return Ok(());
+	}
+
+	if args.output.values.codes_only {
+		for info in codes {
+			println!("{}", info.code);
+		}
+		return Ok(());
+	}
+
+	if args.output.facets.kinds_only {
+		for kind in unique_code_kinds(&codes) {
+			println!("{kind}");
+		}
+		return Ok(());
+	}
+
+	if args.output.facets.surfaces_only {
+		for surface in unique_code_surfaces(&codes) {
+			println!("{surface}");
+		}
+		return Ok(());
+	}
+
+	if args.output.values.descriptions_only {
+		for info in codes {
+			println!("{}", info.description);
+		}
+		return Ok(());
+	}
+
+	println!("JSON status codes");
+	println!("ok responses use code: null");
+	if let Some(kind) = args.kind {
+		println!("filter: kind={}", kind.label());
+	}
+	if let Some(surface) = &args.surface {
+		println!("filter: surface={surface}");
+	}
+	if let Some(search) = &args.search {
+		println!("filter: search={search}");
+	}
+	println!();
+	for info in codes {
+		println!("{} [{}] {}", info.code, info.surface, info.description);
+	}
+	Ok(())
+}
+
+fn render_codes_markdown(codes: &[JsonCodeInfo]) {
+	println!("| Code | Kind | Surface | Description |");
+	println!("| --- | --- | --- | --- |");
+	for info in codes {
+		println!(
+			"| `{}` | `{}` | `{}` | {} |",
+			markdown_table_escape(info.code),
+			markdown_table_escape(info.kind),
+			markdown_table_escape(info.surface),
+			markdown_table_escape(info.description)
+		);
+	}
+}
+
+fn filtered_json_code_infos(kind: Option<CodeKind>, surface: Option<&str>, search: Option<&str>) -> Vec<JsonCodeInfo> {
+	let surface = surface.map(str::to_ascii_lowercase);
+	let search = search.map(str::to_ascii_lowercase);
+	JSON_CODE_INFOS
+		.iter()
+		.copied()
+		.filter(|info| kind.is_none_or(|kind| info.kind == kind.label()))
+		.filter(|info| {
+			surface
+				.as_deref()
+				.is_none_or(|surface| info.surface.to_ascii_lowercase().contains(surface))
+		})
+		.filter(|info| {
+			search
+				.as_deref()
+				.is_none_or(|search| json_code_info_matches_search(info, search))
+		})
+		.collect()
+}
+
+fn json_code_info_matches_search(info: &JsonCodeInfo, search: &str) -> bool {
+	info.code.contains(search)
+		|| info.surface.to_ascii_lowercase().contains(search)
+		|| info.kind.contains(search)
+		|| info.description.to_ascii_lowercase().contains(search)
+}
+
+fn unique_code_kinds(codes: &[JsonCodeInfo]) -> Vec<&'static str> {
+	codes
+		.iter()
+		.map(|info| info.kind)
+		.collect::<BTreeSet<_>>()
+		.into_iter()
+		.collect()
+}
+
+fn unique_code_surfaces(codes: &[JsonCodeInfo]) -> Vec<&'static str> {
+	codes
+		.iter()
+		.map(|info| info.surface)
+		.collect::<BTreeSet<_>>()
+		.into_iter()
+		.collect()
+}
+
+fn completion_command(args: &CompletionArgs) -> Result<()> {
+	match &args.output {
+		Some(path) => {
+			let completion = Cli::completion_string(args.shell);
+			if args.check {
+				return check_completion_output(path, args.shell, &completion, args.json, args.quiet);
+			}
+
+			if let Some(parent) = path.parent()
+				&& !parent.as_os_str().is_empty()
+			{
+				std::fs::create_dir_all(parent)
+					.with_context(|| format!("failed to create completion output directory `{}`", parent.display()))?;
+			}
+			let mut file = std::fs::File::create(path)
+				.with_context(|| format!("failed to create completion output file `{}`", path.display()))?;
+			file.write_all(completion.as_bytes())
+				.with_context(|| format!("failed to write completion output file `{}`", path.display()))?;
+			file.flush()
+				.with_context(|| format!("failed to flush completion output file `{}`", path.display()))?;
+		}
+		None => Cli::write_completion(args.shell, &mut std::io::stdout()),
+	}
+
+	Ok(())
+}
+
+fn check_completion_output(
+	path: &std::path::Path,
+	shell: clap_complete::Shell,
+	expected_completion: &str,
+	json_output: bool,
+	quiet: bool,
+) -> Result<()> {
+	let shell_label = completion_shell_label(shell);
+	let existing_completion = match std::fs::read_to_string(path) {
+		Ok(completion) => completion,
+		Err(error) => {
+			if json_output {
+				println!(
+					"{}",
+					serde_json::to_string_pretty(&generated_file_check_json(
+						path,
+						Some(&shell_label),
+						false,
+						false,
+						Some(&format!("failed to read completion file: {error}")),
+						&completion_check_details(path, &shell_label),
+					))?
+				);
+			}
+			return Err(anyhow!("failed to read completion file `{}`: {error}", path.display()));
+		}
+	};
+	let matches = existing_completion == expected_completion;
+	if json_output {
+		let error = if matches {
+			None
+		} else {
+			Some("completion output is out of date")
+		};
+		let details = error.map_or_else(Vec::new, |_| completion_check_details(path, &shell_label));
+		println!(
+			"{}",
+			serde_json::to_string_pretty(&generated_file_check_json(
+				path,
+				Some(&shell_label),
+				true,
+				matches,
+				error,
+				&details,
+			))?
+		);
+	}
+	if matches {
+		if !json_output && !quiet {
+			println!("completion up to date: {}", path.display());
+		}
+		return Ok(());
+	}
+
+	Err(anyhow!(
+		"completion out of date: {} (rerun `pullhook completion {} --output {}`)",
+		path.display(),
+		shell_label,
+		path.display()
+	))
+}
+
+fn run_legacy(cli: &RunArgs) -> Result<()> {
+	if cli.pattern.is_none() && !cli.install {
+		let error = anyhow!("missing required argument: use `--pattern <glob>`, `--install`, or the `run` subcommand");
+		if cli.json {
+			print_json_error(&error)?;
+		}
+		return Err(error);
+	}
+	ensure_json_without_debug(cli.json, cli.debug)?;
+
+	let renderer = Renderer::new(effective_render_mode(cli.render, cli.no_color));
+	let (_, repo) = discover_repo_from_cwd_for_output(cli.debug, cli.json)?;
 	let repo_root = repo.root().to_path_buf();
-	let run_config = resolve_run_config(cli, &repo_root)?;
+	let run_config = result_for_output(resolve_run_config(cli, &repo_root), cli.json)?;
+	let (changed_count, matched_files) = result_for_output(collect_matches(cli, &repo, &run_config), cli.json)?;
+	let invocations = result_for_output(
+		runner::prepare_invocations(run_config.command.as_deref(), run_config.script.as_deref())
+			.context("failed to prepare command invocations"),
+		cli.json,
+	)?;
+	let tasks = runner::build_task_dirs(&repo_root, &matched_files, run_config.once, cli.unique_cwd);
 
-	renderer.render_prepare_stage(run_config.pattern());
+	if cli.json {
+		return run_legacy_json(
+			cli,
+			LegacyJsonContext {
+				changed_count,
+				run_config,
+				matched_files,
+				invocations,
+				tasks,
+			},
+			&repo_root,
+		);
+	}
 
-	let (changed_count, matched_files) = collect_matches(cli, &repo, &run_config)?;
-
+	renderer.render_prepare_stage(&run_config.pattern);
 	renderer.render_discovery_stage(changed_count, matched_files.len());
 
 	if matched_files.is_empty() {
-		renderer.render_no_match_stage(run_config.pattern(), changed_count, matched_files.len());
+		renderer.render_no_match_stage(&run_config.pattern, changed_count, matched_files.len());
 		return Ok(());
 	}
 
 	if let Some(message) = &cli.message {
 		renderer.render_message_stage(message);
 	}
-
-	let invocations = runner::prepare_invocations(run_config.command.as_deref(), run_config.script.as_deref())
-		.context("failed to prepare command invocations")?;
 
 	if invocations.is_empty() {
 		renderer.render_summary_stage(Summary {
@@ -107,9 +2253,6 @@ fn run(cli: &RunArgs) -> Result<()> {
 		});
 		return Ok(());
 	}
-
-	let tasks = runner::build_task_dirs(&repo_root, &matched_files, run_config.once, cli.unique_cwd);
-
 	if cli.dry_run {
 		let planned_commands = print_dry_run(&renderer, &tasks, &invocations, &repo_root);
 		renderer.render_dry_run_summary_stage(DryRunSummary {
@@ -137,23 +2280,3328 @@ fn run(cli: &RunArgs) -> Result<()> {
 	Ok(())
 }
 
+fn run_legacy_json(cli: &RunArgs, context: LegacyJsonContext, repo_root: &std::path::Path) -> Result<()> {
+	if cli.dry_run {
+		let planned_commands = context.tasks.len() * context.invocations.len();
+		println!(
+			"{}",
+			serde_json::to_string_pretty(&legacy_dry_run_json(cli, &context, planned_commands, repo_root))?
+		);
+		return Ok(());
+	}
+
+	let LegacyJsonContext {
+		changed_count,
+		run_config,
+		matched_files,
+		invocations,
+		tasks,
+	} = context;
+
+	if matched_files.is_empty() || invocations.is_empty() {
+		println!(
+			"{}",
+			serde_json::to_string_pretty(&legacy_run_json(
+				cli,
+				&run_config,
+				changed_count,
+				&matched_files,
+				TaskCounters::default(),
+				&[],
+				None,
+			))?
+		);
+		return Ok(());
+	}
+
+	let results = runner::run_tasks(&tasks, &invocations, cli.effective_jobs(), cli.shell, cli.debug)
+		.context("failed to execute tasks")?;
+	let counts = summarize_results(&results);
+	let failure_count = counts.failed + counts.interrupted;
+	let executions = results
+		.iter()
+		.map(|result| task_result_json(result, repo_root))
+		.collect::<Vec<_>>();
+	let error = (failure_count > 0).then(|| format!("{failure_count} task(s) failed"));
+	println!(
+		"{}",
+		serde_json::to_string_pretty(&legacy_run_json(
+			cli,
+			&run_config,
+			changed_count,
+			&matched_files,
+			counts,
+			&executions,
+			error.as_deref(),
+		))?
+	);
+	if let Some(error) = error {
+		return Err(anyhow!(error));
+	}
+
+	Ok(())
+}
+
+fn run_config_command(args: &ConfigRunArgs) -> Result<()> {
+	ensure_json_without_debug(args.json, args.debug)?;
+
+	let renderer = Renderer::new(effective_render_mode(args.render, args.no_color));
+	let (repo, repo_root, config) = load_config_from_cwd_for_output(args.debug, args.config.as_deref(), args.json)?;
+	let explicit_changed_files = collect_explicit_changed_files_for_output(
+		&args.changed_files,
+		args.changed_files_file.as_deref(),
+		args.changed_files_stdin,
+		args.json,
+	)?;
+	let (changed_files, base_missing, changed_files_source) = resolve_config_changed_files_for_output(
+		&repo,
+		&config,
+		args.base.as_deref(),
+		&explicit_changed_files,
+		args.debug,
+		args.json,
+	)?;
+	let evaluation = filter_config_evaluation_for_output(
+		evaluate_config(&config, &changed_files, base_missing, &repo_root)?,
+		&args.rules,
+		args.json,
+	)?;
+
+	if args.json {
+		return run_config_command_json(
+			args,
+			&config,
+			&changed_files,
+			base_missing,
+			changed_files_source,
+			&evaluation,
+			&repo_root,
+		);
+	}
+
+	let matched_files = count_config_matched_files(&evaluation);
+
+	if render_config_run_planning_only_output(args, &changed_files, base_missing, changed_files_source, &evaluation) {
+		return ensure_required_config_match(args.require_match, &evaluation);
+	}
+
+	if !args.quiet {
+		render_config_evaluation(&config, &evaluation, args.all_matches || args.dry_run, args.dry_run);
+	}
+
+	if args.dry_run {
+		let planned_commands = count_planned_commands(&evaluation);
+		renderer.render_dry_run_summary_stage(DryRunSummary {
+			matched_files,
+			task_dirs: planned_commands,
+			planned_commands,
+		});
+		return ensure_required_config_match(args.require_match, &evaluation);
+	}
+
+	let counts = execute_config_entries(&renderer, config.on_failure, &evaluation, &repo_root, args)?;
+	let failure_count = counts.failed + counts.interrupted;
+	if !args.quiet || failure_count > 0 {
+		renderer.render_summary_stage(Summary {
+			matched_files,
+			task_dirs: counts.task_dirs,
+			passed: counts.passed,
+			failed: counts.failed,
+			interrupted: counts.interrupted,
+		});
+	}
+	if failure_count > 0 {
+		return Err(anyhow!("{failure_count} config rule(s) failed"));
+	}
+
+	ensure_required_config_match(args.require_match, &evaluation)
+}
+
+fn run_config_command_json(
+	args: &ConfigRunArgs,
+	config: &Config,
+	changed_files: &[std::path::PathBuf],
+	base_missing: bool,
+	changed_files_source: ChangedFilesSource,
+	evaluation: &[EvaluatedEntry],
+	repo_root: &std::path::Path,
+) -> Result<()> {
+	if args.dry_run {
+		let planned_commands = count_planned_commands(evaluation);
+		let error = required_config_match_error(args.require_match, evaluation);
+		let base = config_evaluation_json(
+			config,
+			changed_files,
+			base_missing,
+			changed_files_source,
+			evaluation,
+			error,
+		);
+		println!(
+			"{}",
+			serde_json::to_string_pretty(&config_dry_run_json(base, planned_commands))?
+		);
+		if let Some(error) = error {
+			return Err(anyhow!(error));
+		}
+		return Ok(());
+	}
+
+	let (counts, executions) = execute_config_entries_json(config.on_failure, evaluation, repo_root, args)?;
+	let failure_count = counts.failed + counts.interrupted;
+	let failure_error = (failure_count > 0).then(|| format!("{failure_count} config rule(s) failed"));
+	let require_match_error = required_config_match_error(args.require_match, evaluation);
+	let error = failure_error.as_deref().or(require_match_error);
+	let base = config_evaluation_json(
+		config,
+		changed_files,
+		base_missing,
+		changed_files_source,
+		evaluation,
+		error,
+	);
+	println!(
+		"{}",
+		serde_json::to_string_pretty(&config_run_json(base, counts, executions))?
+	);
+	if let Some(error) = failure_error {
+		return Err(anyhow!(error));
+	}
+	if let Some(error) = require_match_error {
+		return Err(anyhow!(error));
+	}
+	Ok(())
+}
+
+fn render_config_run_planning_only_output(
+	args: &ConfigRunArgs,
+	changed_files: &[std::path::PathBuf],
+	base_missing: bool,
+	changed_files_source: ChangedFilesSource,
+	evaluation: &[EvaluatedEntry],
+) -> bool {
+	if args.summary_only {
+		render_config_evaluation_summary(changed_files, base_missing, changed_files_source, evaluation);
+		return true;
+	}
+
+	if args.commands_only {
+		render_config_evaluation_commands(evaluation);
+		return true;
+	}
+
+	if args.changed_files_only {
+		render_path_list(changed_files);
+		return true;
+	}
+
+	if args.matched_files_only {
+		render_config_evaluation_matched_files(evaluation);
+		return true;
+	}
+
+	if args.matched_rules_only {
+		render_config_evaluation_matched_rules(evaluation);
+		return true;
+	}
+
+	false
+}
+
+fn ensure_required_config_match(require_match: bool, evaluation: &[EvaluatedEntry]) -> Result<()> {
+	if let Some(error) = required_config_match_error(require_match, evaluation) {
+		return Err(anyhow!(error));
+	}
+
+	Ok(())
+}
+
+fn required_config_match_error(require_match: bool, evaluation: &[EvaluatedEntry]) -> Option<&'static str> {
+	if require_match && count_planned_commands(evaluation) == 0 {
+		return Some("no config rules matched changed files");
+	}
+
+	None
+}
+
+fn explain_config_command(args: &ExplainArgs) -> Result<()> {
+	ensure_json_without_debug(args.json, args.debug)?;
+
+	let (repo, repo_root, config) = load_config_from_cwd_for_output(args.debug, args.config.as_deref(), args.json)?;
+	let explicit_changed_files = collect_explicit_changed_files_for_output(
+		&args.changed_files,
+		args.changed_files_file.as_deref(),
+		args.changed_files_stdin,
+		args.json,
+	)?;
+	let (changed_files, base_missing, changed_files_source) = resolve_config_changed_files_for_output(
+		&repo,
+		&config,
+		args.base.as_deref(),
+		&explicit_changed_files,
+		args.debug,
+		args.json,
+	)?;
+	let evaluation = filter_config_evaluation_for_output(
+		evaluate_config(&config, &changed_files, base_missing, &repo_root)?,
+		&args.rules,
+		args.json,
+	)?;
+
+	if args.json {
+		let error = required_config_match_error(args.require_match, &evaluation);
+		println!(
+			"{}",
+			serde_json::to_string_pretty(&config_evaluation_json(
+				&config,
+				&changed_files,
+				base_missing,
+				changed_files_source,
+				&evaluation,
+				error,
+			))?
+		);
+		if let Some(error) = error {
+			return Err(anyhow!(error));
+		}
+		return Ok(());
+	}
+
+	if args.summary_only {
+		render_config_evaluation_summary(&changed_files, base_missing, changed_files_source, &evaluation);
+		return ensure_required_config_match(args.require_match, &evaluation);
+	}
+
+	if args.commands_only {
+		render_config_evaluation_commands(&evaluation);
+		return ensure_required_config_match(args.require_match, &evaluation);
+	}
+
+	if args.changed_files_only {
+		render_path_list(&changed_files);
+		return ensure_required_config_match(args.require_match, &evaluation);
+	}
+
+	if args.matched_files_only {
+		render_config_evaluation_matched_files(&evaluation);
+		return ensure_required_config_match(args.require_match, &evaluation);
+	}
+
+	if args.matched_rules_only {
+		render_config_evaluation_matched_rules(&evaluation);
+		return ensure_required_config_match(args.require_match, &evaluation);
+	}
+
+	render_config_evaluation(&config, &evaluation, args.all_matches, false);
+	ensure_required_config_match(args.require_match, &evaluation)
+}
+
+fn validate_config_command(args: &ValidateArgs) -> Result<()> {
+	ensure_json_without_debug(args.json, args.debug)?;
+
+	let renderer = Renderer::new(effective_render_mode(args.render, args.no_color));
+
+	if args.json {
+		let (cwd, repo) = discover_repo_from_cwd_for_output(args.debug, args.json)?;
+		let repo_root = repo.root().to_path_buf();
+		let path = match resolve_config_path(&cwd, &repo_root, args.config.as_deref()) {
+			Ok(path) => path,
+			Err(error) => {
+				let config_error = find_pullhook_error(&error);
+				println!(
+					"{}",
+					serde_json::to_string_pretty(&config_validation_error_json(
+						None,
+						&error.to_string(),
+						&json_error_details(&error),
+						config_error,
+					))?
+				);
+				return Err(error);
+			}
+		};
+		let config = match config::load(&path) {
+			Ok(config) => config,
+			Err(error) => {
+				println!(
+					"{}",
+					serde_json::to_string_pretty(&config_validation_error_json(
+						Some(&path),
+						&error.to_string(),
+						&config_load_error_details(&error),
+						Some(&error),
+					))?
+				);
+				return Err(anyhow!("config invalid"));
+			}
+		};
+		println!("{}", serde_json::to_string_pretty(&config_summary_json(&config))?);
+		return Ok(());
+	}
+
+	let (_, _, config) = load_config_from_cwd(args.debug, args.config.as_deref())?;
+	if args.path_only {
+		println!("{}", config.path.display());
+		return Ok(());
+	}
+
+	if args.quiet {
+		return Ok(());
+	}
+
+	renderer.render_message_stage(&format!("config valid: {}", config.path.display()));
+	renderer.render_message_stage(&format!(
+		"entries: {} | rules: {} | parallel groups: {}",
+		config.entries.len(),
+		count_config_rules(&config),
+		count_config_groups(&config)
+	));
+	Ok(())
+}
+
+fn doctor_command(args: &DoctorArgs) -> Result<()> {
+	ensure_json_without_debug(args.json, args.debug)?;
+
+	let (_, repo) = discover_repo_from_cwd_for_output(args.debug, args.json)?;
+	let repo_root = repo.root().to_path_buf();
+	let checks = build_doctor_checks(&repo, &repo_root, args.config.as_deref());
+	let blocking_error = checks.iter().any(|check| check.level == DoctorLevel::Error);
+	let strict_warning = args.strict && checks.iter().any(|check| check.level == DoctorLevel::Warn);
+	let error = if blocking_error {
+		Some("doctor found blocking issues")
+	} else if strict_warning {
+		Some("doctor found warnings in strict mode")
+	} else {
+		None
+	};
+
+	if args.checks_only {
+		for check in &checks {
+			println!("{}", check.name);
+		}
+	} else if args.codes_only {
+		for check in &checks {
+			println!("{}", check.code);
+		}
+	} else if args.json {
+		println!(
+			"{}",
+			serde_json::to_string_pretty(&doctor_report_json(&repo_root, &checks, error, args.strict))?
+		);
+	} else if !args.quiet || checks.iter().any(|check| check.level != DoctorLevel::Ok) {
+		render_doctor_checks(&checks, &repo_root);
+	}
+
+	if let Some(error) = error {
+		return Err(anyhow!(error));
+	}
+	Ok(())
+}
+
+fn config_command(args: &ConfigArgs) -> Result<()> {
+	ensure_json_without_debug(args.json, args.debug)?;
+	if (args.path_only || args.format_only || args.source_only) && args.debug {
+		return Err(anyhow!("line-output config modes cannot be used with --debug"));
+	}
+
+	let (cwd, repo) = discover_repo_from_cwd_for_output(args.debug, args.json)?;
+	let repo_root = repo.root().to_path_buf();
+	let path = resolve_config_path_for_output(&cwd, &repo_root, args.config.as_deref(), args.json)?;
+	let format = config_format_from_path_for_output(&path, args.json)?;
+	let explicit = args.config.is_some();
+	let source = if explicit { "explicit" } else { "discovered" };
+	let exists = path.is_file();
+	if args.require_existing && !exists {
+		if args.json {
+			println!(
+				"{}",
+				serde_json::to_string_pretty(&json!({
+					"status": "error",
+					"code": "config_path_missing",
+					"path": path.display().to_string(),
+					"format": format.label(),
+					"exists": false,
+					"explicit": explicit,
+					"source": source,
+					"repoRoot": repo_root.display().to_string(),
+					"error": "resolved config file does not exist",
+					"details": [
+						format!("resolved path: {}", path.display()),
+						format!("create it with `pullhook init --output {}`", path.display()),
+					],
+				}))?
+			);
+		}
+		return Err(anyhow!("resolved config file does not exist: {}", path.display()));
+	}
+
+	if args.path_only {
+		println!("{}", path.display());
+		return Ok(());
+	}
+
+	if args.format_only {
+		println!("{}", format.label());
+		return Ok(());
+	}
+
+	if args.exists_only {
+		println!("{exists}");
+		return Ok(());
+	}
+
+	if args.source_only {
+		println!("{source}");
+		return Ok(());
+	}
+
+	if args.json {
+		println!(
+			"{}",
+			serde_json::to_string_pretty(&json!({
+				"status": "ok",
+				"code": null,
+				"path": path.display().to_string(),
+				"format": format.label(),
+				"exists": exists,
+				"explicit": explicit,
+				"source": source,
+				"repoRoot": repo_root.display().to_string(),
+				"error": null,
+			}))?
+		);
+		return Ok(());
+	}
+
+	let renderer = Renderer::new(effective_render_mode(args.render, args.no_color));
+	renderer.render_message_stage(&format!("config: {}", path.display()));
+	renderer.render_message_stage(&format!("format: {}", format.label()));
+	renderer.render_message_stage(if exists { "exists: yes" } else { "exists: no" });
+	renderer.render_message_stage(if explicit {
+		"source: explicit"
+	} else {
+		"source: discovered"
+	});
+	Ok(())
+}
+
+fn rules_command(args: &RulesArgs) -> Result<()> {
+	ensure_json_without_debug(args.json, args.debug)?;
+
+	let renderer = Renderer::new(effective_render_mode(args.render, args.no_color));
+	let (_, _, config) = load_config_from_cwd_for_output(args.debug, args.config.as_deref(), args.json)?;
+	let config = filter_config_rules_for_output(config, &args.rules, args.json)?;
+	let config = filter_config_rules_by_search(config, args.search.as_deref());
+
+	if args.json {
+		println!(
+			"{}",
+			serde_json::to_string_pretty(&config_rules_json(
+				&config,
+				args.kind,
+				&args.rules,
+				args.search.as_deref()
+			))?
+		);
+		return Ok(());
+	}
+
+	if args.markdown {
+		render_config_rules_markdown(&config, args.kind);
+		return Ok(());
+	}
+
+	if args.count_only {
+		println!(
+			"{}",
+			collect_rules_output_selectors(&config, args.kind, &args.rules, args.search.as_deref()).len()
+		);
+		return Ok(());
+	}
+
+	if args.names_only {
+		for selector in collect_rules_output_selectors(&config, args.kind, &args.rules, args.search.as_deref()) {
+			println!("{selector}");
+		}
+		return Ok(());
+	}
+
+	if args.commands_only {
+		for command in collect_config_rule_commands_for_kind(&config, args.kind) {
+			println!("{command}");
+		}
+		return Ok(());
+	}
+
+	if args.patterns_only {
+		for pattern in collect_config_rule_patterns_for_kind(&config, args.kind) {
+			println!("{pattern}");
+		}
+		return Ok(());
+	}
+
+	if args.exclude_patterns_only {
+		for pattern in collect_config_rule_exclude_patterns_for_kind(&config, args.kind) {
+			println!("{pattern}");
+		}
+		return Ok(());
+	}
+
+	if args.fail_text_only {
+		for fail_text in collect_config_fail_text_for_kind(&config, args.kind) {
+			println!("{fail_text}");
+		}
+		return Ok(());
+	}
+
+	renderer.render_message_stage(&format!("config: {}", config.path.display()));
+	renderer.render_message_stage(&format!(
+		"entries: {} | rules: {} | parallel groups: {}",
+		config.entries.len(),
+		count_config_rules_for_kind(&config, args.kind),
+		count_config_groups_for_kind(&config, args.kind)
+	));
+	println!();
+	println!("Rules");
+	for entry in &config.entries {
+		match entry {
+			Entry::Rule(rule) => {
+				if rules_kind_matches_rule(args.kind, rule) {
+					render_config_rule_inventory(rule);
+				}
+			}
+			Entry::Group(group) => render_config_group_inventory(group, args.kind),
+		}
+	}
+
+	Ok(())
+}
+
+fn filter_config_rules_for_output(config: Config, selectors: &[String], json_output: bool) -> Result<Config> {
+	match filter_config_rules(config, selectors) {
+		Ok(config) => Ok(config),
+		Err(error) => {
+			if json_output {
+				print_json_error(&error)?;
+			}
+			Err(error)
+		}
+	}
+}
+
+fn filter_config_rules(mut config: Config, selectors: &[String]) -> Result<Config> {
+	if selectors.is_empty() {
+		return Ok(config);
+	}
+
+	let available = collect_config_selectors(&config);
+	let available_set = available.iter().map(String::as_str).collect::<BTreeSet<_>>();
+	let requested = selectors.iter().map(String::as_str).collect::<BTreeSet<_>>();
+	let unknown = selectors
+		.iter()
+		.filter(|selector| !available_set.contains(selector.as_str()))
+		.cloned()
+		.collect::<Vec<_>>();
+	if !unknown.is_empty() {
+		return Err(UnknownSelectorError::new(unknown, available, false).into());
+	}
+
+	config.entries = filter_config_entries_by_selectors(&config.entries, &requested);
+	Ok(config)
+}
+
+fn filter_config_entries_by_selectors(entries: &[Entry], requested: &BTreeSet<&str>) -> Vec<Entry> {
+	entries
+		.iter()
+		.filter_map(|entry| match entry {
+			Entry::Rule(rule) if requested.contains(rule.name.as_str()) => Some(Entry::Rule(rule.clone())),
+			Entry::Rule(_) => None,
+			Entry::Group(group) if requested.contains(group.name.as_str()) => Some(Entry::Group(group.clone())),
+			Entry::Group(group) => {
+				let rules = group
+					.rules
+					.iter()
+					.filter(|rule| requested.contains(rule.name.as_str()))
+					.cloned()
+					.collect::<Vec<_>>();
+				(!rules.is_empty()).then(|| {
+					Entry::Group(config::Group {
+						name: group.name.clone(),
+						jobs: group.jobs,
+						rules,
+						fail_text: group.fail_text.clone(),
+					})
+				})
+			}
+		})
+		.collect()
+}
+
+fn filter_config_rules_by_search(mut config: Config, search: Option<&str>) -> Config {
+	let Some(search) = search.map(str::to_ascii_lowercase) else {
+		return config;
+	};
+
+	config.entries = filter_config_entries_by_search(&config.entries, &search);
+	config
+}
+
+fn filter_config_entries_by_search(entries: &[Entry], search: &str) -> Vec<Entry> {
+	entries
+		.iter()
+		.filter_map(|entry| match entry {
+			Entry::Rule(rule) if config_rule_matches_search(rule, search) => Some(Entry::Rule(rule.clone())),
+			Entry::Rule(_) => None,
+			Entry::Group(group) if config_group_matches_search(group, search) => Some(Entry::Group(group.clone())),
+			Entry::Group(group) => {
+				let rules = group
+					.rules
+					.iter()
+					.filter(|rule| config_rule_matches_search(rule, search))
+					.cloned()
+					.collect::<Vec<_>>();
+				(!rules.is_empty()).then(|| {
+					Entry::Group(config::Group {
+						name: group.name.clone(),
+						jobs: group.jobs,
+						rules,
+						fail_text: group.fail_text.clone(),
+					})
+				})
+			}
+		})
+		.collect()
+}
+
+fn config_group_matches_search(group: &config::Group, search: &str) -> bool {
+	text_matches_search(&group.name, search)
+		|| group
+			.fail_text
+			.as_ref()
+			.is_some_and(|fail_text| text_matches_search(fail_text.as_str(), search))
+}
+
+fn config_rule_matches_search(rule: &config::Rule, search: &str) -> bool {
+	text_matches_search(&rule.name, search)
+		|| text_matches_search(config_rule_kind_label(rule), search)
+		|| rule
+			.run
+			.as_ref()
+			.is_some_and(|command| text_matches_search(command, search))
+		|| rule
+			.changed
+			.iter()
+			.any(|pattern| text_matches_search(pattern.as_str(), search))
+		|| rule
+			.exclude
+			.iter()
+			.any(|pattern| text_matches_search(pattern.as_str(), search))
+		|| rule
+			.fail_text
+			.as_ref()
+			.is_some_and(|fail_text| text_matches_search(fail_text.as_str(), search))
+}
+
+fn text_matches_search(value: &str, search: &str) -> bool {
+	value.to_ascii_lowercase().contains(search)
+}
+
+fn schema_command(args: &SchemaArgs) -> Result<()> {
+	if let Some(path) = args.output.as_deref() {
+		if args.check {
+			return check_schema_output(path, args.json, args.quiet);
+		}
+
+		if let Some(parent) = path.parent()
+			&& !parent.as_os_str().is_empty()
+		{
+			std::fs::create_dir_all(parent)
+				.with_context(|| format!("failed to create schema directory `{}`", parent.display()))?;
+		}
+		std::fs::write(path, config::CONFIG_SCHEMA_JSON)
+			.with_context(|| format!("failed to write schema `{}`", path.display()))?;
+		return Ok(());
+	}
+
+	print!("{}", config::CONFIG_SCHEMA_JSON);
+	Ok(())
+}
+
+fn check_schema_output(path: &std::path::Path, json_output: bool, quiet: bool) -> Result<()> {
+	let existing_schema = match std::fs::read_to_string(path) {
+		Ok(schema) => schema,
+		Err(error) => {
+			if json_output {
+				println!(
+					"{}",
+					serde_json::to_string_pretty(&schema_check_json(
+						path,
+						false,
+						false,
+						Some(&format!("failed to read schema file: {error}")),
+						&schema_check_details(path),
+					))?
+				);
+			}
+			return Err(anyhow!("failed to read schema file `{}`: {error}", path.display()));
+		}
+	};
+	let matches = existing_schema == config::CONFIG_SCHEMA_JSON;
+	if json_output {
+		let error = if matches {
+			None
+		} else {
+			Some("schema output is out of date")
+		};
+		let details = error.map_or_else(Vec::new, |_| schema_check_details(path));
+		println!(
+			"{}",
+			serde_json::to_string_pretty(&schema_check_json(path, true, matches, error, &details))?
+		);
+	}
+	if matches {
+		if !json_output && !quiet {
+			println!("schema up to date: {}", path.display());
+		}
+		return Ok(());
+	}
+
+	Err(anyhow!(
+		"schema out of date: {} (rerun `pullhook schema --output {}`)",
+		path.display(),
+		path.display()
+	))
+}
+
+fn ensure_json_without_debug(json_output: bool, debug_enabled: bool) -> Result<()> {
+	if json_output && debug_enabled {
+		let error = anyhow!("--json cannot be used with --debug");
+		print_json_error(&error)?;
+		return Err(error);
+	}
+	Ok(())
+}
+
+const fn effective_render_mode(render: RenderMode, no_color: bool) -> RenderMode {
+	if no_color { RenderMode::Never } else { render }
+}
+
+fn init_config_command(args: &InitArgs) -> Result<()> {
+	ensure_json_without_debug(args.json, args.debug)?;
+
+	let requested_format = args.format.map_or(config::ConfigFormat::Json, Into::into);
+	if args.stdout {
+		print!("{}", requested_format.starter_config());
+		return Ok(());
+	}
+
+	let (cwd, repo) = discover_repo_from_cwd_for_output(args.debug, args.json)?;
+	let repo_root = repo.root();
+
+	let renderer = Renderer::new(effective_render_mode(args.render, args.no_color));
+	let path_and_format = args.output.as_deref().map_or_else(
+		|| resolve_default_init_output(repo_root, args.format, requested_format, args.force),
+		|output| resolve_init_output_path(&cwd, output, args.format),
+	);
+	let (path, format) = match path_and_format {
+		Ok(resolved) => resolved,
+		Err(error) => {
+			if args.json {
+				print_json_error(&error)?;
+			}
+			return Err(error);
+		}
+	};
+	let exists = path.exists();
+
+	if exists && !args.force {
+		let error = format!(
+			"refusing to overwrite existing file `{}`; rerun with `pullhook init --force`",
+			path.display()
+		);
+		if args.json {
+			println!(
+				"{}",
+				serde_json::to_string_pretty(&init_plan_json(
+					&path,
+					format,
+					exists,
+					args.force,
+					args.dry_run,
+					Some(&error)
+				))?
+			);
+		}
+		return Err(anyhow!(error));
+	}
+
+	if args.dry_run {
+		if args.path_only {
+			println!("{}", path.display());
+		} else if args.format_only {
+			println!("{}", format.label());
+		} else if args.action_only {
+			println!("{}", if exists { "overwrite" } else { "create" });
+		} else if args.json {
+			println!(
+				"{}",
+				serde_json::to_string_pretty(&init_plan_json(&path, format, exists, args.force, true, None))?
+			);
+		} else {
+			renderer.render_message_stage(&format!(
+				"would {} {}",
+				if exists { "overwrite" } else { "create" },
+				path.display()
+			));
+			renderer.render_message_stage(&format!("format: {}", format.label()));
+		}
+		return Ok(());
+	}
+
+	if let Some(parent) = path.parent()
+		&& !parent.as_os_str().is_empty()
+	{
+		std::fs::create_dir_all(parent)
+			.with_context(|| format!("failed to create config directory `{}`", parent.display()))?;
+	}
+
+	std::fs::write(&path, format.starter_config())
+		.with_context(|| format!("failed to write config `{}`", path.display()))?;
+	if args.json {
+		println!(
+			"{}",
+			serde_json::to_string_pretty(&init_plan_json(&path, format, exists, args.force, false, None))?
+		);
+	} else {
+		renderer.render_message_stage(&format!(
+			"{} {}",
+			if exists { "overwrote" } else { "created" },
+			path.display()
+		));
+	}
+	Ok(())
+}
+
+fn resolve_default_init_output(
+	repo_root: &std::path::Path,
+	format_arg: Option<cli::InitFormat>,
+	requested_format: config::ConfigFormat,
+	force: bool,
+) -> Result<(std::path::PathBuf, config::ConfigFormat)> {
+	let existing_path = config::discover(repo_root)?;
+	let output = if let Some(path) = existing_path {
+		let existing_format = config::ConfigFormat::from_path(&path)?;
+		let format = format_arg.map_or(existing_format, Into::into);
+		if force && format != existing_format {
+			return Err(anyhow!(
+				"existing config `{}` is {}; rerun without `--format` to overwrite it in place or remove it first",
+				path.display(),
+				existing_format.default_name()
+			));
+		}
+		(path, format)
+	} else {
+		let path = repo_root.join(requested_format.default_name());
+		(path, requested_format)
+	};
+	Ok(output)
+}
+
+fn resolve_init_output_path(
+	cwd: &std::path::Path,
+	output: &std::path::Path,
+	format_arg: Option<cli::InitFormat>,
+) -> Result<(std::path::PathBuf, config::ConfigFormat)> {
+	let path = if output.is_absolute() {
+		output.to_path_buf()
+	} else {
+		cwd.join(output)
+	};
+	let extension_format = config::ConfigFormat::from_path(&path)?;
+	let format = format_arg.map_or(extension_format, Into::into);
+	if format != extension_format {
+		return Err(anyhow!(
+			"output path `{}` uses {}; choose a matching `--format` or file extension",
+			path.display(),
+			extension_format.default_name()
+		));
+	}
+	Ok((path, format))
+}
+
+fn discover_repo_from_cwd_for_output(debug_enabled: bool, json_output: bool) -> Result<(std::path::PathBuf, GitRepo)> {
+	let cwd = std::env::current_dir().context("failed to read current working directory")?;
+	match GitRepo::discover(&cwd, debug_enabled).context("failed to resolve repository root") {
+		Ok(repo) => Ok((cwd, repo)),
+		Err(error) => {
+			if json_output {
+				print_json_error(&error)?;
+			}
+			Err(error)
+		}
+	}
+}
+
+fn resolve_config_path_for_output(
+	cwd: &std::path::Path,
+	repo_root: &std::path::Path,
+	explicit_config: Option<&std::path::Path>,
+	json_output: bool,
+) -> Result<std::path::PathBuf> {
+	match resolve_config_path(cwd, repo_root, explicit_config) {
+		Ok(path) => Ok(path),
+		Err(error) => {
+			if json_output {
+				print_json_error(&error)?;
+			}
+			Err(error)
+		}
+	}
+}
+
+fn config_format_from_path_for_output(path: &std::path::Path, json_output: bool) -> Result<config::ConfigFormat> {
+	match config::ConfigFormat::from_path(path) {
+		Ok(format) => Ok(format),
+		Err(error) => {
+			let error = anyhow!(error);
+			if json_output {
+				print_json_error(&error)?;
+			}
+			Err(error)
+		}
+	}
+}
+
+fn load_config_from_cwd(
+	debug_enabled: bool,
+	explicit_config: Option<&std::path::Path>,
+) -> Result<(GitRepo, std::path::PathBuf, Config)> {
+	let cwd = std::env::current_dir().context("failed to read current working directory")?;
+	let repo = GitRepo::discover(&cwd, debug_enabled).context("failed to resolve repository root")?;
+	let repo_root = repo.root().to_path_buf();
+	let path = resolve_config_path(&cwd, &repo_root, explicit_config)?;
+	let config = config::load(&path)?;
+	Ok((repo, repo_root, config))
+}
+
+fn load_config_from_cwd_for_output(
+	debug_enabled: bool,
+	explicit_config: Option<&std::path::Path>,
+	json_output: bool,
+) -> Result<(GitRepo, std::path::PathBuf, Config)> {
+	match load_config_from_cwd(debug_enabled, explicit_config) {
+		Ok(loaded) => Ok(loaded),
+		Err(error) => {
+			if json_output {
+				print_json_error(&error)?;
+			}
+			Err(error)
+		}
+	}
+}
+
+fn resolve_config_path(
+	cwd: &std::path::Path,
+	repo_root: &std::path::Path,
+	explicit_config: Option<&std::path::Path>,
+) -> Result<std::path::PathBuf> {
+	if let Some(path) = explicit_config {
+		let resolved = if path.is_absolute() {
+			path.to_path_buf()
+		} else {
+			cwd.join(path)
+		};
+		return Ok(resolved);
+	}
+
+	config::discover(repo_root)?.ok_or_else(|| {
+		error::PullhookError::ConfigMissing {
+			repo_root: repo_root.display().to_string(),
+			default_config: config::config_names()[0],
+		}
+		.into()
+	})
+}
+
+fn collect_explicit_changed_files(
+	changed_files: &[std::path::PathBuf],
+	changed_files_file: Option<&std::path::Path>,
+	read_stdin: bool,
+) -> Result<Vec<std::path::PathBuf>> {
+	let mut paths = changed_files.to_vec();
+	let mut stdin_consumed = false;
+	if let Some(path) = changed_files_file {
+		if path == std::path::Path::new("-") {
+			read_changed_files_from_stdin(&mut paths)?;
+			stdin_consumed = true;
+		} else {
+			let input = std::fs::read_to_string(path).map_err(|source| ChangedFilesFileError::new(path, source))?;
+			extend_changed_files_from_lines(&mut paths, &input);
+		}
+	}
+	if read_stdin && !stdin_consumed {
+		read_changed_files_from_stdin(&mut paths)?;
+	}
+	Ok(dedupe_paths_preserving_order(paths))
+}
+
+fn read_changed_files_from_stdin(paths: &mut Vec<std::path::PathBuf>) -> Result<()> {
+	let mut input = String::new();
+	std::io::stdin()
+		.read_to_string(&mut input)
+		.context("failed to read changed files from stdin")?;
+	extend_changed_files_from_lines(paths, &input);
+	Ok(())
+}
+
+fn collect_explicit_changed_files_for_output(
+	changed_files: &[std::path::PathBuf],
+	changed_files_file: Option<&std::path::Path>,
+	read_stdin: bool,
+	json_output: bool,
+) -> Result<Vec<std::path::PathBuf>> {
+	match collect_explicit_changed_files(changed_files, changed_files_file, read_stdin) {
+		Ok(paths) => Ok(paths),
+		Err(error) => {
+			if json_output {
+				print_json_error(&error)?;
+			}
+			Err(error)
+		}
+	}
+}
+
+fn extend_changed_files_from_lines(paths: &mut Vec<std::path::PathBuf>, input: &str) {
+	paths.extend(
+		input
+			.lines()
+			.map(str::trim)
+			.filter(|line| !line.is_empty())
+			.map(std::path::PathBuf::from),
+	);
+}
+
+fn dedupe_paths_preserving_order(paths: Vec<std::path::PathBuf>) -> Vec<std::path::PathBuf> {
+	let mut seen = BTreeSet::new();
+	paths.into_iter().filter(|path| seen.insert(path.clone())).collect()
+}
+
+fn resolve_config_changed_files(
+	repo: &GitRepo,
+	config: &Config,
+	base: Option<&str>,
+	explicit_changed_files: &[std::path::PathBuf],
+	debug_enabled: bool,
+) -> Result<(Vec<std::path::PathBuf>, bool, ChangedFilesSource)> {
+	if !explicit_changed_files.is_empty() {
+		if debug_enabled {
+			debug!(
+				changed = explicit_changed_files.len(),
+				"using explicit config changed files"
+			);
+		}
+		return Ok((explicit_changed_files.to_vec(), false, ChangedFilesSource::Explicit));
+	}
+
+	match repo.resolve_base_and_changed_files(base, debug_enabled) {
+		Ok((resolved_base, changed_files)) => {
+			if debug_enabled {
+				debug!(base = %resolved_base, changed = changed_files.len(), "resolved config changed files");
+			}
+			Ok((changed_files, false, ChangedFilesSource::Git))
+		}
+		Err(error)
+			if config_allows_base_missing(config) && matches!(error, error::PullhookError::DiffBaseUnavailable) =>
+		{
+			if debug_enabled {
+				debug!("diff base missing; evaluating runIfBaseMissing rules");
+			}
+			Ok((Vec::new(), true, ChangedFilesSource::BaseMissing))
+		}
+		Err(error) => Err(error).context("failed to resolve diff base or read changed files"),
+	}
+}
+
+fn resolve_config_changed_files_for_output(
+	repo: &GitRepo,
+	config: &Config,
+	base: Option<&str>,
+	explicit_changed_files: &[std::path::PathBuf],
+	debug_enabled: bool,
+	json_output: bool,
+) -> Result<(Vec<std::path::PathBuf>, bool, ChangedFilesSource)> {
+	match resolve_config_changed_files(repo, config, base, explicit_changed_files, debug_enabled) {
+		Ok(resolved) => Ok(resolved),
+		Err(error) => {
+			if json_output {
+				print_json_error(&error)?;
+			}
+			Err(error)
+		}
+	}
+}
+
+fn config_allows_base_missing(config: &Config) -> bool {
+	config.entries.iter().any(|entry| match entry {
+		Entry::Rule(rule) => rule.run_if_base_missing,
+		Entry::Group(group) => group.rules.iter().any(|rule| rule.run_if_base_missing),
+	})
+}
+
+fn evaluate_config(
+	config: &Config,
+	changed_files: &[std::path::PathBuf],
+	base_missing: bool,
+	repo_root: &std::path::Path,
+) -> Result<Vec<EvaluatedEntry>> {
+	let mut install_plan: Option<(String, Vec<Pattern>)> = None;
+
+	config::evaluate(config, changed_files, base_missing, |_rule| {
+		if let Some((command, patterns)) = &install_plan {
+			return Ok((Some(command.clone()), patterns.clone()));
+		}
+
+		let resolved = resolve_install_plan(repo_root, "failed to detect package manager for config install rule")?;
+		let command = resolved.command;
+		let patterns = vec![Pattern::new(resolved.pattern)?];
+		install_plan = Some((command.clone(), patterns.clone()));
+		Ok((Some(command), patterns))
+	})
+	.map_err(Into::into)
+}
+
+fn filter_config_evaluation(evaluation: Vec<EvaluatedEntry>, selectors: &[String]) -> Result<Vec<EvaluatedEntry>> {
+	if selectors.is_empty() {
+		return Ok(evaluation);
+	}
+
+	let requested = selectors.iter().map(String::as_str).collect::<BTreeSet<_>>();
+	let mut available = BTreeSet::new();
+	let mut filtered = Vec::new();
+
+	for entry in evaluation {
+		match entry {
+			EvaluatedEntry::Rule(rule) => {
+				let rule_name = rule.rule.name.clone();
+				available.insert(rule_name.clone());
+				if requested.contains(rule_name.as_str()) {
+					filtered.push(EvaluatedEntry::Rule(rule));
+				}
+			}
+			EvaluatedEntry::Group(group) => {
+				let group_name = group.group.name.clone();
+				let group_selected = requested.contains(group_name.as_str());
+				available.insert(group_name);
+
+				if group_selected {
+					for rule in &group.rules {
+						available.insert(rule.rule.name.clone());
+					}
+					filtered.push(EvaluatedEntry::Group(group));
+					continue;
+				}
+
+				let rules = group
+					.rules
+					.into_iter()
+					.filter(|rule| {
+						available.insert(rule.rule.name.clone());
+						requested.contains(rule.rule.name.as_str())
+					})
+					.collect::<Vec<_>>();
+
+				if !rules.is_empty() {
+					filtered.push(EvaluatedEntry::Group(EvaluatedGroup {
+						group: group.group,
+						rules,
+					}));
+				}
+			}
+		}
+	}
+
+	let unknown = selectors
+		.iter()
+		.filter(|selector| !available.contains(selector.as_str()))
+		.cloned()
+		.collect::<Vec<_>>();
+
+	if !unknown.is_empty() {
+		let available = available.into_iter().collect::<Vec<_>>();
+		return Err(UnknownSelectorError::new(unknown, available, true).into());
+	}
+
+	Ok(filtered)
+}
+
+fn filter_config_evaluation_for_output(
+	evaluation: Vec<EvaluatedEntry>,
+	selectors: &[String],
+	json_output: bool,
+) -> Result<Vec<EvaluatedEntry>> {
+	match filter_config_evaluation(evaluation, selectors) {
+		Ok(evaluation) => Ok(evaluation),
+		Err(error) => {
+			if json_output {
+				print_json_error(&error)?;
+			}
+			Err(error)
+		}
+	}
+}
+
+fn result_for_output<T>(result: Result<T>, json_output: bool) -> Result<T> {
+	match result {
+		Ok(value) => Ok(value),
+		Err(error) => {
+			if json_output {
+				print_json_error(&error)?;
+			}
+			Err(error)
+		}
+	}
+}
+
+fn print_json_error(error: &anyhow::Error) -> Result<()> {
+	let details = json_error_details(error);
+	let pullhook_error = find_pullhook_error(error);
+	if let Some(selector_error) = error.downcast_ref::<UnknownSelectorError>() {
+		println!(
+			"{}",
+			serde_json::to_string_pretty(&unknown_selector_error_json(selector_error, &details))?
+		);
+		return Ok(());
+	}
+	if let Some(changed_files_error) = error.downcast_ref::<ChangedFilesFileError>() {
+		println!(
+			"{}",
+			serde_json::to_string_pretty(&changed_files_file_error_json(changed_files_error, &details))?
+		);
+		return Ok(());
+	}
+	if let Some(value) = pullhook_error.and_then(|error_kind| package_manager_error_json(error, &details, error_kind)) {
+		println!("{}", serde_json::to_string_pretty(&value)?);
+		return Ok(());
+	}
+	if let Some(value) = pullhook_error.and_then(|error_kind| diff_base_error_json(error, &details, error_kind)) {
+		println!("{}", serde_json::to_string_pretty(&value)?);
+		return Ok(());
+	}
+	if let Some(error::PullhookError::GitOpen { path, .. }) = pullhook_error {
+		println!(
+			"{}",
+			serde_json::to_string_pretty(&repository_error_json(error, &details, path))?
+		);
+		return Ok(());
+	}
+	if let Some(error::PullhookError::Pattern { pattern, reason }) = pullhook_error {
+		println!(
+			"{}",
+			serde_json::to_string_pretty(&pattern_error_json(error, &details, pattern, reason))?
+		);
+		return Ok(());
+	}
+	if let Some(error::PullhookError::CommandParse { command, reason }) = pullhook_error {
+		println!(
+			"{}",
+			serde_json::to_string_pretty(&command_parse_error_json(error, &details, command, reason))?
+		);
+		return Ok(());
+	}
+	if let Some(error::PullhookError::ConfigFormat {
+		path,
+		extension,
+		reason,
+	}) = pullhook_error
+	{
+		println!(
+			"{}",
+			serde_json::to_string_pretty(&config_path_error_json(
+				error,
+				&details,
+				path,
+				extension.as_deref(),
+				reason
+			))?
+		);
+		return Ok(());
+	}
+	if let Some(error::PullhookError::ConfigMissing {
+		repo_root,
+		default_config,
+	}) = pullhook_error
+	{
+		println!(
+			"{}",
+			serde_json::to_string_pretty(&config_missing_error_json(error, &details, repo_root, default_config))?
+		);
+		return Ok(());
+	}
+
+	println!(
+		"{}",
+		serde_json::to_string_pretty(&json!({
+			"status": "error",
+			"code": json_error_code(error),
+			"error": error.to_string(),
+			"details": details,
+		}))?
+	);
+	Ok(())
+}
+
+fn find_pullhook_error(error: &anyhow::Error) -> Option<&error::PullhookError> {
+	error
+		.chain()
+		.find_map(|cause| cause.downcast_ref::<error::PullhookError>())
+}
+
+fn json_error_code(error: &anyhow::Error) -> &'static str {
+	if error.downcast_ref::<UnknownSelectorError>().is_some() {
+		return "unknown_selector";
+	}
+	if error.downcast_ref::<ChangedFilesFileError>().is_some() {
+		return "changed_files_file";
+	}
+	if let Some(pullhook_error) = find_pullhook_error(error) {
+		return pullhook_error_code(pullhook_error);
+	}
+
+	match error.to_string().as_str() {
+		"--json cannot be used with --debug" => "json_debug_conflict",
+		message if message.starts_with("missing required argument") => "missing_required_argument",
+		message if message.starts_with("no pullhook config found") => "config_missing",
+		_ => "error",
+	}
+}
+
+fn pullhook_error_code(error: &error::PullhookError) -> &'static str {
+	match error {
+		error::PullhookError::GitOpen { .. } => "repository_not_found",
+		error::PullhookError::GitRevision { .. } => "diff_base_revision_error",
+		error::PullhookError::BaseRevisionNotFound { .. } => "diff_base_revision_not_found",
+		error::PullhookError::GitDiff { .. } => "diff_base_error",
+		error::PullhookError::DiffBaseUnavailable => "diff_base_unavailable",
+		error::PullhookError::PackageManagerDetection { source, .. } => pullhook_error_code(source),
+		error::PullhookError::Pattern { .. } => "invalid_pattern",
+		error::PullhookError::AmbiguousPackageManagers { .. } => "package_manager_ambiguous",
+		error::PullhookError::PackageManagerNotFound { .. } => "package_manager_not_found",
+		error::PullhookError::CommandParse { .. } => "command_parse",
+		error::PullhookError::ConfigParse { .. } => "config_parse",
+		error::PullhookError::ConfigFormat { extension, .. } => {
+			if extension.is_some() {
+				"config_path_unsupported_format"
+			} else {
+				"config_path_missing_extension"
+			}
+		}
+		error::PullhookError::ConfigMissing { .. } => "config_missing",
+		error::PullhookError::ConfigValidation { .. } => "config_validation",
+		error::PullhookError::CommandIo { .. } => "command_io",
+		error::PullhookError::CommandFailed { .. } => "command_failed",
+		error::PullhookError::Message(_) => "message",
+	}
+}
+
+fn package_manager_error_json(
+	error: &anyhow::Error,
+	details: &[String],
+	error_kind: &error::PullhookError,
+) -> Option<serde_json::Value> {
+	match error_kind {
+		error::PullhookError::PackageManagerDetection { source, .. } => {
+			package_manager_error_json(error, details, source)
+		}
+		error::PullhookError::PackageManagerNotFound { root } => {
+			Some(package_manager_not_found_json(error, details, root))
+		}
+		error::PullhookError::AmbiguousPackageManagers { found } => {
+			Some(ambiguous_package_managers_json(error, details, found))
+		}
+		_ => None,
+	}
+}
+
+fn package_manager_not_found_json(error: &anyhow::Error, details: &[String], root: &str) -> serde_json::Value {
+	json!({
+		"status": "error",
+		"code": "package_manager_not_found",
+		"error": error.to_string(),
+		"details": details,
+		"packageManagerError": {
+			"kind": "not_found",
+			"root": root,
+		},
+	})
+}
+
+fn ambiguous_package_managers_json(error: &anyhow::Error, details: &[String], found: &[&str]) -> serde_json::Value {
+	json!({
+		"status": "error",
+		"code": "package_manager_ambiguous",
+		"error": error.to_string(),
+		"details": details,
+		"packageManagerError": {
+			"kind": "ambiguous",
+			"found": found,
+		},
+	})
+}
+
+fn repository_error_json(error: &anyhow::Error, details: &[String], path: &str) -> serde_json::Value {
+	json!({
+		"status": "error",
+		"code": "repository_not_found",
+		"error": error.to_string(),
+		"details": details,
+		"repositoryError": {
+			"kind": "not_found",
+			"path": path,
+		},
+	})
+}
+
+fn diff_base_error_json(
+	error: &anyhow::Error,
+	details: &[String],
+	error_kind: &error::PullhookError,
+) -> Option<serde_json::Value> {
+	let diff_base_error = match error_kind {
+		error::PullhookError::BaseRevisionNotFound { revision } => json!({
+			"kind": "revision_not_found",
+			"revision": revision,
+		}),
+		error::PullhookError::GitRevision { revision, .. } => json!({
+			"kind": "revision_error",
+			"revision": revision,
+		}),
+		error::PullhookError::GitDiff { base, .. } => json!({
+			"kind": "diff_error",
+			"base": base,
+		}),
+		error::PullhookError::DiffBaseUnavailable => json!({
+			"kind": "unavailable",
+		}),
+		_ => return None,
+	};
+
+	Some(json!({
+		"status": "error",
+		"code": pullhook_error_code(error_kind),
+		"error": error.to_string(),
+		"details": details,
+		"diffBaseError": diff_base_error,
+	}))
+}
+
+fn pattern_error_json(error: &anyhow::Error, details: &[String], pattern: &str, reason: &str) -> serde_json::Value {
+	json!({
+		"status": "error",
+		"code": "invalid_pattern",
+		"error": error.to_string(),
+		"details": details,
+		"patternError": {
+			"pattern": pattern,
+			"reason": reason,
+		},
+	})
+}
+
+fn command_parse_error_json(
+	error: &anyhow::Error,
+	details: &[String],
+	command: &str,
+	reason: &str,
+) -> serde_json::Value {
+	json!({
+		"status": "error",
+		"code": "command_parse",
+		"error": error.to_string(),
+		"details": details,
+		"commandParse": {
+			"command": command,
+			"reason": reason,
+		},
+	})
+}
+
+fn config_path_error_json(
+	error: &anyhow::Error,
+	details: &[String],
+	path: &str,
+	extension: Option<&str>,
+	reason: &str,
+) -> serde_json::Value {
+	json!({
+		"status": "error",
+		"code": if extension.is_some() { "config_path_unsupported_format" } else { "config_path_missing_extension" },
+		"error": error.to_string(),
+		"details": details,
+		"configPathError": {
+			"kind": if extension.is_some() { "unsupported_format" } else { "missing_extension" },
+			"path": path,
+			"extension": extension,
+			"reason": reason,
+			"supported": config::config_names(),
+		},
+	})
+}
+
+fn config_missing_error_json(
+	error: &anyhow::Error,
+	details: &[String],
+	repo_root: &str,
+	default_config: &str,
+) -> serde_json::Value {
+	json!({
+		"status": "error",
+		"code": "config_missing",
+		"error": error.to_string(),
+		"details": details,
+		"configDiscoveryError": {
+			"kind": "missing",
+			"repoRoot": repo_root,
+			"defaultConfig": default_config,
+			"supported": config::config_names(),
+		},
+	})
+}
+
+fn changed_files_file_error_json(error: &ChangedFilesFileError, details: &[String]) -> serde_json::Value {
+	let mut details = details.to_vec();
+	details.push(format!("check that `{}` exists and is readable", error.path));
+	details.push("pass `--changed-files-file -` to read changed paths from stdin".to_owned());
+
+	json!({
+		"status": "error",
+		"code": "changed_files_file",
+		"error": error.to_string(),
+		"details": details,
+		"changedFilesFile": &error.path,
+	})
+}
+
+fn unknown_selector_error_json(error: &UnknownSelectorError, details: &[String]) -> serde_json::Value {
+	json!({
+		"status": "error",
+		"code": "unknown_selector",
+		"error": error.to_string(),
+		"details": details,
+		"unknownSelectors": &error.unknown,
+		"availableSelectors": &error.available,
+		"suggestions": unknown_selector_suggestions(error),
+	})
+}
+
+fn unknown_selector_suggestions(error: &UnknownSelectorError) -> Vec<serde_json::Value> {
+	error
+		.unknown
+		.iter()
+		.filter_map(|selector| {
+			closest_selector(selector, &error.available).map(|suggestion| {
+				json!({
+					"selector": selector,
+					"suggestion": suggestion,
+				})
+			})
+		})
+		.collect()
+}
+
+fn json_error_details(error: &anyhow::Error) -> Vec<String> {
+	let mut details = error.chain().skip(1).map(ToString::to_string).collect::<Vec<_>>();
+	let message = error.to_string();
+	if message.starts_with("failed to resolve diff base or read changed files") {
+		details.push("check that `--base <rev>` names a commit reachable from this repo".to_owned());
+		details.push("omit `--base` to use pullhook's automatic diff-base fallback".to_owned());
+	}
+	if message == "failed to resolve repository root" {
+		details.push("rerun from inside a Git working tree".to_owned());
+		details.push("or initialize a repository with `git init` before running pullhook".to_owned());
+	}
+	if message.starts_with("failed to detect package manager") {
+		details.push("add a supported package-manager lockfile at the repo root".to_owned());
+		details.push("or pass explicit `--pattern <glob>` and `--command <cmd>` instead of `--install`".to_owned());
+	}
+	if !details.is_empty() {
+		return details;
+	}
+
+	if message.starts_with("no pullhook config found") {
+		return vec![
+			format!("run `pullhook init` to create {}", config::config_names()[0]),
+			"use `--config <path>` to point at a custom config file".to_owned(),
+		];
+	}
+	if message.starts_with("missing required argument") {
+		return vec![
+			"use `pullhook run` to execute configured rules from pullhook.json".to_owned(),
+			"or pass `--pattern <glob>` with `--command <cmd>` for legacy top-level mode".to_owned(),
+			"use `--install` only when the repo root has a supported package-manager file".to_owned(),
+		];
+	}
+	if message.contains("configs are not supported")
+		|| message.starts_with("unsupported config extension")
+		|| message == "config path has no extension"
+	{
+		return vec![
+			"supported config files are `pullhook.json`, `pullhook.jsonc`, `pullhook.yaml`, and `.pullhook.toml`"
+				.to_owned(),
+			"use `pullhook init --output <path>` to create a supported config file".to_owned(),
+		];
+	}
+
+	match message.as_str() {
+		"--json cannot be used with --debug" => vec![
+			"rerun without `--debug` when a script needs JSON".to_owned(),
+			"rerun without `--json` when you need debug traces".to_owned(),
+		],
+		_ => Vec::new(),
+	}
+}
+
+fn config_load_error_details(error: &error::PullhookError) -> Vec<String> {
+	match error {
+		error::PullhookError::ConfigParse { reason, .. } => vec![reason.clone()],
+		error::PullhookError::ConfigValidation { details, .. } => details.lines().map(str::to_owned).collect(),
+		_ => Vec::new(),
+	}
+}
+
+fn format_unknown_selectors(unknown: &[String], available: &[String]) -> String {
+	unknown
+		.iter()
+		.map(|selector| {
+			closest_selector(selector, available).map_or_else(
+				|| selector.clone(),
+				|suggestion| format!("{selector} (did you mean `{suggestion}`?)"),
+			)
+		})
+		.collect::<Vec<_>>()
+		.join(", ")
+}
+
+fn closest_selector<'a>(selector: &str, available: &'a [String]) -> Option<&'a str> {
+	let max_distance = (selector.chars().count() / 3).max(2);
+	available
+		.iter()
+		.map(|candidate| (edit_distance(selector, candidate), candidate.as_str()))
+		.filter(|(distance, _)| *distance <= max_distance)
+		.min_by(|(left_distance, left), (right_distance, right)| {
+			left_distance.cmp(right_distance).then_with(|| left.cmp(right))
+		})
+		.map(|(_, candidate)| candidate)
+}
+
+fn edit_distance(left: &str, right: &str) -> usize {
+	let right_chars = right.chars().collect::<Vec<_>>();
+	let mut previous = (0..=right_chars.len()).collect::<Vec<_>>();
+	let mut current = vec![0; right_chars.len() + 1];
+
+	for (left_index, left_char) in left.chars().enumerate() {
+		current[0] = left_index + 1;
+		for (right_index, right_char) in right_chars.iter().enumerate() {
+			let substitution_cost = usize::from(left_char != *right_char);
+			current[right_index + 1] = (previous[right_index + 1] + 1)
+				.min(current[right_index] + 1)
+				.min(previous[right_index] + substitution_cost);
+		}
+		std::mem::swap(&mut previous, &mut current);
+	}
+
+	previous[right_chars.len()]
+}
+
+fn render_config_evaluation(config: &Config, evaluation: &[EvaluatedEntry], all_matches: bool, dry_run: bool) {
+	println!("Config");
+	println!("path: {}", config.path.display());
+	println!(
+		"onFailure: {}",
+		match config.on_failure {
+			OnFailure::Stop => "stop",
+			OnFailure::Continue => "continue",
+		}
+	);
+
+	println!();
+	if dry_run {
+		println!("Dry Run");
+	} else {
+		println!("Rules");
+	}
+
+	for entry in evaluation {
+		match entry {
+			EvaluatedEntry::Rule(rule) => render_evaluated_rule(rule, all_matches),
+			EvaluatedEntry::Group(group) => {
+				if group.should_run() || all_matches {
+					println!("group: {}", group.group.name);
+					match group.group.jobs {
+						Some(jobs) => println!("jobs: {jobs}"),
+						None => println!("jobs: default"),
+					}
+				}
+				for rule in &group.rules {
+					render_evaluated_rule(rule, all_matches);
+				}
+			}
+		}
+	}
+}
+
+fn render_config_evaluation_summary(
+	changed_files: &[std::path::PathBuf],
+	base_missing: bool,
+	changed_files_source: ChangedFilesSource,
+	evaluation: &[EvaluatedEntry],
+) {
+	println!("changedFilesSource: {}", changed_files_source.label());
+	println!("baseMissing: {base_missing}");
+	println!("changedFiles: {}", changed_files.len());
+	println!("matchedFiles: {}", count_config_matched_files(evaluation));
+	println!("plannedCommands: {}", count_planned_commands(evaluation));
+}
+
+fn render_config_evaluation_commands(evaluation: &[EvaluatedEntry]) {
+	for command in collect_planned_commands(evaluation) {
+		println!("{command}");
+	}
+}
+
+fn render_config_evaluation_matched_files(evaluation: &[EvaluatedEntry]) {
+	render_path_list(collect_matched_files(evaluation));
+}
+
+fn render_config_evaluation_matched_rules(evaluation: &[EvaluatedEntry]) {
+	for rule_name in collect_matched_rules(evaluation) {
+		println!("{rule_name}");
+	}
+}
+
+fn render_path_list(paths: impl IntoIterator<Item = impl AsRef<std::path::Path>>) {
+	for path in paths {
+		println!("{}", path.as_ref().display());
+	}
+}
+
+fn render_evaluated_rule(rule: &EvaluatedRule, all_matches: bool) {
+	if rule.should_run() {
+		println!("[match] {}", rule.rule.name);
+		println!("matches: {}", rule.matches.len());
+		if let Some(command) = &rule.command {
+			println!("command: {command}");
+		}
+		return;
+	}
+
+	if all_matches {
+		println!("[skip] {}", rule.rule.name);
+		println!("reason: {}", rule.skip_reason.as_deref().unwrap_or("not runnable"));
+	}
+}
+
+fn build_doctor_checks(
+	repo: &GitRepo,
+	repo_root: &std::path::Path,
+	explicit_config: Option<&std::path::Path>,
+) -> Vec<DoctorCheck> {
+	let cwd = std::env::current_dir().unwrap_or_else(|_| repo_root.to_path_buf());
+	vec![
+		doctor_repository_check(repo_root),
+		doctor_config_check(&cwd, repo_root, explicit_config),
+		doctor_diff_base_check(repo),
+		doctor_install_check(repo_root),
+	]
+}
+
+fn doctor_repository_check(repo_root: &std::path::Path) -> DoctorCheck {
+	DoctorCheck {
+		name: "repository",
+		code: "repository_ok",
+		level: DoctorLevel::Ok,
+		summary: format!("repo root resolved to {}", repo_root.display()),
+		details: vec![format!("cwd scope is inside `{}`", repo_root.display())],
+		hint: Some("run pullhook commands from anywhere inside this repository".to_owned()),
+	}
+}
+
+fn doctor_config_check(
+	cwd: &std::path::Path,
+	repo_root: &std::path::Path,
+	explicit_config: Option<&std::path::Path>,
+) -> DoctorCheck {
+	match resolve_config_path(cwd, repo_root, explicit_config) {
+		Ok(path) => match config::load(&path) {
+			Ok(config) => {
+				let config_label = if explicit_config.is_some() {
+					format!("loaded {} from --config", path.display())
+				} else {
+					format!("loaded {}", path.display())
+				};
+				DoctorCheck {
+					name: "config",
+					code: "config_ok",
+					level: DoctorLevel::Ok,
+					summary: config_label,
+					details: vec![
+						format!("entries: {}", config.entries.len()),
+						format!("rules: {}", count_config_rules(&config)),
+						format!("parallel groups: {}", count_config_groups(&config)),
+					],
+					hint: Some("run `pullhook explain --all-matches` to preview rule matches".to_owned()),
+				}
+			}
+			Err(error) => DoctorCheck {
+				name: "config",
+				code: "config_invalid",
+				level: DoctorLevel::Error,
+				summary: format!("config is invalid: {}", path.display()),
+				details: config_load_error_details(&error),
+				hint: Some("run `pullhook validate` after editing the config".to_owned()),
+			},
+		},
+		Err(error) if explicit_config.is_none() && error.to_string().contains("no pullhook config found") => {
+			DoctorCheck {
+				name: "config",
+				code: "config_missing",
+				level: DoctorLevel::Warn,
+				summary: "no pullhook config found".to_owned(),
+				details: vec!["run `pullhook init` to create pullhook.json".to_owned()],
+				hint: Some("run `pullhook init` to create a starter config".to_owned()),
+			}
+		}
+		Err(error) => DoctorCheck {
+			name: "config",
+			code: "config_discovery_failed",
+			level: DoctorLevel::Error,
+			summary: "config discovery failed".to_owned(),
+			details: vec![error.to_string()],
+			hint: Some("fix the config path or pass `--config <path>` explicitly".to_owned()),
+		},
+	}
+}
+
+fn doctor_diff_base_check(repo: &GitRepo) -> DoctorCheck {
+	match repo.resolve_base_and_changed_files(None, false) {
+		Ok((base, changed_files)) => DoctorCheck {
+			name: "diff base",
+			code: "diff_base_ok",
+			level: DoctorLevel::Ok,
+			summary: format!("resolved {base}"),
+			details: vec![format!("changed files: {}", changed_files.len())],
+			hint: Some("pass `--base <rev>` to compare against a specific revision".to_owned()),
+		},
+		Err(error::PullhookError::DiffBaseUnavailable) => DoctorCheck {
+			name: "diff base",
+			code: "diff_base_unavailable",
+			level: DoctorLevel::Warn,
+			summary: "no automatic diff base available".to_owned(),
+			details: vec!["use `--base <rev>` or rely on `runIfBaseMissing` rules".to_owned()],
+			hint: Some("run with `--base <rev>` or add `runIfBaseMissing: true` to recovery rules".to_owned()),
+		},
+		Err(error) => DoctorCheck {
+			name: "diff base",
+			code: "diff_base_error",
+			level: DoctorLevel::Error,
+			summary: "failed to inspect git history".to_owned(),
+			details: vec![error.to_string()],
+			hint: Some("check git history or pass `--base <rev>` explicitly".to_owned()),
+		},
+	}
+}
+
+fn doctor_install_check(repo_root: &std::path::Path) -> DoctorCheck {
+	match detect_package_manager(repo_root) {
+		Ok(package_manager) => DoctorCheck {
+			name: "install detection",
+			code: "package_manager_ok",
+			level: DoctorLevel::Ok,
+			summary: format!("detected {}", package_manager.name()),
+			details: vec![
+				format!("command: {}", package_manager.install_command()),
+				format!("pattern: {}", package_manager.install_pattern()),
+			],
+			hint: Some("use `install: true` for dependency-recovery rules".to_owned()),
+		},
+		Err(error::PullhookError::PackageManagerNotFound { .. }) => DoctorCheck {
+			name: "install detection",
+			code: "package_manager_missing",
+			level: DoctorLevel::Warn,
+			summary: "no supported package manager files found".to_owned(),
+			details: vec!["`pullhook --install` would not work in this repo yet".to_owned()],
+			hint: Some("add a supported lockfile or use explicit `run` commands instead".to_owned()),
+		},
+		Err(error::PullhookError::AmbiguousPackageManagers { found }) => DoctorCheck {
+			name: "install detection",
+			code: "package_manager_ambiguous",
+			level: DoctorLevel::Error,
+			summary: "multiple package managers detected".to_owned(),
+			details: vec![format!("found: {}", found.join(", "))],
+			hint: Some("remove extra lockfiles so package-manager detection is unambiguous".to_owned()),
+		},
+		Err(error) => DoctorCheck {
+			name: "install detection",
+			code: "package_manager_error",
+			level: DoctorLevel::Error,
+			summary: "package-manager detection failed".to_owned(),
+			details: vec![error.to_string()],
+			hint: Some("fix package-manager files or avoid `install: true` rules".to_owned()),
+		},
+	}
+}
+
+fn render_doctor_checks(checks: &[DoctorCheck], repo_root: &std::path::Path) {
+	println!("Doctor");
+	println!("repo: {}", repo_root.display());
+	println!();
+
+	for check in checks {
+		println!("[{}] {}", check.level.label(), check.name);
+		println!("summary: {}", check.summary);
+		for detail in &check.details {
+			println!("detail: {detail}");
+		}
+		if let Some(hint) = &check.hint {
+			println!("hint: {hint}");
+		}
+		println!();
+	}
+
+	let summary = doctor_summary_json(checks);
+	println!("Summary");
+	println!("ok: {}", summary["ok"]);
+	println!("warn: {}", summary["warn"]);
+	println!("error: {}", summary["error"]);
+}
+
+fn doctor_check_json(check: &DoctorCheck) -> serde_json::Value {
+	json!({
+		"name": check.name,
+		"code": check.code,
+		"level": check.level.label(),
+		"summary": check.summary,
+		"details": check.details,
+		"hint": check.hint,
+	})
+}
+
+fn doctor_summary_json(checks: &[DoctorCheck]) -> serde_json::Value {
+	let ok = checks.iter().filter(|check| check.level == DoctorLevel::Ok).count();
+	let warn = checks.iter().filter(|check| check.level == DoctorLevel::Warn).count();
+	let error = checks.iter().filter(|check| check.level == DoctorLevel::Error).count();
+
+	json!({
+		"ok": ok,
+		"warn": warn,
+		"error": error,
+		"allOk": warn == 0 && error == 0,
+		"hasWarnings": warn > 0,
+		"hasErrors": error > 0,
+	})
+}
+
+fn doctor_report_json(
+	repo_root: &std::path::Path,
+	checks: &[DoctorCheck],
+	error: Option<&str>,
+	strict: bool,
+) -> serde_json::Value {
+	let code = match error {
+		Some("doctor found blocking issues") => json!("doctor_blocking_issues"),
+		Some("doctor found warnings in strict mode") => json!("doctor_warnings"),
+		Some(_) => json!("doctor_error"),
+		None => serde_json::Value::Null,
+	};
+	json!({
+		"status": if error.is_some() { "error" } else { "ok" },
+		"code": code,
+		"repoRoot": repo_root.display().to_string(),
+		"strict": strict,
+		"checks": checks.iter().map(doctor_check_json).collect::<Vec<_>>(),
+		"summary": doctor_summary_json(checks),
+		"error": error,
+	})
+}
+
+fn config_summary_json(config: &Config) -> serde_json::Value {
+	json!({
+		"status": "ok",
+		"code": null,
+		"valid": true,
+		"path": config.path.display().to_string(),
+		"onFailure": on_failure_label(config.on_failure),
+		"entries": config.entries.len(),
+		"rules": count_config_rules(config),
+		"parallelGroups": count_config_groups(config),
+		"error": null,
+	})
+}
+
+fn config_validation_error_json(
+	path: Option<&std::path::Path>,
+	error: &str,
+	details: &[String],
+	config_error: Option<&error::PullhookError>,
+) -> serde_json::Value {
+	let mut value = json!({
+		"status": "error",
+		"code": config_error.map_or("config_validation_error", pullhook_error_code),
+		"valid": false,
+		"path": path.map(|path| path.display().to_string()),
+		"error": error,
+		"details": details,
+		"validationErrors": details,
+	});
+
+	if let Some(error::PullhookError::ConfigParse { path, reason }) = config_error {
+		value["parseError"] = json!({
+			"path": path,
+			"reason": reason,
+		});
+	} else if let Some(error::PullhookError::ConfigMissing {
+		repo_root,
+		default_config,
+	}) = config_error
+	{
+		value["configDiscoveryError"] = json!({
+			"kind": "missing",
+			"repoRoot": repo_root,
+			"defaultConfig": default_config,
+			"supported": config::config_names(),
+		});
+	}
+
+	value
+}
+
+fn init_plan_json(
+	path: &std::path::Path,
+	format: config::ConfigFormat,
+	existed: bool,
+	force: bool,
+	dry_run: bool,
+	error: Option<&str>,
+) -> serde_json::Value {
+	let details = init_plan_details(path, format, dry_run, error);
+	let code = if error.is_some() {
+		json!("init_refusing_overwrite")
+	} else {
+		serde_json::Value::Null
+	};
+	json!({
+		"status": if error.is_some() { "error" } else { "ok" },
+		"code": code,
+		"path": path.display().to_string(),
+		"format": format.label(),
+		"existed": existed,
+		"force": force,
+		"dryRun": dry_run,
+		"action": if existed { "overwrite" } else { "create" },
+		"written": !dry_run && error.is_none(),
+		"error": error,
+		"details": details,
+	})
+}
+
+fn init_plan_details(
+	path: &std::path::Path,
+	format: config::ConfigFormat,
+	dry_run: bool,
+	error: Option<&str>,
+) -> Vec<String> {
+	if let Some(error) = error {
+		return vec![error.to_owned()];
+	}
+	if dry_run {
+		return vec![format!(
+			"rerun `pullhook init --output {} --format {}` without `--dry-run` to write config",
+			path.display(),
+			format.label()
+		)];
+	}
+	Vec::new()
+}
+
+fn schema_check_json(
+	path: &std::path::Path,
+	exists: bool,
+	matches: bool,
+	error: Option<&str>,
+	details: &[String],
+) -> serde_json::Value {
+	json!({
+		"status": if error.is_some() { "error" } else { "ok" },
+		"code": generated_file_check_code("schema", exists, matches, error),
+		"error": error,
+		"path": path.display().to_string(),
+		"exists": exists,
+		"matches": matches,
+		"details": details,
+	})
+}
+
+fn generated_file_check_json(
+	path: &std::path::Path,
+	shell: Option<&str>,
+	exists: bool,
+	matches: bool,
+	error: Option<&str>,
+	details: &[String],
+) -> serde_json::Value {
+	json!({
+		"status": if error.is_some() { "error" } else { "ok" },
+		"code": generated_file_check_code("completion", exists, matches, error),
+		"error": error,
+		"path": path.display().to_string(),
+		"shell": shell,
+		"exists": exists,
+		"matches": matches,
+		"details": details,
+	})
+}
+
+fn generated_file_check_code(
+	kind: &'static str,
+	exists: bool,
+	matches: bool,
+	error: Option<&str>,
+) -> serde_json::Value {
+	if error.is_none() {
+		return serde_json::Value::Null;
+	}
+
+	let suffix = if !exists {
+		"missing"
+	} else if !matches {
+		"out_of_date"
+	} else {
+		"error"
+	};
+
+	format!("{kind}_{suffix}").into()
+}
+
+fn schema_check_details(path: &std::path::Path) -> Vec<String> {
+	vec![format!("rerun `pullhook schema --output {}`", path.display())]
+}
+
+fn completion_check_details(path: &std::path::Path, shell: &str) -> Vec<String> {
+	vec![format!(
+		"rerun `pullhook completion {shell} --output {}`",
+		path.display()
+	)]
+}
+
+fn completion_shell_label(shell: clap_complete::Shell) -> String {
+	shell
+		.to_possible_value()
+		.map_or_else(|| "unknown".to_owned(), |value| value.get_name().to_owned())
+}
+
+fn config_rules_json(
+	config: &Config,
+	kind: RulesKind,
+	selectors: &[String],
+	search: Option<&str>,
+) -> serde_json::Value {
+	let requested_selectors = selectors;
+	let output_selectors = collect_rules_output_selectors(config, kind, requested_selectors, search);
+	let commands = collect_config_rule_commands_for_kind(config, kind);
+	let patterns = collect_config_rule_patterns_for_kind(config, kind);
+	let exclude_patterns = collect_config_rule_exclude_patterns_for_kind(config, kind);
+	let fail_text = collect_config_fail_text_for_kind(config, kind);
+	let entries = config
+		.entries
+		.iter()
+		.filter_map(|entry| config_rule_inventory_json(entry, kind))
+		.collect::<Vec<_>>();
+	let rules = count_config_rules_for_kind(config, kind);
+	let parallel_groups = count_config_groups_for_kind(config, kind);
+	let entry_count = entries.len();
+	let selector_count = output_selectors.len();
+	let command_count = commands.len();
+	let pattern_count = patterns.len();
+	let exclude_pattern_count = exclude_patterns.len();
+	let fail_text_count = fail_text.len();
+
+	json!({
+		"status": "ok",
+		"code": serde_json::Value::Null,
+		"error": serde_json::Value::Null,
+		"path": config.path.display().to_string(),
+		"onFailure": on_failure_label(config.on_failure),
+		"kind": rules_kind_label(kind),
+		"filters": {
+			"kind": rules_kind_label(kind),
+			"rules": requested_selectors,
+			"search": search,
+		},
+		"searchFields": ["name", "kind", "command", "changed", "exclude", "failText"],
+		"selectors": output_selectors,
+		"commands": commands,
+		"patterns": patterns,
+		"excludePatterns": exclude_patterns,
+		"failText": fail_text,
+		"entries": entries,
+		"rules": rules,
+		"parallelGroups": parallel_groups,
+		"summary": {
+			"entries": entry_count,
+			"rules": rules,
+			"parallelGroups": parallel_groups,
+			"selectors": selector_count,
+			"commands": command_count,
+			"patterns": pattern_count,
+			"excludePatterns": exclude_pattern_count,
+			"failText": fail_text_count,
+		},
+	})
+}
+
+fn render_config_rules_markdown(config: &Config, kind: RulesKind) {
+	println!("| Type | Name | Parent | Kind | Jobs | Command | Changed | Exclude | Fail text |");
+	println!("| --- | --- | --- | --- | --- | --- | --- | --- | --- |");
+	for entry in &config.entries {
+		match entry {
+			Entry::Rule(rule) if rules_kind_matches_rule(kind, rule) => {
+				render_config_rule_markdown_row(rule, "rule", "", "");
+			}
+			Entry::Rule(_) => {}
+			Entry::Group(group) if kind == RulesKind::Group => {
+				render_config_group_markdown_row(group);
+			}
+			Entry::Group(group) => {
+				let rules = group
+					.rules
+					.iter()
+					.filter(|rule| rules_kind_matches_rule(kind, rule))
+					.collect::<Vec<_>>();
+				if rules.is_empty() {
+					continue;
+				}
+				if kind == RulesKind::All {
+					render_config_group_markdown_row(group);
+				}
+				for rule in rules {
+					render_config_rule_markdown_row(rule, "rule", &group.name, "");
+				}
+			}
+		}
+	}
+}
+
+fn render_config_group_markdown_row(group: &config::Group) {
+	println!(
+		"| `group` | `{}` |  | `group` | {} |  |  |  | {} |",
+		markdown_table_escape(&group.name),
+		group.jobs.map_or_else(|| "default".to_owned(), |jobs| jobs.to_string()),
+		group
+			.fail_text
+			.as_ref()
+			.map_or_else(String::new, |fail_text| markdown_table_escape(fail_text.as_str()))
+	);
+}
+
+fn render_config_rule_markdown_row(rule: &config::Rule, row_type: &str, parent: &str, jobs: &str) {
+	println!(
+		"| `{}` | `{}` | {} | `{}` | {} | {} | {} | {} | {} |",
+		row_type,
+		markdown_table_escape(&rule.name),
+		markdown_code_cell(parent),
+		if rule.install { "install" } else { "run" },
+		jobs,
+		rule.run.as_deref().map_or_else(String::new, markdown_code_cell),
+		markdown_pattern_cell(rule.changed.iter().map(config::Pattern::as_str)),
+		markdown_pattern_cell(rule.exclude.iter().map(config::Pattern::as_str)),
+		rule.fail_text
+			.as_ref()
+			.map_or_else(String::new, |fail_text| markdown_table_escape(fail_text.as_str()))
+	);
+}
+
+fn collect_rules_output_selectors(
+	config: &Config,
+	kind: RulesKind,
+	selectors: &[String],
+	search: Option<&str>,
+) -> Vec<String> {
+	if selectors.is_empty() {
+		return search.map_or_else(
+			|| collect_rule_selectors_for_kind(config, kind),
+			|search| collect_rule_selectors_for_kind_and_search(config, kind, search),
+		);
+	}
+
+	let available = collect_rule_selectors_for_kind(config, kind)
+		.into_iter()
+		.collect::<BTreeSet<_>>();
+	selectors
+		.iter()
+		.filter(|selector| available.contains(selector.as_str()))
+		.cloned()
+		.collect::<BTreeSet<_>>()
+		.into_iter()
+		.collect()
+}
+
+fn config_evaluation_json(
+	config: &Config,
+	changed_files: &[std::path::PathBuf],
+	base_missing: bool,
+	changed_files_source: ChangedFilesSource,
+	evaluation: &[EvaluatedEntry],
+	error: Option<&str>,
+) -> serde_json::Value {
+	let entries = evaluation.iter().map(config_entry_json).collect::<Vec<_>>();
+	let matched_files = collect_matched_files(evaluation)
+		.into_iter()
+		.map(|path| path.display().to_string())
+		.collect::<Vec<_>>();
+	let code = config_evaluation_code(error);
+
+	json!({
+		"status": if error.is_some() { "error" } else { "ok" },
+		"code": code,
+		"error": error,
+		"path": config.path.display().to_string(),
+		"onFailure": on_failure_label(config.on_failure),
+		"baseMissing": base_missing,
+		"changedFilesSource": changed_files_source.label(),
+		"changedFiles": changed_files.iter().map(|path| path.display().to_string()).collect::<Vec<_>>(),
+		"matchedFiles": matched_files,
+		"summary": config_evaluation_summary_json(changed_files, base_missing, changed_files_source, evaluation),
+		"entries": entries,
+	})
+}
+
+fn config_evaluation_code(error: Option<&str>) -> serde_json::Value {
+	match error {
+		Some("no config rules matched changed files") => json!("no_rules_matched"),
+		Some(error) if error.ends_with(" config rule(s) failed") => json!("config_rule_failed"),
+		Some(_) => json!("config_evaluation_error"),
+		None => serde_json::Value::Null,
+	}
+}
+
+fn config_evaluation_summary_json(
+	changed_files: &[std::path::PathBuf],
+	base_missing: bool,
+	changed_files_source: ChangedFilesSource,
+	evaluation: &[EvaluatedEntry],
+) -> serde_json::Value {
+	json!({
+		"changedFilesSource": changed_files_source.label(),
+		"baseMissing": base_missing,
+		"changedFiles": changed_files.len(),
+		"matchedFiles": count_config_matched_files(evaluation),
+		"matchedRules": collect_matched_rules(evaluation).len(),
+		"plannedCommands": count_planned_commands(evaluation),
+	})
+}
+
+fn config_dry_run_json(mut value: serde_json::Value, planned_commands: usize) -> serde_json::Value {
+	if let Some(object) = value.as_object_mut() {
+		object.insert("mode".to_owned(), json!("dry-run"));
+		object.insert("plannedCommands".to_owned(), json!(planned_commands));
+	}
+	value
+}
+
+fn config_run_json(
+	mut value: serde_json::Value,
+	counts: TaskCounters,
+	executions: Vec<serde_json::Value>,
+) -> serde_json::Value {
+	if let Some(object) = value.as_object_mut() {
+		object.insert("mode".to_owned(), json!("run"));
+		if let Some(summary) = object.get_mut("summary").and_then(serde_json::Value::as_object_mut) {
+			summary.insert("taskDirs".to_owned(), json!(counts.task_dirs));
+			summary.insert("passed".to_owned(), json!(counts.passed));
+			summary.insert("failed".to_owned(), json!(counts.failed));
+			summary.insert("interrupted".to_owned(), json!(counts.interrupted));
+		}
+		object.insert("executions".to_owned(), serde_json::Value::Array(executions));
+	}
+	value
+}
+
+fn legacy_dry_run_json(
+	cli: &RunArgs,
+	context: &LegacyJsonContext,
+	planned_commands: usize,
+	repo_root: &std::path::Path,
+) -> serde_json::Value {
+	let LegacyJsonContext {
+		changed_count,
+		run_config,
+		matched_files,
+		invocations,
+		tasks,
+	} = context;
+	json!({
+		"status": "ok",
+		"code": serde_json::Value::Null,
+		"error": serde_json::Value::Null,
+		"mode": "dry-run",
+		"pattern": run_config.pattern,
+		"command": run_config.command,
+		"script": run_config.script,
+		"message": cli.message,
+		"once": run_config.once,
+		"shell": cli.shell,
+		"jobs": cli.effective_jobs(),
+		"changedCount": changed_count,
+		"matchedFiles": matched_files.iter().map(|path| path.display().to_string()).collect::<Vec<_>>(),
+		"tasks": tasks.iter().map(|cwd| runner::relative_cwd_label(cwd, repo_root)).collect::<Vec<_>>(),
+		"invocations": invocations.iter().map(|invocation| invocation.display().into_owned()).collect::<Vec<_>>(),
+		"plannedCommands": planned_commands,
+	})
+}
+
+fn legacy_run_json(
+	cli: &RunArgs,
+	run_config: &RunConfig,
+	changed_count: usize,
+	matched_files: &[std::path::PathBuf],
+	counts: TaskCounters,
+	results: &[serde_json::Value],
+	error: Option<&str>,
+) -> serde_json::Value {
+	json!({
+		"status": if error.is_some() { "error" } else { "ok" },
+		"code": if error.is_some() { json!("command_failed") } else { serde_json::Value::Null },
+		"error": error,
+		"mode": "run",
+		"pattern": run_config.pattern,
+		"command": run_config.command,
+		"script": run_config.script,
+		"message": cli.message,
+		"once": run_config.once,
+		"shell": cli.shell,
+		"jobs": cli.effective_jobs(),
+		"changedCount": changed_count,
+		"matchedFiles": matched_files.iter().map(|path| path.display().to_string()).collect::<Vec<_>>(),
+		"summary": {
+			"matchedFiles": matched_files.len(),
+			"taskDirs": counts.task_dirs,
+			"passed": counts.passed,
+			"failed": counts.failed,
+			"interrupted": counts.interrupted,
+		},
+		"results": results,
+	})
+}
+
+fn config_entry_json(entry: &EvaluatedEntry) -> serde_json::Value {
+	match entry {
+		EvaluatedEntry::Rule(rule) => config_rule_json(rule),
+		EvaluatedEntry::Group(group) => json!({
+			"type": "group",
+			"name": group.group.name,
+			"jobs": group.group.jobs,
+			"status": if group.should_run() { "match" } else { "skip" },
+			"rules": group.rules.iter().map(config_rule_json).collect::<Vec<_>>(),
+		}),
+	}
+}
+
+fn config_rule_inventory_json(entry: &Entry, kind: RulesKind) -> Option<serde_json::Value> {
+	match entry {
+		Entry::Rule(rule) if rules_kind_matches_rule(kind, rule) => Some(json!({
+			"type": "rule",
+			"name": rule.name,
+			"kind": if rule.install { "install" } else { "run" },
+			"changed": rule.changed.iter().map(config::Pattern::as_str).collect::<Vec<_>>(),
+			"exclude": rule.exclude.iter().map(config::Pattern::as_str).collect::<Vec<_>>(),
+			"command": rule.run,
+			"runIfBaseMissing": rule.run_if_base_missing,
+			"failText": rule.fail_text.as_ref().map(config::FailText::as_str),
+		})),
+		Entry::Rule(_) => None,
+		Entry::Group(group) if kind == RulesKind::All || kind == RulesKind::Group => Some(json!({
+			"type": "group",
+			"name": group.name,
+			"jobs": group.jobs,
+			"failText": group.fail_text.as_ref().map(config::FailText::as_str),
+			"rules": group.rules.iter().map(|rule| json!({
+				"name": rule.name,
+				"kind": if rule.install { "install" } else { "run" },
+				"changed": rule.changed.iter().map(config::Pattern::as_str).collect::<Vec<_>>(),
+				"exclude": rule.exclude.iter().map(config::Pattern::as_str).collect::<Vec<_>>(),
+				"command": rule.run,
+				"runIfBaseMissing": rule.run_if_base_missing,
+				"failText": rule.fail_text.as_ref().map(config::FailText::as_str),
+			})).collect::<Vec<_>>(),
+		})),
+		Entry::Group(group) => {
+			let rules = group
+				.rules
+				.iter()
+				.filter(|rule| rules_kind_matches_rule(kind, rule))
+				.map(|rule| {
+					json!({
+						"name": rule.name,
+						"kind": if rule.install { "install" } else { "run" },
+						"changed": rule.changed.iter().map(config::Pattern::as_str).collect::<Vec<_>>(),
+						"exclude": rule.exclude.iter().map(config::Pattern::as_str).collect::<Vec<_>>(),
+						"command": rule.run,
+						"runIfBaseMissing": rule.run_if_base_missing,
+						"failText": rule.fail_text.as_ref().map(config::FailText::as_str),
+					})
+				})
+				.collect::<Vec<_>>();
+			if rules.is_empty() {
+				None
+			} else {
+				Some(json!({
+					"type": "group",
+					"name": group.name,
+					"jobs": group.jobs,
+					"failText": group.fail_text.as_ref().map(config::FailText::as_str),
+					"rules": rules,
+				}))
+			}
+		}
+	}
+}
+
+fn config_rule_json(rule: &EvaluatedRule) -> serde_json::Value {
+	json!({
+		"type": "rule",
+		"name": rule.rule.name,
+		"status": if rule.should_run() { "match" } else { "skip" },
+		"matchCount": rule.matches.len(),
+		"matches": rule.matches.iter().map(|path| path.display().to_string()).collect::<Vec<_>>(),
+		"command": rule.command,
+		"install": rule.rule.install,
+		"runIfBaseMissing": rule.rule.run_if_base_missing,
+		"skipReason": rule.skip_reason,
+	})
+}
+
+const fn on_failure_label(on_failure: OnFailure) -> &'static str {
+	match on_failure {
+		OnFailure::Stop => "stop",
+		OnFailure::Continue => "continue",
+	}
+}
+
+fn count_config_rules(config: &Config) -> usize {
+	config
+		.entries
+		.iter()
+		.map(|entry| match entry {
+			Entry::Rule(_) => 1,
+			Entry::Group(group) => group.rules.len(),
+		})
+		.sum()
+}
+
+fn count_config_rules_for_kind(config: &Config, kind: RulesKind) -> usize {
+	config
+		.entries
+		.iter()
+		.map(|entry| match entry {
+			Entry::Rule(rule) => usize::from(rules_kind_matches_rule(kind, rule)),
+			Entry::Group(group) => group
+				.rules
+				.iter()
+				.filter(|rule| rules_kind_matches_rule(kind, rule))
+				.count(),
+		})
+		.sum()
+}
+
+fn collect_rule_selectors_for_kind(config: &Config, kind: RulesKind) -> Vec<String> {
+	let mut selectors = BTreeSet::new();
+	for entry in &config.entries {
+		match entry {
+			Entry::Rule(rule) => {
+				if rules_kind_matches_rule(kind, rule) {
+					selectors.insert(rule.name.clone());
+				}
+			}
+			Entry::Group(group) => {
+				if kind == RulesKind::All || kind == RulesKind::Group {
+					selectors.insert(group.name.clone());
+				}
+				for rule in &group.rules {
+					if rules_kind_matches_rule(kind, rule) {
+						selectors.insert(rule.name.clone());
+					}
+				}
+			}
+		}
+	}
+	selectors.into_iter().collect()
+}
+
+fn collect_rule_selectors_for_kind_and_search(config: &Config, kind: RulesKind, search: &str) -> Vec<String> {
+	let search = search.to_ascii_lowercase();
+	let mut selectors = BTreeSet::new();
+	for entry in &config.entries {
+		match entry {
+			Entry::Rule(rule) => {
+				if rules_kind_matches_rule(kind, rule) && config_rule_matches_search(rule, &search) {
+					selectors.insert(rule.name.clone());
+				}
+			}
+			Entry::Group(group) => {
+				if (kind == RulesKind::All || kind == RulesKind::Group) && config_group_matches_search(group, &search) {
+					selectors.insert(group.name.clone());
+				}
+				for rule in &group.rules {
+					if rules_kind_matches_rule(kind, rule) && config_rule_matches_search(rule, &search) {
+						selectors.insert(rule.name.clone());
+					}
+				}
+			}
+		}
+	}
+	selectors.into_iter().collect()
+}
+
+fn collect_config_selectors(config: &Config) -> Vec<String> {
+	collect_rule_selectors_for_kind(config, RulesKind::All)
+}
+
+fn collect_config_rule_commands_for_kind(config: &Config, kind: RulesKind) -> Vec<&str> {
+	let mut commands = Vec::new();
+	for entry in &config.entries {
+		match entry {
+			Entry::Rule(rule) => collect_config_rule_command_for_kind(rule, kind, &mut commands),
+			Entry::Group(group) => {
+				for rule in &group.rules {
+					collect_config_rule_command_for_kind(rule, kind, &mut commands);
+				}
+			}
+		}
+	}
+	commands
+}
+
+fn collect_config_rule_patterns_for_kind(config: &Config, kind: RulesKind) -> Vec<&str> {
+	let mut patterns = Vec::new();
+	for entry in &config.entries {
+		match entry {
+			Entry::Rule(rule) => collect_config_rule_patterns_for_rule_kind(rule, kind, &mut patterns),
+			Entry::Group(group) => {
+				for rule in &group.rules {
+					collect_config_rule_patterns_for_rule_kind(rule, kind, &mut patterns);
+				}
+			}
+		}
+	}
+	patterns
+}
+
+fn collect_config_rule_exclude_patterns_for_kind(config: &Config, kind: RulesKind) -> Vec<&str> {
+	let mut patterns = Vec::new();
+	for entry in &config.entries {
+		match entry {
+			Entry::Rule(rule) => collect_config_rule_exclude_patterns_for_rule_kind(rule, kind, &mut patterns),
+			Entry::Group(group) => {
+				for rule in &group.rules {
+					collect_config_rule_exclude_patterns_for_rule_kind(rule, kind, &mut patterns);
+				}
+			}
+		}
+	}
+	patterns
+}
+
+fn collect_config_fail_text_for_kind(config: &Config, kind: RulesKind) -> Vec<&str> {
+	let mut fail_text = Vec::new();
+	for entry in &config.entries {
+		match entry {
+			Entry::Rule(rule) => collect_config_rule_fail_text_for_kind(rule, kind, &mut fail_text),
+			Entry::Group(group) => {
+				if (kind == RulesKind::All || kind == RulesKind::Group)
+					&& let Some(group_fail_text) = group.fail_text.as_ref()
+				{
+					fail_text.push(group_fail_text.as_str());
+				}
+				for rule in &group.rules {
+					collect_config_rule_fail_text_for_kind(rule, kind, &mut fail_text);
+				}
+			}
+		}
+	}
+	fail_text
+}
+
+fn collect_config_rule_patterns_for_rule_kind<'a>(
+	rule: &'a config::Rule,
+	kind: RulesKind,
+	patterns: &mut Vec<&'a str>,
+) {
+	if rules_kind_matches_rule(kind, rule) {
+		patterns.extend(rule.changed.iter().map(config::Pattern::as_str));
+	}
+}
+
+fn collect_config_rule_exclude_patterns_for_rule_kind<'a>(
+	rule: &'a config::Rule,
+	kind: RulesKind,
+	patterns: &mut Vec<&'a str>,
+) {
+	if rules_kind_matches_rule(kind, rule) {
+		patterns.extend(rule.exclude.iter().map(config::Pattern::as_str));
+	}
+}
+
+fn collect_config_rule_fail_text_for_kind<'a>(rule: &'a config::Rule, kind: RulesKind, fail_text: &mut Vec<&'a str>) {
+	if rules_kind_matches_rule(kind, rule)
+		&& let Some(rule_fail_text) = rule.fail_text.as_ref()
+	{
+		fail_text.push(rule_fail_text.as_str());
+	}
+}
+
+fn collect_config_rule_command_for_kind<'a>(rule: &'a config::Rule, kind: RulesKind, commands: &mut Vec<&'a str>) {
+	if rules_kind_matches_rule(kind, rule)
+		&& let Some(command) = rule.run.as_deref()
+	{
+		commands.push(command);
+	}
+}
+
+fn render_config_rule_inventory(rule: &config::Rule) {
+	println!("[rule] {}", rule.name);
+	println!("kind: {}", if rule.install { "install" } else { "run" });
+	render_rule_patterns(rule, "");
+	if let Some(command) = &rule.run {
+		println!("command: {command}");
+	}
+	if rule.run_if_base_missing {
+		println!("runIfBaseMissing: true");
+	}
+	render_fail_text(rule.fail_text.as_ref(), "");
+	println!();
+}
+
+fn render_config_group_inventory(group: &config::Group, kind: RulesKind) {
+	if kind == RulesKind::Group {
+		println!("[group] {}", group.name);
+		match group.jobs {
+			Some(jobs) => println!("jobs: {jobs}"),
+			None => println!("jobs: default"),
+		}
+		render_fail_text(group.fail_text.as_ref(), "");
+		println!();
+		return;
+	}
+
+	let rules = group
+		.rules
+		.iter()
+		.filter(|rule| rules_kind_matches_rule(kind, rule))
+		.collect::<Vec<_>>();
+	if rules.is_empty() {
+		return;
+	}
+
+	println!("[group] {}", group.name);
+	match group.jobs {
+		Some(jobs) => println!("jobs: {jobs}"),
+		None => println!("jobs: default"),
+	}
+	render_fail_text(group.fail_text.as_ref(), "");
+	for rule in rules {
+		println!("- {}", rule.name);
+		println!("  kind: {}", if rule.install { "install" } else { "run" });
+		render_rule_patterns(rule, "  ");
+		if let Some(command) = &rule.run {
+			println!("  command: {command}");
+		}
+		if rule.run_if_base_missing {
+			println!("  runIfBaseMissing: true");
+		}
+		render_fail_text(rule.fail_text.as_ref(), "  ");
+	}
+	println!();
+}
+
+fn render_rule_patterns(rule: &config::Rule, indent: &str) {
+	if !rule.changed.is_empty() {
+		println!("{indent}changed: {}", render_pattern_list(&rule.changed));
+	}
+	if !rule.exclude.is_empty() {
+		println!("{indent}exclude: {}", render_pattern_list(&rule.exclude));
+	}
+}
+
+fn render_fail_text(fail_text: Option<&config::FailText>, indent: &str) {
+	if let Some(fail_text) = fail_text {
+		println!("{indent}failText: {}", fail_text.as_str());
+	}
+}
+
+fn render_pattern_list(patterns: &[config::Pattern]) -> String {
+	patterns
+		.iter()
+		.map(config::Pattern::as_str)
+		.collect::<Vec<_>>()
+		.join(", ")
+}
+
+fn count_config_groups(config: &Config) -> usize {
+	config
+		.entries
+		.iter()
+		.filter(|entry| matches!(entry, Entry::Group(_)))
+		.count()
+}
+
+fn count_config_groups_for_kind(config: &Config, kind: RulesKind) -> usize {
+	if kind != RulesKind::All && kind != RulesKind::Group {
+		return 0;
+	}
+	count_config_groups(config)
+}
+
+const fn rules_kind_matches_rule(kind: RulesKind, rule: &config::Rule) -> bool {
+	match kind {
+		RulesKind::All | RulesKind::Rule => true,
+		RulesKind::Group => false,
+		RulesKind::Run => !rule.install,
+		RulesKind::Install => rule.install,
+	}
+}
+
+const fn config_rule_kind_label(rule: &config::Rule) -> &'static str {
+	if rule.install { "install" } else { "run" }
+}
+
+const fn rules_kind_label(kind: RulesKind) -> &'static str {
+	match kind {
+		RulesKind::All => "all",
+		RulesKind::Rule => "rule",
+		RulesKind::Group => "group",
+		RulesKind::Run => "run",
+		RulesKind::Install => "install",
+	}
+}
+
+fn count_planned_commands(evaluation: &[EvaluatedEntry]) -> usize {
+	evaluation
+		.iter()
+		.map(|entry| match entry {
+			EvaluatedEntry::Rule(rule) => usize::from(rule.should_run()),
+			EvaluatedEntry::Group(group) => group.rules.iter().filter(|rule| rule.should_run()).count(),
+		})
+		.sum()
+}
+
+fn collect_planned_commands(evaluation: &[EvaluatedEntry]) -> Vec<&str> {
+	let mut commands = Vec::new();
+
+	for entry in evaluation {
+		match entry {
+			EvaluatedEntry::Rule(rule) => collect_rule_command(rule, &mut commands),
+			EvaluatedEntry::Group(group) => {
+				for rule in &group.rules {
+					collect_rule_command(rule, &mut commands);
+				}
+			}
+		}
+	}
+
+	commands
+}
+
+fn collect_rule_command<'a>(rule: &'a EvaluatedRule, commands: &mut Vec<&'a str>) {
+	if rule.should_run()
+		&& let Some(command) = &rule.command
+	{
+		commands.push(command);
+	}
+}
+
+fn collect_matched_rules(evaluation: &[EvaluatedEntry]) -> Vec<&str> {
+	let mut rule_names = Vec::new();
+
+	for entry in evaluation {
+		match entry {
+			EvaluatedEntry::Rule(rule) => collect_matched_rule(rule, &mut rule_names),
+			EvaluatedEntry::Group(group) => {
+				for rule in &group.rules {
+					collect_matched_rule(rule, &mut rule_names);
+				}
+			}
+		}
+	}
+
+	rule_names
+}
+
+fn collect_matched_rule<'a>(rule: &'a EvaluatedRule, rule_names: &mut Vec<&'a str>) {
+	if rule.should_run() {
+		rule_names.push(rule.rule.name.as_str());
+	}
+}
+
+fn count_config_matched_files(evaluation: &[EvaluatedEntry]) -> usize {
+	collect_matched_files(evaluation).len()
+}
+
+fn collect_matched_files(evaluation: &[EvaluatedEntry]) -> BTreeSet<std::path::PathBuf> {
+	let mut matched_files = BTreeSet::new();
+
+	for entry in evaluation {
+		match entry {
+			EvaluatedEntry::Rule(rule) => collect_rule_matches(rule, &mut matched_files),
+			EvaluatedEntry::Group(group) => {
+				for rule in &group.rules {
+					collect_rule_matches(rule, &mut matched_files);
+				}
+			}
+		}
+	}
+
+	matched_files
+}
+
+fn collect_rule_matches(rule: &EvaluatedRule, matched_files: &mut BTreeSet<std::path::PathBuf>) {
+	for path in &rule.matches {
+		matched_files.insert(path.clone());
+	}
+}
+
+fn execute_config_entries(
+	renderer: &Renderer,
+	on_failure: OnFailure,
+	evaluation: &[EvaluatedEntry],
+	repo_root: &std::path::Path,
+	args: &ConfigRunArgs,
+) -> Result<TaskCounters> {
+	let mut counts = TaskCounters::default();
+
+	for entry in evaluation {
+		match entry {
+			EvaluatedEntry::Rule(rule) => {
+				if !rule.should_run() {
+					continue;
+				}
+				let state = execute_config_rule(
+					renderer,
+					rule,
+					repo_root,
+					args.debug,
+					effective_render_mode(args.render, args.no_color),
+					args.quiet,
+				);
+				counts.add_state(state);
+			}
+			EvaluatedEntry::Group(group) => {
+				if !group.should_run() {
+					continue;
+				}
+				counts.add(execute_config_group(renderer, group, repo_root, args)?);
+			}
+		}
+
+		if counts.has_non_success() && on_failure == OnFailure::Stop {
+			break;
+		}
+	}
+
+	Ok(counts)
+}
+
+fn execute_config_entries_json(
+	on_failure: OnFailure,
+	evaluation: &[EvaluatedEntry],
+	repo_root: &std::path::Path,
+	args: &ConfigRunArgs,
+) -> Result<(TaskCounters, Vec<serde_json::Value>)> {
+	let mut counts = TaskCounters::default();
+	let mut executions = Vec::new();
+
+	for entry in evaluation {
+		match entry {
+			EvaluatedEntry::Rule(rule) => {
+				if !rule.should_run() {
+					continue;
+				}
+				let result = run_config_rule_task(rule, repo_root, args.debug);
+				counts.add_state(result.state);
+				executions.push(rule_execution_json(
+					rule,
+					None,
+					&result,
+					repo_root,
+					effective_render_mode(args.render, args.no_color),
+				));
+			}
+			EvaluatedEntry::Group(group) => {
+				if !group.should_run() {
+					continue;
+				}
+				let results = run_config_group_tasks(group, repo_root, args)?;
+				let mut group_counts = TaskCounters::default();
+				for (_, result) in &results {
+					group_counts.add_state(result.state);
+				}
+				counts.add(group_counts);
+				executions.push(group_execution_json(
+					group,
+					&results,
+					repo_root,
+					effective_render_mode(args.render, args.no_color),
+				));
+			}
+		}
+
+		if counts.has_non_success() && on_failure == OnFailure::Stop {
+			break;
+		}
+	}
+
+	Ok((counts, executions))
+}
+
+fn execute_config_rule(
+	renderer: &Renderer,
+	rule: &EvaluatedRule,
+	repo_root: &std::path::Path,
+	debug_enabled: bool,
+	render_mode: RenderMode,
+	quiet: bool,
+) -> runner::ResultState {
+	let result = run_config_rule_task(rule, repo_root, debug_enabled);
+	render_config_rule_result(renderer, rule, &result, repo_root, debug_enabled, render_mode, quiet);
+	result.state
+}
+
+fn execute_config_group(
+	renderer: &Renderer,
+	group: &EvaluatedGroup,
+	repo_root: &std::path::Path,
+	args: &ConfigRunArgs,
+) -> Result<TaskCounters> {
+	let results = run_config_group_tasks(group, repo_root, args)?;
+
+	let mut counts = TaskCounters::default();
+	for (rule, result) in &results {
+		render_config_rule_result(
+			renderer,
+			rule,
+			result,
+			repo_root,
+			args.debug,
+			effective_render_mode(args.render, args.no_color),
+			args.quiet,
+		);
+		counts.add_state(result.state);
+	}
+
+	if counts.has_non_success() {
+		render_group_fail_text(group, effective_render_mode(args.render, args.no_color));
+	}
+
+	Ok(counts)
+}
+
+fn run_config_group_tasks<'a>(
+	group: &'a EvaluatedGroup,
+	repo_root: &std::path::Path,
+	args: &ConfigRunArgs,
+) -> Result<Vec<(&'a EvaluatedRule, runner::TaskResult)>> {
+	let runnable: Vec<_> = group.rules.iter().filter(|rule| rule.should_run()).collect();
+	let jobs = group.group.jobs.unwrap_or_else(|| args.effective_jobs()).max(1);
+
+	if runnable.len() <= 1 || jobs <= 1 {
+		return Ok(runnable
+			.iter()
+			.map(|rule| (*rule, run_config_rule_task(rule, repo_root, args.debug)))
+			.collect::<Vec<_>>());
+	}
+
+	let pool = rayon::ThreadPoolBuilder::new()
+		.num_threads(jobs)
+		.build()
+		.map_err(|error| anyhow!(error.to_string()))?;
+
+	Ok(pool.install(|| {
+		runnable
+			.par_iter()
+			.map(|rule| (*rule, run_config_rule_task(rule, repo_root, args.debug)))
+			.collect::<Vec<_>>()
+	}))
+}
+
+fn run_config_rule_task(rule: &EvaluatedRule, repo_root: &std::path::Path, debug_enabled: bool) -> runner::TaskResult {
+	let command = rule.command.as_deref().unwrap_or_default();
+	let invocations = runner::prepare_invocations(Some(command), None);
+	invocations.map_or_else(
+		|error| runner::TaskResult {
+			cwd: repo_root.to_path_buf(),
+			outputs: Vec::new(),
+			state: runner::ResultState::SpawnError,
+			error: Some(error),
+		},
+		|invocations| runner::run_task_dir(repo_root, &invocations, false, debug_enabled),
+	)
+}
+
+fn render_config_rule_result(
+	renderer: &Renderer,
+	rule: &EvaluatedRule,
+	result: &runner::TaskResult,
+	repo_root: &std::path::Path,
+	debug_enabled: bool,
+	render_mode: RenderMode,
+	quiet: bool,
+) {
+	let failed = result.state != runner::ResultState::Success;
+	if quiet && !failed {
+		return;
+	}
+
+	render_task_results(renderer, std::slice::from_ref(result), repo_root);
+	report_debug_errors(debug_enabled, std::slice::from_ref(result));
+	if failed {
+		render_rule_fail_text(rule, result, repo_root, render_mode);
+	}
+}
+
+fn render_rule_fail_text(
+	rule: &EvaluatedRule,
+	result: &runner::TaskResult,
+	repo_root: &std::path::Path,
+	render_mode: RenderMode,
+) {
+	if let Some(message) = rule_fail_text_message(rule, result, repo_root, render_mode) {
+		eprintln!("{message}");
+	}
+}
+
+fn render_group_fail_text(group: &EvaluatedGroup, render_mode: RenderMode) {
+	if let Some(message) = group_fail_text_message(group, render_mode) {
+		eprintln!("{message}");
+	}
+}
+
+fn rule_fail_text_message(
+	rule: &EvaluatedRule,
+	result: &runner::TaskResult,
+	repo_root: &std::path::Path,
+	render_mode: RenderMode,
+) -> Option<String> {
+	let fail_text = rule.rule.fail_text.as_ref()?;
+	let (command, exit_code) = result.outputs.last().map_or_else(
+		|| ("", "unavailable".to_owned()),
+		|output| {
+			(
+				output.command.as_str(),
+				output
+					.exit_code
+					.map_or_else(|| "unavailable".to_owned(), |code| code.to_string()),
+			)
+		},
+	);
+	let cwd = runner::relative_cwd_label(&result.cwd, repo_root);
+	let context = FailTextContext {
+		rule: &rule.rule.name,
+		command,
+		cwd: &cwd,
+		exit_code: &exit_code,
+	};
+	Some(fail_text.render(&context, render_mode))
+}
+
+fn group_fail_text_message(group: &EvaluatedGroup, render_mode: RenderMode) -> Option<String> {
+	let fail_text = group.group.fail_text.as_ref()?;
+	let context = FailTextContext {
+		rule: &group.group.name,
+		command: "parallel group",
+		cwd: ".",
+		exit_code: "1",
+	};
+	Some(fail_text.render(&context, render_mode))
+}
+
+fn group_execution_json(
+	group: &EvaluatedGroup,
+	results: &[(&EvaluatedRule, runner::TaskResult)],
+	repo_root: &std::path::Path,
+	render_mode: RenderMode,
+) -> serde_json::Value {
+	json!({
+		"type": "group",
+		"name": group.group.name,
+		"jobs": group.group.jobs,
+		"failText": group_fail_text_message(group, render_mode),
+		"results": results
+			.iter()
+			.map(|(rule, result)| rule_execution_json(rule, Some(&group.group.name), result, repo_root, render_mode))
+			.collect::<Vec<_>>(),
+	})
+}
+
+fn rule_execution_json(
+	rule: &EvaluatedRule,
+	parent_group: Option<&str>,
+	result: &runner::TaskResult,
+	repo_root: &std::path::Path,
+	render_mode: RenderMode,
+) -> serde_json::Value {
+	json!({
+		"type": "rule",
+		"name": rule.rule.name,
+		"parentGroup": parent_group,
+		"cwd": runner::relative_cwd_label(&result.cwd, repo_root),
+		"state": result_state_label(result.state),
+		"failText": rule_fail_text_message(rule, result, repo_root, render_mode),
+		"error": result.error.as_ref().map(ToString::to_string),
+		"outputs": result.outputs.iter().map(invocation_output_json).collect::<Vec<_>>(),
+	})
+}
+
+fn invocation_output_json(output: &runner::InvocationOutput) -> serde_json::Value {
+	json!({
+		"command": output.command,
+		"stdout": output.stdout,
+		"stderr": output.stderr,
+		"state": result_state_label(output.state),
+		"exitCode": output.exit_code,
+	})
+}
+
+fn task_result_json(result: &runner::TaskResult, repo_root: &std::path::Path) -> serde_json::Value {
+	json!({
+		"cwd": runner::relative_cwd_label(&result.cwd, repo_root),
+		"state": result_state_label(result.state),
+		"error": result.error.as_ref().map(ToString::to_string),
+		"outputs": result.outputs.iter().map(invocation_output_json).collect::<Vec<_>>(),
+	})
+}
+
+const fn result_state_label(state: runner::ResultState) -> &'static str {
+	match state {
+		runner::ResultState::Success => "success",
+		runner::ResultState::Failed => "failed",
+		runner::ResultState::Interrupted => "interrupted",
+		runner::ResultState::SpawnError => "spawn_error",
+	}
+}
+
 fn resolve_run_config(cli: &RunArgs, repo_root: &std::path::Path) -> Result<RunConfig> {
-	let mut match_strategy = MatchStrategy::Glob(cli.pattern.clone().unwrap_or_default());
+	let mut pattern = cli.pattern.clone().unwrap_or_default();
 	let mut command = cli.command.clone();
 	let script = cli.script.clone();
-	let mut once = cli.effective_once();
+	let once = cli.effective_once();
 
 	if cli.install {
-		let package_manager =
-			detect_package_manager(repo_root).context("failed to detect package manager for --install")?;
-		match_strategy = MatchStrategy::from_package_manager(package_manager);
-		command = Some(package_manager.install_command());
-		once = true;
+		let resolved = resolve_install_plan(repo_root, "failed to detect package manager for --install")?;
+		pattern = resolved.pattern;
+		command = Some(resolved.command);
 
 		if cli.debug {
 			debug!(
-				package_manager = package_manager.name(),
-				pattern = match_strategy.pattern(),
+				package_manager = resolved.package_manager,
+				pattern = pattern,
 				command = command.as_deref().unwrap_or_default(),
 				"resolved --install settings"
 			);
@@ -161,46 +5609,35 @@ fn resolve_run_config(cli: &RunArgs, repo_root: &std::path::Path) -> Result<RunC
 	}
 
 	Ok(RunConfig {
-		match_strategy,
+		pattern,
 		command,
 		script,
 		once,
 	})
 }
 
+fn resolve_install_plan(repo_root: &std::path::Path, error_context: &str) -> Result<InstallPlan, error::PullhookError> {
+	let package_manager =
+		detect_package_manager(repo_root).map_err(|error| error::PullhookError::PackageManagerDetection {
+			context: error_context.to_owned(),
+			source: Box::new(error),
+		})?;
+
+	Ok(InstallPlan {
+		package_manager: package_manager.name(),
+		pattern: package_manager.install_pattern(),
+		command: package_manager.install_command(),
+	})
+}
+
 fn collect_matches(cli: &RunArgs, repo: &GitRepo, run_config: &RunConfig) -> Result<(usize, Vec<std::path::PathBuf>)> {
-	let (base, changed_count, matched_files) = match &run_config.match_strategy {
-		MatchStrategy::Glob(pattern) => {
-			let (base, changed_files) = repo
-				.resolve_base_and_changed_files(cli.base.as_deref(), cli.debug)
-				.context("failed to resolve diff base or read changed files")?;
-			let changed_count = changed_files.len();
-
-			if cli.debug {
-				debug!(count = changed_count, "loaded changed files");
-				for path in &changed_files {
-					debug!(changed = %path.display(), "changed file");
-				}
-			}
-
-			let matcher = matcher::compile(pattern).context("failed to compile pattern")?;
-			let matched_files = changed_files
-				.into_iter()
-				.filter(|path| matcher.is_match(path))
-				.collect();
-
-			(base, changed_count, matched_files)
-		}
-		MatchStrategy::Install { pattern } => {
-			let matcher = matcher::compile(pattern).context("failed to compile pattern")?;
-			let (base, changed_count, matched_files) = repo
-				.resolve_install_matches(cli.base.as_deref(), |path| matcher.is_match(path), cli.debug)
-				.context("failed to resolve diff base or read changed files")?;
-			(base, changed_count, matched_files)
-		}
-	};
+	let matcher = matcher::compile(&run_config.pattern).context("failed to compile pattern")?;
+	let (base, changed_count, matched_files) = repo
+		.resolve_filtered_matches(cli.base.as_deref(), |path| matcher.is_match(path), cli.debug)
+		.context("failed to resolve diff base or read changed files")?;
 
 	if cli.debug {
+		debug!(count = changed_count, "loaded changed files");
 		debug!(%base, "resolved diff base");
 		debug!(count = matched_files.len(), "matched changed files");
 		for path in &matched_files {
@@ -261,7 +5698,7 @@ fn render_summary(renderer: &Renderer, matched_files: usize, counts: TaskCounter
 	});
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Default)]
 struct TaskCounters {
 	task_dirs: usize,
 	passed: usize,
@@ -269,25 +5706,36 @@ struct TaskCounters {
 	interrupted: usize,
 }
 
-fn summarize_results(results: &[runner::TaskResult]) -> TaskCounters {
-	let mut passed = 0usize;
-	let mut failed = 0usize;
-	let mut interrupted = 0usize;
+impl TaskCounters {
+	const fn add(&mut self, other: Self) {
+		self.task_dirs += other.task_dirs;
+		self.passed += other.passed;
+		self.failed += other.failed;
+		self.interrupted += other.interrupted;
+	}
 
-	for result in results {
-		match result.state {
-			runner::ResultState::Success => passed += 1,
-			runner::ResultState::Failed | runner::ResultState::SpawnError => failed += 1,
-			runner::ResultState::Interrupted => interrupted += 1,
+	const fn add_state(&mut self, state: runner::ResultState) {
+		self.task_dirs += 1;
+		match state {
+			runner::ResultState::Success => self.passed += 1,
+			runner::ResultState::Failed | runner::ResultState::SpawnError => self.failed += 1,
+			runner::ResultState::Interrupted => self.interrupted += 1,
 		}
 	}
 
-	TaskCounters {
-		task_dirs: results.len(),
-		passed,
-		failed,
-		interrupted,
+	const fn has_non_success(self) -> bool {
+		self.failed > 0 || self.interrupted > 0
 	}
+}
+
+fn summarize_results(results: &[runner::TaskResult]) -> TaskCounters {
+	let mut counts = TaskCounters::default();
+
+	for result in results {
+		counts.add_state(result.state);
+	}
+
+	counts
 }
 
 fn print_dry_run(

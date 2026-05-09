@@ -13,9 +13,9 @@ struct PackageManagerSpec {
 
 const NPM_SPEC: PackageManagerSpec = PackageManagerSpec {
 	name: "npm",
-	lock_files: &["package-lock.json"],
+	lock_files: &["package-lock.json", "npm-shrinkwrap.json"],
 	config_files: &["package.json"],
-	watched_files: &["package.json", "package-lock.json"],
+	watched_files: &["package.json", "package-lock.json", "npm-shrinkwrap.json"],
 };
 
 const YARN_SPEC: PackageManagerSpec = PackageManagerSpec {
@@ -39,6 +39,21 @@ const BUN_SPEC: PackageManagerSpec = PackageManagerSpec {
 	watched_files: &["package.json", "bun.lock", "bun.lockb"],
 };
 
+const AUBE_SPEC: PackageManagerSpec = PackageManagerSpec {
+	name: "aube",
+	lock_files: &["aube-lock.yaml"],
+	config_files: &[],
+	watched_files: &[
+		"aube-lock.yaml",
+		"bun.lock",
+		"npm-shrinkwrap.json",
+		"package.json",
+		"package-lock.json",
+		"pnpm-lock.yaml",
+		"yarn.lock",
+	],
+};
+
 const DENO_SPEC: PackageManagerSpec = PackageManagerSpec {
 	name: "deno",
 	lock_files: &["deno.lock"],
@@ -53,15 +68,26 @@ const VLT_SPEC: PackageManagerSpec = PackageManagerSpec {
 	watched_files: &["package.json", "vlt-lock.json"],
 };
 
-// TODO: add wally support?
-
-const LOCKFILE_DETECTION_ORDER: [PackageManager; 6] = [
+const LOCKFILE_DETECTION_PRIORITY: [PackageManager; 7] = [
 	PackageManager::Bun,
 	PackageManager::Npm,
 	PackageManager::Yarn,
 	PackageManager::Pnpm,
 	PackageManager::Deno,
 	PackageManager::Vlt,
+	PackageManager::Aube,
+];
+
+const CONFIG_DETECTION_PRIORITY: [PackageManager; 2] = [PackageManager::Deno, PackageManager::Npm];
+
+const PACKAGE_MANAGERS: &[PackageManager] = &[
+	PackageManager::Npm,
+	PackageManager::Yarn,
+	PackageManager::Pnpm,
+	PackageManager::Bun,
+	PackageManager::Deno,
+	PackageManager::Vlt,
+	PackageManager::Aube,
 ];
 
 /// Supported package managers.
@@ -79,6 +105,8 @@ pub enum PackageManager {
 	Deno,
 	/// vlt
 	Vlt,
+	/// aube
+	Aube,
 }
 
 impl PackageManager {
@@ -90,6 +118,7 @@ impl PackageManager {
 			Self::Bun => &BUN_SPEC,
 			Self::Deno => &DENO_SPEC,
 			Self::Vlt => &VLT_SPEC,
+			Self::Aube => &AUBE_SPEC,
 		}
 	}
 
@@ -130,9 +159,15 @@ impl PackageManager {
 	}
 }
 
+/// Return all supported package managers in display order.
+#[must_use]
+pub const fn package_managers() -> &'static [PackageManager] {
+	PACKAGE_MANAGERS
+}
+
 /// Detect the package manager for `--install`.
 pub fn detect_package_manager(repo_root: &Path) -> Result<PackageManager, PullhookError> {
-	let detected_by_lock: Vec<_> = LOCKFILE_DETECTION_ORDER
+	let detected_by_lock: Vec<_> = LOCKFILE_DETECTION_PRIORITY
 		.into_iter()
 		.filter(|package_manager| any_file_exists(repo_root, package_manager.lock_files()))
 		.collect();
@@ -147,12 +182,11 @@ pub fn detect_package_manager(repo_root: &Path) -> Result<PackageManager, Pullho
 		return Ok(found);
 	}
 
-	if any_file_exists(repo_root, PackageManager::Deno.config_files()) {
-		return Ok(PackageManager::Deno);
-	}
-
-	if any_file_exists(repo_root, PackageManager::Npm.config_files()) {
-		return Ok(PackageManager::Npm);
+	if let Some(found) = CONFIG_DETECTION_PRIORITY
+		.into_iter()
+		.find(|package_manager| any_file_exists(repo_root, package_manager.config_files()))
+	{
+		return Ok(found);
 	}
 
 	Err(PullhookError::PackageManagerNotFound {
@@ -175,7 +209,7 @@ mod tests {
 	fn install_pattern_matches_current_npm_contract() {
 		assert_eq!(
 			PackageManager::Npm.install_pattern(),
-			"+(package.json|package-lock.json)"
+			"+(package.json|package-lock.json|npm-shrinkwrap.json)"
 		);
 	}
 
@@ -211,9 +245,34 @@ mod tests {
 	}
 
 	#[test]
+	fn install_pattern_matches_current_aube_contract() {
+		assert_eq!(
+			PackageManager::Aube.install_pattern(),
+			"+(aube-lock.yaml|bun.lock|npm-shrinkwrap.json|package.json|package-lock.json|pnpm-lock.yaml|yarn.lock)"
+		);
+	}
+
+	#[test]
+	fn detects_aube_from_aube_lock_file() {
+		let dir = tempdir().expect("tempdir");
+		fs::write(dir.path().join("aube-lock.yaml"), "").expect("write aube lock file");
+		assert_eq!(
+			detect_package_manager(dir.path()).expect("detect"),
+			PackageManager::Aube
+		);
+	}
+
+	#[test]
 	fn detects_npm_from_lock_file() {
 		let dir = tempdir().expect("tempdir");
 		fs::write(dir.path().join("package-lock.json"), "{}").expect("write lock file");
+		assert_eq!(detect_package_manager(dir.path()).expect("detect"), PackageManager::Npm);
+	}
+
+	#[test]
+	fn detects_npm_from_shrinkwrap_lock_file() {
+		let dir = tempdir().expect("tempdir");
+		fs::write(dir.path().join("npm-shrinkwrap.json"), "{}").expect("write lock file");
 		assert_eq!(detect_package_manager(dir.path()).expect("detect"), PackageManager::Npm);
 	}
 
@@ -248,6 +307,17 @@ mod tests {
 	fn detects_deno_from_config_file() {
 		let dir = tempdir().expect("tempdir");
 		fs::write(dir.path().join("deno.json"), "{}").expect("write deno config");
+		assert_eq!(
+			detect_package_manager(dir.path()).expect("detect"),
+			PackageManager::Deno
+		);
+	}
+
+	#[test]
+	fn prefers_deno_config_over_package_json_when_no_lock_file_exists() {
+		let dir = tempdir().expect("tempdir");
+		fs::write(dir.path().join("deno.jsonc"), "{}").expect("write deno config");
+		fs::write(dir.path().join("package.json"), "{}").expect("write package json");
 		assert_eq!(
 			detect_package_manager(dir.path()).expect("detect"),
 			PackageManager::Deno

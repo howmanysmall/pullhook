@@ -2,7 +2,7 @@
 
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::Command as ProcessCommand;
+use std::process::{Command as ProcessCommand, Output};
 
 use tempfile::TempDir;
 
@@ -36,6 +36,16 @@ fn debug_mode_streams_outputs_and_keeps_renderer_output() {
 		count_exact_lines(&stderr, "debug-stream-stderr"),
 		2,
 		"stderr should be streamed once per matched task",
+	);
+	assert_eq!(
+		count_exact_lines(&stdout, "debug-stream-stderr"),
+		0,
+		"stderr stream content should not be routed into stdout",
+	);
+	assert_eq!(
+		count_exact_lines(&stderr, "debug-stream-stdout"),
+		0,
+		"stdout stream content should not be routed into stderr",
 	);
 	assert_eq!(
 		count_occurrences(&stdout, "loaded changed files"),
@@ -135,7 +145,7 @@ fn count_exact_lines(haystack: &str, needle: &str) -> usize {
 	haystack.lines().filter(|line| *line == needle).count()
 }
 
-fn run_pullhook(repo_root: &Path, args: &[&str]) -> std::process::Output {
+fn run_pullhook(repo_root: &Path, args: &[&str]) -> Output {
 	ProcessCommand::new(assert_cmd::cargo::cargo_bin!("pullhook"))
 		.current_dir(repo_root)
 		.env("RUST_LOG", "debug")

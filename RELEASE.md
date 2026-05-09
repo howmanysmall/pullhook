@@ -1,6 +1,27 @@
 # Release Process
 
-This project uses `cargo-release` to automate version updates, git tagging, and release commits. Releases are published via `cargo-dist` to GitHub Releases, Homebrew, npm, and shell/powershell installers.
+This project uses `cargo-release` to automate version updates, git tagging, and release commits. Releases are published
+via `cargo-dist` to GitHub Releases, Homebrew, npm, and shell/powershell installers.
+
+## Quick Release (recommended)
+
+The easiest way to release is the bundled script:
+
+```bash
+./scripts/release.sh patch
+./scripts/release.sh minor
+./scripts/release.sh major
+./scripts/release.sh 2.0.0
+```
+
+The script handles **everything**:
+
+- ✅ Checks you're on `main`
+- ✅ Checks the working tree is clean
+- ✅ Asks for confirmation with current → target version
+- ✅ Runs all quality checks (`./scripts/pre-commit.sh`)
+- ✅ Bumps version, commits, tags, and pushes
+- ✅ Prints a link to monitor CI artifact builds
 
 ## Prerequisites
 
@@ -10,49 +31,27 @@ Install `cargo-release`:
 cargo install cargo-release
 ```
 
-## Release Workflow
+## Manual Release
 
-### 1. Update CHANGELOG.md
-
-Manually update `CHANGELOG.md` to document the changes for the upcoming release. Follow [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) format.
-
-Example:
-
-```diff
-## [Unreleased]
-
-### Added
-- (list of features)
-
-## [0.2.0] - [2026-03-05]
-
-### Added
-- Add feature description here
-
-- (commit, close, tag, push in one command)
-```
-
-### 2. Run the Release
-
-From the `main` branch:
+If you prefer to run `cargo-release` directly:
 
 ```bash
 # Release with specific version
-cargo release 0.2.0
+cargo release 0.2.0 --execute
 
 # Or use semver keywords (major, minor, patch, rc, beta, alpha)
-cargo release minor
-cargo release patch
+cargo release minor --execute
+cargo release patch --execute
 ```
 
-### 3. What Happens
+## What Happens
 
-The release process automatically:
+Whether you use the script or run `cargo-release` directly, the release process automatically:
 
 1. ✅ Runs `./scripts/pre-commit.sh` (all quality checks)
 2. ✅ Updates version in `Cargo.toml`
 3. ✅ Verifies the build
-4. ✅ Commits changes with message: `chore: Release pullhook version X.Y.Z`
+4. ✅ Commits changes with message: `chore: release {{version}}`
 5. ✅ Creates git tag `vX.Y.Z`
 6. ✅ Pushes commit and tag to `origin`
 7. 🚀 Triggers `cargo-dist` CI workflow to build and publish artifacts

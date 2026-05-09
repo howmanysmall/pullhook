@@ -1,10 +1,10 @@
-# AGENTS.md
+# Agents Guide
 
 You are an expert at working with Rust CLI tools and have been onboarded to the `pullhook` codebase.
 
 ## Project Overview
 
-**pullhook** is a Rust CLI tool (binary: `pullhook`) that runs commands when files change after `git pull`.
+**`pullhook`** is a Rust CLI tool (binary: `pullhook`) that runs commands when files change after `git pull`.
 It is a drop-in compatible replacement for the npm package `git-pull-run`, with bounded concurrency,
 resilient diff base fallback, and safer command execution.
 
@@ -26,7 +26,7 @@ cargo nextest run -E 'test(test_name)'
 cargo nextest run --no-tests=pass
 ```
 
-### Lint and Quality (run before pushing)
+### Lint and Quality (Run Before Pushing)
 
 ```bash
 cargo fmt --all --check
@@ -36,7 +36,7 @@ cargo deny check
 cargo shear
 ```
 
-### Lint and Quality (always run before finishing a task)
+### Lint and Quality (Always Run Before Finishing a Task)
 
 ```bash
 bash ./scripts/pre-commit.sh
@@ -48,11 +48,10 @@ bash ./scripts/pre-commit.sh
 cargo bench
 ```
 
-### JS Tooling (formatting and commit lint support)
+### JS Tooling (Formatting and Commit Lint Support)
 
 ```bash
-bun install
-bun x --bun lint-staged
+aube install
 ```
 
 ## Architecture
@@ -67,7 +66,8 @@ CLI parse -> validate -> (--install? detect PM) -> git repo root
 
 ### Module Responsibilities (`src/`)
 
-- **`main.rs`** - Entry point. Sets up tracing and signal handling (`ctrlc`), validates args, and orchestrates the full flow.
+- **`main.rs`** - Entry point. Sets up tracing and signal handling (`ctrlc`), validates arguments, and orchestrates the
+  full flow.
 - **`cli.rs`** - `clap` derive-based CLI parsing and validation. `--install` implies `--once` and conflicts with `--pattern`/`--command`.
 - **`git.rs`** - Git operations: repo root discovery, changed files (`diff --name-only`), and diff base resolution.
 - **`matcher.rs`** - Glob matching via `globset` with a shim for bash extglob syntax.

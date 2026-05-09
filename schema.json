@@ -1,0 +1,133 @@
+{
+	"$defs": {
+		"group": {
+			"additionalProperties": false,
+			"properties": {
+				"failText": {
+					"minLength": 1,
+					"type": "string"
+				},
+				"jobs": {
+					"minimum": 1,
+					"type": "integer"
+				},
+				"name": {
+					"minLength": 1,
+					"type": "string"
+				},
+				"parallel": {
+					"items": {
+						"$ref": "#/$defs/rule"
+					},
+					"minItems": 1,
+					"type": "array"
+				}
+			},
+			"required": ["name", "parallel"],
+			"type": "object"
+		},
+		"patternList": {
+			"oneOf": [
+				{
+					"minLength": 1,
+					"type": "string"
+				},
+				{
+					"items": {
+						"minLength": 1,
+						"type": "string"
+					},
+					"minItems": 1,
+					"type": "array"
+				}
+			]
+		},
+		"rule": {
+			"additionalProperties": false,
+			"oneOf": [
+				{
+					"not": {
+						"required": ["install"]
+					},
+					"required": ["changed", "run"]
+				},
+				{
+					"not": {
+						"anyOf": [
+							{
+								"required": ["changed"]
+							},
+							{
+								"required": ["run"]
+							}
+						]
+					},
+					"properties": {
+						"install": {
+							"const": true
+						}
+					},
+					"required": ["install"]
+				}
+			],
+			"properties": {
+				"changed": {
+					"$ref": "#/$defs/patternList"
+				},
+				"exclude": {
+					"$ref": "#/$defs/patternList"
+				},
+				"failText": {
+					"minLength": 1,
+					"type": "string"
+				},
+				"install": {
+					"type": "boolean"
+				},
+				"name": {
+					"minLength": 1,
+					"type": "string"
+				},
+				"run": {
+					"minLength": 1,
+					"type": "string"
+				},
+				"runIfBaseMissing": {
+					"type": "boolean"
+				}
+			},
+			"required": ["name"],
+			"type": "object"
+		}
+	},
+	"$id": "https://pullhook.dev/schema.json",
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"additionalProperties": false,
+	"properties": {
+		"$schema": {
+			"type": "string"
+		},
+		"onFailure": {
+			"default": "stop",
+			"enum": ["stop", "continue"],
+			"type": "string"
+		},
+		"rules": {
+			"items": {
+				"oneOf": [
+					{
+						"$ref": "#/$defs/rule"
+					},
+					{
+						"$ref": "#/$defs/group"
+					}
+				]
+			},
+			"minItems": 1,
+			"type": "array"
+		}
+	},
+	"required": ["rules"],
+	"title": "Pullhook config",
+	"type": "object"
+}
