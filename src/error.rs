@@ -110,6 +110,15 @@ pub enum PullhookError {
 		reason: String,
 	},
 
+	/// No config file was found in the repository.
+	#[error("no pullhook config found; run `pullhook init` to create {default_config}")]
+	ConfigMissing {
+		/// Repository root searched for config files.
+		repo_root: String,
+		/// Default config file name suggested to the user.
+		default_config: &'static str,
+	},
+
 	/// Config validation failed.
 	#[error("invalid config `{path}`:\n{details}")]
 	ConfigValidation {

@@ -2267,6 +2267,17 @@ fn validate_json_reports_missing_config_as_json() {
 			.expect("error")
 			.contains("no pullhook config found")
 	);
+	assert_eq!(value["configDiscoveryError"]["kind"], "missing");
+	let reported_root = PathBuf::from(
+		value["configDiscoveryError"]["repoRoot"]
+			.as_str()
+			.expect("config repo root"),
+	);
+	assert_eq!(
+		reported_root.canonicalize().expect("canonicalize reported root"),
+		repo_root.canonicalize().expect("canonicalize repo root")
+	);
+	assert_eq!(value["configDiscoveryError"]["defaultConfig"], "pullhook.json");
 	assert_eq!(
 		value["details"],
 		serde_json::json!([
@@ -2294,6 +2305,17 @@ fn run_json_reports_missing_config_as_json() {
 			.expect("error")
 			.contains("no pullhook config found")
 	);
+	assert_eq!(value["configDiscoveryError"]["kind"], "missing");
+	let reported_root = PathBuf::from(
+		value["configDiscoveryError"]["repoRoot"]
+			.as_str()
+			.expect("config repo root"),
+	);
+	assert_eq!(
+		reported_root.canonicalize().expect("canonicalize reported root"),
+		repo_root.canonicalize().expect("canonicalize repo root")
+	);
+	assert_eq!(value["configDiscoveryError"]["defaultConfig"], "pullhook.json");
 	assert_eq!(
 		value["details"],
 		serde_json::json!([

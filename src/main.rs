@@ -707,13 +707,14 @@ fn validate_config_command(args: &ValidateArgs) -> Result<()> {
 		let path = match resolve_config_path(&cwd, &repo_root, args.config.as_deref()) {
 			Ok(path) => path,
 			Err(error) => {
+				let config_error = find_pullhook_error(&error);
 				println!(
 					"{}",
 					serde_json::to_string_pretty(&config_validation_error_json(
 						None,
 						&error.to_string(),
 						&json_error_details(&error),
-						None,
+						config_error,
 					))?
 				);
 				return Err(error);
@@ -1276,10 +1277,11 @@ fn resolve_config_path(
 	}
 
 	config::discover(repo_root)?.ok_or_else(|| {
-		anyhow!(
-			"no pullhook config found; run `pullhook init` to create {}",
-			config::config_names()[0]
-		)
+		error::PullhookError::ConfigMissing {
+			repo_root: repo_root.display().to_string(),
+			default_config: config::config_names()[0],
+		}
+		.into()
 	})
 }
 
@@ -1586,6 +1588,17 @@ fn print_json_error(error: &anyhow::Error) -> Result<()> {
 		);
 		return Ok(());
 	}
+	if let Some(error::PullhookError::ConfigMissing {
+		repo_root,
+		default_config,
+	}) = pullhook_error
+	{
+		println!(
+			"{}",
+			serde_json::to_string_pretty(&config_missing_error_json(error, &details, repo_root, default_config))?
+		);
+		return Ok(());
+	}
 
 	println!(
 		"{}",
@@ -1736,6 +1749,25 @@ fn config_path_error_json(
 			"path": path,
 			"extension": extension,
 			"reason": reason,
+			"supported": config::config_names(),
+		},
+	})
+}
+
+fn config_missing_error_json(
+	error: &anyhow::Error,
+	details: &[String],
+	repo_root: &str,
+	default_config: &str,
+) -> serde_json::Value {
+	json!({
+		"status": "error",
+		"error": error.to_string(),
+		"details": details,
+		"configDiscoveryError": {
+			"kind": "missing",
+			"repoRoot": repo_root,
+			"defaultConfig": default_config,
 			"supported": config::config_names(),
 		},
 	})
@@ -2207,6 +2239,17 @@ fn config_validation_error_json(
 		value["parseError"] = json!({
 			"path": path,
 			"reason": reason,
+		});
+	} else if let Some(error::PullhookError::ConfigMissing {
+		repo_root,
+		default_config,
+	}) = config_error
+	{
+		value["configDiscoveryError"] = json!({
+			"kind": "missing",
+			"repoRoot": repo_root,
+			"defaultConfig": default_config,
+			"supported": config::config_names(),
 		});
 	}
 
