@@ -62,12 +62,12 @@ impl GitRepo {
 		explicit: Option<&str>,
 		debug_enabled: bool,
 	) -> Result<(String, Vec<PathBuf>), PullhookError> {
-		let (base, _count, files) = self.resolve_install_matches(explicit, |_| true, debug_enabled)?;
+		let (base, _count, files) = self.resolve_filtered_matches(explicit, |_| true, debug_enabled)?;
 		Ok((base, files))
 	}
 
-	/// Resolve base and collect install matches without materializing all changed paths.
-	pub fn resolve_install_matches<F>(
+	/// Resolve base and collect changed paths that satisfy the provided filter.
+	pub fn resolve_filtered_matches<F>(
 		&self,
 		explicit: Option<&str>,
 		mut is_match: F,
@@ -131,9 +131,7 @@ fn resolve_base<'repo>(
 		});
 	}
 
-	Err(PullhookError::Message(
-		"unable to resolve diff base; use --base <rev> to override".to_owned(),
-	))
+	Err(PullhookError::DiffBaseUnavailable)
 }
 
 fn try_resolve_tree<'repo>(
@@ -277,14 +275,14 @@ mod tests {
 	}
 
 	#[test]
-	fn install_fast_path_uses_full_relative_path_matching() {
+	fn filtered_match_collection_uses_full_relative_path_matching() {
 		let temp = setup_repo_with_nested_manifest_change();
 		let repo = GitRepo::discover(temp.path(), false).expect("discover repo");
 		let matcher = matcher::compile("+(package.json|package-lock.json)").expect("compile matcher");
 
 		let (base, changed_count, matched_files) = repo
-			.resolve_install_matches(None, |path| matcher.is_match(path), false)
-			.expect("resolve install matches");
+			.resolve_filtered_matches(None, |path| matcher.is_match(path), false)
+			.expect("resolve filtered matches");
 
 		assert_eq!(base, "HEAD@{1}");
 		assert_eq!(changed_count, 1);
@@ -292,14 +290,14 @@ mod tests {
 	}
 
 	#[test]
-	fn install_fast_path_matches_repo_root_manifest_changes() {
+	fn filtered_match_collection_matches_repo_root_manifest_changes() {
 		let temp = setup_repo_with_root_manifest_change();
 		let repo = GitRepo::discover(temp.path(), false).expect("discover repo");
 		let matcher = matcher::compile("+(package.json|package-lock.json)").expect("compile matcher");
 
 		let (base, changed_count, matched_files) = repo
-			.resolve_install_matches(None, |path| matcher.is_match(path), false)
-			.expect("resolve install matches");
+			.resolve_filtered_matches(None, |path| matcher.is_match(path), false)
+			.expect("resolve filtered matches");
 
 		assert_eq!(base, "HEAD@{1}");
 		assert_eq!(changed_count, 1);

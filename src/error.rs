@@ -37,6 +37,10 @@ pub enum PullhookError {
 		source: Box<dyn StdError + Send + Sync>,
 	},
 
+	/// No usable diff base could be resolved automatically.
+	#[error("unable to resolve diff base; use --base <rev> to override")]
+	DiffBaseUnavailable,
+
 	/// Glob pattern parsing or compilation error.
 	#[error("invalid pattern `{pattern}`: {reason}")]
 	Pattern {

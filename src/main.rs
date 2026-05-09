@@ -31,6 +31,13 @@ struct RunConfig {
 	once: bool,
 }
 
+#[derive(Debug, Clone)]
+struct InstallPlan {
+	package_manager: &'static str,
+	pattern: String,
+	command: String,
+}
+
 fn main() {
 	let cli = Cli::parse();
 
@@ -238,7 +245,7 @@ fn resolve_config_changed_files(
 			Ok((changed_files, false))
 		}
 		Err(error)
-			if config_allows_base_missing(config) && error.to_string().contains("unable to resolve diff base") =>
+			if config_allows_base_missing(config) && matches!(error, error::PullhookError::DiffBaseUnavailable) =>
 		{
 			if debug_enabled {
 				debug!("diff base missing; evaluating runIfBaseMissing rules");
@@ -269,13 +276,9 @@ fn evaluate_config(
 			return Ok((Some(command.clone()), patterns.clone()));
 		}
 
-		let package_manager = detect_package_manager(repo_root).map_err(|error| {
-			error::PullhookError::Message(format!(
-				"failed to detect package manager for config install rule: {error}"
-			))
-		})?;
-		let command = package_manager.install_command();
-		let patterns = vec![Pattern::new(package_manager.install_pattern())?];
+		let resolved = resolve_install_plan(repo_root, "failed to detect package manager for config install rule")?;
+		let command = resolved.command;
+		let patterns = vec![Pattern::new(resolved.pattern)?];
 		install_plan = Some((command.clone(), patterns.clone()));
 		Ok((Some(command), patterns))
 	})
@@ -506,18 +509,16 @@ fn resolve_run_config(cli: &RunArgs, repo_root: &std::path::Path) -> Result<RunC
 	let mut pattern = cli.pattern.clone().unwrap_or_default();
 	let mut command = cli.command.clone();
 	let script = cli.script.clone();
-	let mut once = cli.effective_once();
+	let once = cli.effective_once();
 
 	if cli.install {
-		let package_manager =
-			detect_package_manager(repo_root).context("failed to detect package manager for --install")?;
-		pattern = package_manager.install_pattern();
-		command = Some(package_manager.install_command());
-		once = true;
+		let resolved = resolve_install_plan(repo_root, "failed to detect package manager for --install")?;
+		pattern = resolved.pattern;
+		command = Some(resolved.command);
 
 		if cli.debug {
 			debug!(
-				package_manager = package_manager.name(),
+				package_manager = resolved.package_manager,
 				pattern = pattern,
 				command = command.as_deref().unwrap_or_default(),
 				"resolved --install settings"
@@ -533,10 +534,21 @@ fn resolve_run_config(cli: &RunArgs, repo_root: &std::path::Path) -> Result<RunC
 	})
 }
 
+fn resolve_install_plan(repo_root: &std::path::Path, error_context: &str) -> Result<InstallPlan, error::PullhookError> {
+	let package_manager = detect_package_manager(repo_root)
+		.map_err(|error| error::PullhookError::Message(format!("{error_context}: {error}")))?;
+
+	Ok(InstallPlan {
+		package_manager: package_manager.name(),
+		pattern: package_manager.install_pattern(),
+		command: package_manager.install_command(),
+	})
+}
+
 fn collect_matches(cli: &RunArgs, repo: &GitRepo, run_config: &RunConfig) -> Result<(usize, Vec<std::path::PathBuf>)> {
 	let matcher = matcher::compile(&run_config.pattern).context("failed to compile pattern")?;
 	let (base, changed_count, matched_files) = repo
-		.resolve_install_matches(cli.base.as_deref(), |path| matcher.is_match(path), cli.debug)
+		.resolve_filtered_matches(cli.base.as_deref(), |path| matcher.is_match(path), cli.debug)
 		.context("failed to resolve diff base or read changed files")?;
 
 	if cli.debug {
