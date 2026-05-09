@@ -2303,6 +2303,11 @@ fn config_command(args: &ConfigArgs) -> Result<()> {
 		return Ok(());
 	}
 
+	if args.exists_only {
+		println!("{exists}");
+		return Ok(());
+	}
+
 	if args.source_only {
 		println!("{source}");
 		return Ok(());

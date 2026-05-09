@@ -274,6 +274,7 @@ pullhook validate --config config/pullhook.ci.json
 pullhook config
 pullhook config --path-only
 pullhook config --format-only
+pullhook config --exists-only
 pullhook config --source-only
 pullhook config --require-existing --path-only
 pullhook config --json
@@ -371,7 +372,7 @@ Placeholders render in every mode.
 
 `pullhook config` shows the config path and format that pullhook will use without parsing the file.
 Use `pullhook config --path-only` when a script needs the resolved path as one clean line.
-Use `pullhook config --format-only` or `pullhook config --source-only` when a script only needs the resolved format or discovery source.
+Use `pullhook config --format-only`, `--exists-only`, or `--source-only` when a script only needs the resolved format, file-existence status, or discovery source.
 Add `--require-existing` when that script should fail instead of returning a planned-but-missing config path.
 `config --json` includes `status`, stable `code`, `source`, and `error` fields for the same automation-friendly result shape used by other JSON commands.
 Standard JSON errors also include `details` when there is a deeper cause chain, so scripts can show the short error while still keeping the useful diagnostic text.

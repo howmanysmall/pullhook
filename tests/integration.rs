@@ -3908,6 +3908,7 @@ fn diagnostic_help_groups_options_by_task() {
 	assert!(config_stdout.contains("Input options:"));
 	assert!(config_stdout.contains("Output options:"));
 	assert!(config_stdout.contains("pullhook config --format-only"));
+	assert!(config_stdout.contains("pullhook config --exists-only"));
 	assert!(config_stdout.contains("pullhook config --source-only"));
 	assert!(config_stdout.contains("Resolution options:"));
 	assert!(config_stdout.contains("Display options:"));
@@ -5350,6 +5351,44 @@ fn config_format_only_reports_discovered_config_format() {
 }
 
 #[test]
+fn config_exists_only_reports_existing_discovered_config() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_file(repo_root, Path::new("pullhook.toml"), "not valid toml\n");
+
+	let output = run_pullhook(repo_root, &["config", "--exists-only"]);
+
+	assert!(
+		output.status.success(),
+		"config --exists-only should not require a valid config body"
+	);
+	let stdout = stdout_text(&output);
+	assert_eq!(stdout.lines().collect::<Vec<_>>(), vec!["true"]);
+	let stderr = stderr_text(&output);
+	assert!(stderr.trim().is_empty(), "config --exists-only should not write stderr");
+}
+
+#[test]
+fn config_exists_only_reports_missing_explicit_config() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+
+	let output = run_pullhook(
+		repo_root,
+		&["config", "--config", "config/pullhook.custom.yaml", "--exists-only"],
+	);
+
+	assert!(
+		output.status.success(),
+		"config --exists-only should report explicit paths before they exist"
+	);
+	let stdout = stdout_text(&output);
+	assert_eq!(stdout.lines().collect::<Vec<_>>(), vec!["false"]);
+	let stderr = stderr_text(&output);
+	assert!(stderr.trim().is_empty(), "config --exists-only should not write stderr");
+}
+
+#[test]
 fn config_source_only_reports_explicit_config_source() {
 	let temp = setup_repo_with_merge();
 	let repo_root = temp.path();
@@ -5367,6 +5406,23 @@ fn config_source_only_reports_explicit_config_source() {
 	assert_eq!(stdout.lines().collect::<Vec<_>>(), vec!["explicit"]);
 	let stderr = stderr_text(&output);
 	assert!(stderr.trim().is_empty(), "config --source-only should not write stderr");
+}
+
+#[test]
+fn config_exists_only_conflicts_with_json() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+
+	let output = run_pullhook(repo_root, &["config", "--exists-only", "--json"]);
+
+	assert!(
+		!output.status.success(),
+		"config --exists-only should conflict with --json"
+	);
+	let stderr = stderr_text(&output);
+	assert!(stderr.contains("cannot be used with"));
+	assert!(stderr.contains("--exists-only"));
+	assert!(stderr.contains("--json"));
 }
 
 #[test]

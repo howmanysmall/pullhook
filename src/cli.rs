@@ -99,6 +99,7 @@ Examples:
   pullhook config
   pullhook config --path-only
   pullhook config --format-only
+  pullhook config --exists-only
   pullhook config --source-only
   pullhook config --require-existing --path-only
   pullhook config --json
@@ -813,7 +814,7 @@ pub struct ConfigArgs {
 	#[arg(
 		long = "path-only",
 		default_value_t = false,
-		conflicts_with_all = ["json", "format_only", "source_only"],
+		conflicts_with_all = ["json", "format_only", "exists_only", "source_only"],
 		help_heading = "Output options"
 	)]
 	pub path_only: bool,
@@ -822,16 +823,25 @@ pub struct ConfigArgs {
 	#[arg(
 		long = "format-only",
 		default_value_t = false,
-		conflicts_with_all = ["json", "path_only", "source_only"],
+		conflicts_with_all = ["json", "path_only", "exists_only", "source_only"],
 		help_heading = "Output options"
 	)]
 	pub format_only: bool,
+
+	/// Print only whether the resolved config file exists.
+	#[arg(
+		long = "exists-only",
+		default_value_t = false,
+		conflicts_with_all = ["json", "path_only", "format_only", "source_only"],
+		help_heading = "Output options"
+	)]
+	pub exists_only: bool,
 
 	/// Print only the config source (`discovered` or `explicit`).
 	#[arg(
 		long = "source-only",
 		default_value_t = false,
-		conflicts_with_all = ["json", "path_only", "format_only"],
+		conflicts_with_all = ["json", "path_only", "format_only", "exists_only"],
 		help_heading = "Output options"
 	)]
 	pub source_only: bool,
@@ -840,7 +850,7 @@ pub struct ConfigArgs {
 	#[arg(
 		long = "json",
 		default_value_t = false,
-		conflicts_with_all = ["path_only", "format_only", "source_only"],
+		conflicts_with_all = ["path_only", "format_only", "exists_only", "source_only"],
 		help_heading = "Output options"
 	)]
 	pub json: bool,
