@@ -1605,6 +1605,7 @@ fn print_json_error(error: &anyhow::Error) -> Result<()> {
 		"{}",
 		serde_json::to_string_pretty(&json!({
 			"status": "error",
+			"code": json_error_code(error),
 			"error": error.to_string(),
 			"details": details,
 		}))?
@@ -1616,6 +1617,53 @@ fn find_pullhook_error(error: &anyhow::Error) -> Option<&error::PullhookError> {
 	error
 		.chain()
 		.find_map(|cause| cause.downcast_ref::<error::PullhookError>())
+}
+
+fn json_error_code(error: &anyhow::Error) -> &'static str {
+	if error.downcast_ref::<UnknownSelectorError>().is_some() {
+		return "unknown_selector";
+	}
+	if error.downcast_ref::<ChangedFilesFileError>().is_some() {
+		return "changed_files_file";
+	}
+	if let Some(pullhook_error) = find_pullhook_error(error) {
+		return pullhook_error_code(pullhook_error);
+	}
+
+	match error.to_string().as_str() {
+		"--json cannot be used with --debug" => "json_debug_conflict",
+		message if message.starts_with("missing required argument") => "missing_required_argument",
+		message if message.starts_with("no pullhook config found") => "config_missing",
+		_ => "error",
+	}
+}
+
+fn pullhook_error_code(error: &error::PullhookError) -> &'static str {
+	match error {
+		error::PullhookError::GitOpen { .. } => "repository_not_found",
+		error::PullhookError::GitRevision { .. } => "diff_base_revision_error",
+		error::PullhookError::BaseRevisionNotFound { .. } => "diff_base_revision_not_found",
+		error::PullhookError::GitDiff { .. } => "diff_base_error",
+		error::PullhookError::DiffBaseUnavailable => "diff_base_unavailable",
+		error::PullhookError::PackageManagerDetection { source, .. } => pullhook_error_code(source),
+		error::PullhookError::Pattern { .. } => "invalid_pattern",
+		error::PullhookError::AmbiguousPackageManagers { .. } => "package_manager_ambiguous",
+		error::PullhookError::PackageManagerNotFound { .. } => "package_manager_not_found",
+		error::PullhookError::CommandParse { .. } => "command_parse",
+		error::PullhookError::ConfigParse { .. } => "config_parse",
+		error::PullhookError::ConfigFormat { extension, .. } => {
+			if extension.is_some() {
+				"config_path_unsupported_format"
+			} else {
+				"config_path_missing_extension"
+			}
+		}
+		error::PullhookError::ConfigMissing { .. } => "config_missing",
+		error::PullhookError::ConfigValidation { .. } => "config_validation",
+		error::PullhookError::CommandIo { .. } => "command_io",
+		error::PullhookError::CommandFailed { .. } => "command_failed",
+		error::PullhookError::Message(_) => "message",
+	}
 }
 
 fn package_manager_error_json(
@@ -1640,6 +1688,7 @@ fn package_manager_error_json(
 fn package_manager_not_found_json(error: &anyhow::Error, details: &[String], root: &str) -> serde_json::Value {
 	json!({
 		"status": "error",
+		"code": "package_manager_not_found",
 		"error": error.to_string(),
 		"details": details,
 		"packageManagerError": {
@@ -1652,6 +1701,7 @@ fn package_manager_not_found_json(error: &anyhow::Error, details: &[String], roo
 fn ambiguous_package_managers_json(error: &anyhow::Error, details: &[String], found: &[&str]) -> serde_json::Value {
 	json!({
 		"status": "error",
+		"code": "package_manager_ambiguous",
 		"error": error.to_string(),
 		"details": details,
 		"packageManagerError": {
@@ -1664,6 +1714,7 @@ fn ambiguous_package_managers_json(error: &anyhow::Error, details: &[String], fo
 fn repository_error_json(error: &anyhow::Error, details: &[String], path: &str) -> serde_json::Value {
 	json!({
 		"status": "error",
+		"code": "repository_not_found",
 		"error": error.to_string(),
 		"details": details,
 		"repositoryError": {
@@ -1699,6 +1750,7 @@ fn diff_base_error_json(
 
 	Some(json!({
 		"status": "error",
+		"code": pullhook_error_code(error_kind),
 		"error": error.to_string(),
 		"details": details,
 		"diffBaseError": diff_base_error,
@@ -1708,6 +1760,7 @@ fn diff_base_error_json(
 fn pattern_error_json(error: &anyhow::Error, details: &[String], pattern: &str, reason: &str) -> serde_json::Value {
 	json!({
 		"status": "error",
+		"code": "invalid_pattern",
 		"error": error.to_string(),
 		"details": details,
 		"patternError": {
@@ -1725,6 +1778,7 @@ fn command_parse_error_json(
 ) -> serde_json::Value {
 	json!({
 		"status": "error",
+		"code": "command_parse",
 		"error": error.to_string(),
 		"details": details,
 		"commandParse": {
@@ -1743,6 +1797,7 @@ fn config_path_error_json(
 ) -> serde_json::Value {
 	json!({
 		"status": "error",
+		"code": if extension.is_some() { "config_path_unsupported_format" } else { "config_path_missing_extension" },
 		"error": error.to_string(),
 		"details": details,
 		"configPathError": {
@@ -1763,6 +1818,7 @@ fn config_missing_error_json(
 ) -> serde_json::Value {
 	json!({
 		"status": "error",
+		"code": "config_missing",
 		"error": error.to_string(),
 		"details": details,
 		"configDiscoveryError": {
@@ -1781,6 +1837,7 @@ fn changed_files_file_error_json(error: &ChangedFilesFileError, details: &[Strin
 
 	json!({
 		"status": "error",
+		"code": "changed_files_file",
 		"error": error.to_string(),
 		"details": details,
 		"changedFilesFile": &error.path,
@@ -1790,6 +1847,7 @@ fn changed_files_file_error_json(error: &ChangedFilesFileError, details: &[Strin
 fn unknown_selector_error_json(error: &UnknownSelectorError, details: &[String]) -> serde_json::Value {
 	json!({
 		"status": "error",
+		"code": "unknown_selector",
 		"error": error.to_string(),
 		"details": details,
 		"unknownSelectors": &error.unknown,
@@ -2242,6 +2300,7 @@ fn config_validation_error_json(
 ) -> serde_json::Value {
 	let mut value = json!({
 		"status": "error",
+		"code": config_error.map_or("config_validation_error", pullhook_error_code),
 		"valid": false,
 		"path": path.map(|path| path.display().to_string()),
 		"error": error,

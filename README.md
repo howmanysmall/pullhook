@@ -326,7 +326,7 @@ Add `--require-match` to `explain` or `run` when an empty plan should fail the c
 Use `run --quiet` when successful text output would be noise; failures still print the failed task, any `failText`,
 and the final summary.
 
-Legacy top-level mode also supports `--json`, including the same top-level `status`, `error`, and `details`
+Legacy top-level mode also supports `--json`, including the same top-level `status`, stable `code`, `error`, and `details`
 fields for setup failures, live execution results, and dry-run plans.
 Repository-discovery JSON errors include recovery details for running inside or initializing a Git repo,
 plus a `repositoryError` object with the searched path.

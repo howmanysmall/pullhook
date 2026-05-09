@@ -358,6 +358,7 @@ fn legacy_json_reports_repo_discovery_errors_as_json() {
 	assert!(!output.status.success(), "legacy --json should fail outside a git repo");
 	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse repo discovery json");
 	assert_eq!(value["status"], "error");
+	assert_eq!(value["code"], "repository_not_found");
 	assert_eq!(value["error"], "failed to resolve repository root");
 	assert_eq!(value["repositoryError"]["kind"], "not_found");
 	let reported_path = PathBuf::from(value["repositoryError"]["path"].as_str().expect("repository path"));
@@ -422,6 +423,7 @@ fn legacy_json_reports_diff_base_errors_as_json() {
 	assert!(!output.status.success(), "legacy --json should fail for invalid base");
 	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse legacy base error json");
 	assert_eq!(value["status"], "error");
+	assert_eq!(value["code"], "diff_base_revision_not_found");
 	let error = value["error"].as_str().expect("error");
 	assert!(error.contains("failed to resolve diff base or read changed files"));
 	assert_eq!(value["diffBaseError"]["kind"], "revision_not_found");
@@ -2193,6 +2195,7 @@ fn validate_json_reports_invalid_config_as_json() {
 	assert!(!output.status.success(), "invalid config should fail");
 	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse validate json");
 	assert_eq!(value["status"], "error");
+	assert_eq!(value["code"], "config_validation");
 	assert_eq!(value["valid"], false);
 	assert!(value["path"].as_str().expect("path").ends_with("pullhook.json"));
 	assert!(
@@ -2224,6 +2227,7 @@ fn validate_json_reports_config_parse_errors_as_json() {
 	assert!(!output.status.success(), "unparseable config should fail");
 	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse validate json");
 	assert_eq!(value["status"], "error");
+	assert_eq!(value["code"], "config_missing");
 	assert_eq!(value["valid"], false);
 	assert!(value["path"].as_str().expect("path").ends_with("pullhook.json"));
 	assert!(
@@ -2418,6 +2422,7 @@ fn rules_json_reports_missing_config_as_json() {
 	assert!(!output.status.success(), "rules --json should fail without config");
 	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse rules error json");
 	assert_eq!(value["status"], "error");
+	assert_eq!(value["code"], "config_missing");
 	assert!(
 		value["error"]
 			.as_str()
