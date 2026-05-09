@@ -152,6 +152,7 @@ impl ChangedFilesSource {
 #[derive(Debug, Clone)]
 struct DoctorCheck {
 	name: &'static str,
+	code: &'static str,
 	level: DoctorLevel,
 	summary: String,
 	details: Vec<String>,
@@ -2021,6 +2022,7 @@ fn build_doctor_checks(
 fn doctor_repository_check(repo_root: &std::path::Path) -> DoctorCheck {
 	DoctorCheck {
 		name: "repository",
+		code: "repository_ok",
 		level: DoctorLevel::Ok,
 		summary: format!("repo root resolved to {}", repo_root.display()),
 		details: vec![format!("cwd scope is inside `{}`", repo_root.display())],
@@ -2043,6 +2045,7 @@ fn doctor_config_check(
 				};
 				DoctorCheck {
 					name: "config",
+					code: "config_ok",
 					level: DoctorLevel::Ok,
 					summary: config_label,
 					details: vec![
@@ -2055,6 +2058,7 @@ fn doctor_config_check(
 			}
 			Err(error) => DoctorCheck {
 				name: "config",
+				code: "config_invalid",
 				level: DoctorLevel::Error,
 				summary: format!("config is invalid: {}", path.display()),
 				details: config_load_error_details(&error),
@@ -2064,6 +2068,7 @@ fn doctor_config_check(
 		Err(error) if explicit_config.is_none() && error.to_string().contains("no pullhook config found") => {
 			DoctorCheck {
 				name: "config",
+				code: "config_missing",
 				level: DoctorLevel::Warn,
 				summary: "no pullhook config found".to_owned(),
 				details: vec!["run `pullhook init` to create pullhook.json".to_owned()],
@@ -2072,6 +2077,7 @@ fn doctor_config_check(
 		}
 		Err(error) => DoctorCheck {
 			name: "config",
+			code: "config_discovery_failed",
 			level: DoctorLevel::Error,
 			summary: "config discovery failed".to_owned(),
 			details: vec![error.to_string()],
@@ -2084,6 +2090,7 @@ fn doctor_diff_base_check(repo: &GitRepo) -> DoctorCheck {
 	match repo.resolve_base_and_changed_files(None, false) {
 		Ok((base, changed_files)) => DoctorCheck {
 			name: "diff base",
+			code: "diff_base_ok",
 			level: DoctorLevel::Ok,
 			summary: format!("resolved {base}"),
 			details: vec![format!("changed files: {}", changed_files.len())],
@@ -2091,6 +2098,7 @@ fn doctor_diff_base_check(repo: &GitRepo) -> DoctorCheck {
 		},
 		Err(error::PullhookError::DiffBaseUnavailable) => DoctorCheck {
 			name: "diff base",
+			code: "diff_base_unavailable",
 			level: DoctorLevel::Warn,
 			summary: "no automatic diff base available".to_owned(),
 			details: vec!["use `--base <rev>` or rely on `runIfBaseMissing` rules".to_owned()],
@@ -2098,6 +2106,7 @@ fn doctor_diff_base_check(repo: &GitRepo) -> DoctorCheck {
 		},
 		Err(error) => DoctorCheck {
 			name: "diff base",
+			code: "diff_base_error",
 			level: DoctorLevel::Error,
 			summary: "failed to inspect git history".to_owned(),
 			details: vec![error.to_string()],
@@ -2110,6 +2119,7 @@ fn doctor_install_check(repo_root: &std::path::Path) -> DoctorCheck {
 	match detect_package_manager(repo_root) {
 		Ok(package_manager) => DoctorCheck {
 			name: "install detection",
+			code: "package_manager_ok",
 			level: DoctorLevel::Ok,
 			summary: format!("detected {}", package_manager.name()),
 			details: vec![
@@ -2120,6 +2130,7 @@ fn doctor_install_check(repo_root: &std::path::Path) -> DoctorCheck {
 		},
 		Err(error::PullhookError::PackageManagerNotFound { .. }) => DoctorCheck {
 			name: "install detection",
+			code: "package_manager_missing",
 			level: DoctorLevel::Warn,
 			summary: "no supported package manager files found".to_owned(),
 			details: vec!["`pullhook --install` would not work in this repo yet".to_owned()],
@@ -2127,6 +2138,7 @@ fn doctor_install_check(repo_root: &std::path::Path) -> DoctorCheck {
 		},
 		Err(error::PullhookError::AmbiguousPackageManagers { found }) => DoctorCheck {
 			name: "install detection",
+			code: "package_manager_ambiguous",
 			level: DoctorLevel::Error,
 			summary: "multiple package managers detected".to_owned(),
 			details: vec![format!("found: {}", found.join(", "))],
@@ -2134,6 +2146,7 @@ fn doctor_install_check(repo_root: &std::path::Path) -> DoctorCheck {
 		},
 		Err(error) => DoctorCheck {
 			name: "install detection",
+			code: "package_manager_error",
 			level: DoctorLevel::Error,
 			summary: "package-manager detection failed".to_owned(),
 			details: vec![error.to_string()],
@@ -2169,6 +2182,7 @@ fn render_doctor_checks(checks: &[DoctorCheck], repo_root: &std::path::Path) {
 fn doctor_check_json(check: &DoctorCheck) -> serde_json::Value {
 	json!({
 		"name": check.name,
+		"code": check.code,
 		"level": check.level.label(),
 		"summary": check.summary,
 		"details": check.details,

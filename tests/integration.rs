@@ -2568,7 +2568,10 @@ fn doctor_strict_fails_on_warnings() {
 	assert_eq!(value["summary"]["hasErrors"], false);
 	let checks = value["checks"].as_array().expect("checks array");
 	assert_eq!(checks[1]["name"], "config");
+	assert_eq!(checks[1]["code"], "config_missing");
 	assert_eq!(checks[1]["level"], "warn");
+	assert_eq!(checks[2]["code"], "diff_base_ok");
+	assert_eq!(checks[3]["code"], "package_manager_missing");
 	let stderr = stderr_text(&output);
 	assert!(stderr.contains("doctor found warnings in strict mode"));
 }
@@ -2604,6 +2607,7 @@ fn doctor_json_fails_when_config_is_invalid() {
 	assert_eq!(value["summary"]["hasErrors"], true);
 	let checks = value["checks"].as_array().expect("checks array");
 	assert_eq!(checks[1]["name"], "config");
+	assert_eq!(checks[1]["code"], "config_invalid");
 	assert_eq!(checks[1]["level"], "error");
 	assert_eq!(checks[1]["hint"], "run `pullhook validate` after editing the config");
 	let details = checks[1]["details"].as_array().expect("config details");
