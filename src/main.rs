@@ -905,6 +905,11 @@ fn shells_command(args: &ShellsArgs) -> Result<()> {
 		return Ok(());
 	}
 
+	if args.count_only {
+		println!("{}", shells.len());
+		return Ok(());
+	}
+
 	if args.names_only {
 		for shell in shells {
 			println!("{}", shell.name);
@@ -978,6 +983,11 @@ fn formats_command(args: &FormatsArgs) -> Result<()> {
 				},
 			}))?
 		);
+		return Ok(());
+	}
+
+	if args.output.count_only {
+		println!("{}", formats.len());
 		return Ok(());
 	}
 
@@ -1084,6 +1094,11 @@ fn managers_command(args: &ManagersArgs) -> Result<()> {
 				},
 			}))?
 		);
+		return Ok(());
+	}
+
+	if args.output.count_only {
+		println!("{}", managers.len());
 		return Ok(());
 	}
 
@@ -1257,6 +1272,11 @@ fn categories_command(args: &CategoriesArgs) -> Result<()> {
 		return Ok(());
 	}
 
+	if args.count_only {
+		println!("{}", categories.len());
+		return Ok(());
+	}
+
 	if args.names_only {
 		for category in categories {
 			println!("{}", category.name);
@@ -1387,6 +1407,11 @@ fn examples_command(args: &ExamplesArgs) -> Result<()> {
 				},
 			}))?
 		);
+		return Ok(());
+	}
+
+	if args.output.count_only {
+		println!("{}", examples.len());
 		return Ok(());
 	}
 
@@ -1529,6 +1554,11 @@ fn command_catalog_command(args: &CommandCatalogArgs) -> Result<()> {
 				},
 			}))?
 		);
+		return Ok(());
+	}
+
+	if args.output.count_only {
+		println!("{}", commands.len());
 		return Ok(());
 	}
 
@@ -1714,6 +1744,11 @@ fn codes_command(args: &CodesArgs) -> Result<()> {
 				},
 			}))?
 		);
+		return Ok(());
+	}
+
+	if args.output.values.count_only {
+		println!("{}", codes.len());
 		return Ok(());
 	}
 

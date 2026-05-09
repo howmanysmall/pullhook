@@ -290,18 +290,21 @@ pullhook doctor --codes-only
 pullhook doctor --json
 pullhook shells
 pullhook shells --search fish
+pullhook shells --search fish --count-only
 pullhook shells --names-only
 pullhook shells --commands-only
 pullhook shells --descriptions-only
 pullhook shells --json
 pullhook formats
 pullhook formats --search yaml
+pullhook formats --search yaml --count-only
 pullhook formats --files-only
 pullhook formats --init-commands-only
 pullhook formats --descriptions-only
 pullhook formats --json
 pullhook managers
 pullhook managers --search pnpm
+pullhook managers --search pnpm --count-only
 pullhook managers --patterns-only
 pullhook managers --commands-only
 pullhook managers --lock-files-only
@@ -310,6 +313,7 @@ pullhook managers --watched-files-only
 pullhook managers --json
 pullhook categories
 pullhook categories --search workflow
+pullhook categories --search workflow --count-only
 pullhook categories --names-only
 pullhook categories --commands-only
 pullhook categories --example-commands-only
@@ -320,6 +324,7 @@ pullhook examples --category reference
 pullhook examples --category reference --commands-only
 pullhook examples --category reference --titles-only
 pullhook examples --search install
+pullhook examples --search install --count-only
 pullhook examples --search install --summaries-only
 pullhook examples --command run
 pullhook examples --command run --commands-only
@@ -333,6 +338,7 @@ pullhook commands
 pullhook commands --category diagnostic
 pullhook commands --category reference --names-only
 pullhook commands --search config
+pullhook commands --search config --count-only
 pullhook commands --repo-only
 pullhook commands --standalone-only --names-only
 pullhook commands --categories-only
@@ -343,6 +349,7 @@ pullhook codes
 pullhook codes --kind doctor-check
 pullhook codes --surface run
 pullhook codes --search config
+pullhook codes --search config --count-only
 pullhook codes --kinds-only
 pullhook codes --surfaces-only
 pullhook codes --search config --descriptions-only
@@ -391,6 +398,7 @@ Catalog-style JSON commands that accept `--search` also include `searchFields`, 
 Use `pullhook shells` to inspect supported shell completion targets in text form, or `pullhook shells --json`
 when another tool needs shell names and generation commands without scraping help text.
 Add `--search <text>` to match shell names, completion commands, or descriptions case-insensitively.
+Use `--count-only` on catalog commands when a script only needs the number of matching rows.
 Use `pullhook shells --names-only` when a script only needs supported shell names.
 Use `pullhook shells --commands-only` when a script only needs shell completion commands.
 Use `pullhook shells --descriptions-only` when a script only needs short shell descriptions.

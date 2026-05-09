@@ -2721,6 +2721,52 @@ fn categories_search_filter_composes_with_descriptions_only() {
 }
 
 #[test]
+fn catalog_count_only_prints_matching_result_counts() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+	let cases: &[(&[&str], &str)] = &[
+		(&["shells", "--search", "power", "--count-only"], "1\n"),
+		(&["formats", "--search", "yml", "--count-only"], "1\n"),
+		(&["managers", "--search", "deno", "--count-only"], "1\n"),
+		(&["categories", "--search", "diagnostic", "--count-only"], "1\n"),
+		(&["codes", "--search", "schema_out_of_date", "--count-only"], "1\n"),
+		(&["commands", "--search", "schema", "--count-only"], "1\n"),
+		(&["examples", "--command", "schema", "--count-only"], "1\n"),
+	];
+
+	for (args, expected_stdout) in cases {
+		let output = run_pullhook(temp.path(), args);
+
+		assert!(output.status.success(), "{args:?} should succeed");
+		assert_eq!(stdout_text(&output), *expected_stdout, "{args:?} should print count");
+		let stderr = stderr_text(&output);
+		assert!(stderr.trim().is_empty(), "{args:?} should not write stderr");
+	}
+}
+
+#[test]
+fn catalog_count_only_conflicts_with_json_and_line_modes() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+	let conflicting_modes: &[&[&str]] = &[
+		&["shells", "--count-only", "--json"],
+		&["formats", "--count-only", "--names-only"],
+		&["managers", "--count-only", "--commands-only"],
+		&["categories", "--count-only", "--descriptions-only"],
+		&["codes", "--count-only", "--codes-only"],
+		&["commands", "--count-only", "--summaries-only"],
+		&["examples", "--count-only", "--titles-only"],
+	];
+
+	for args in conflicting_modes {
+		let output = run_pullhook(temp.path(), args);
+
+		assert!(!output.status.success(), "{args:?} should fail");
+		let stderr = stderr_text(&output);
+		assert!(stderr.contains("cannot be used with"));
+		assert!(stderr.contains("--count-only"));
+	}
+}
+
+#[test]
 fn categories_line_outputs_conflict_with_json() {
 	let temp = tempfile::tempdir().expect("create temp dir");
 	let conflicting_modes: &[&[&str]] = &[
@@ -4926,6 +4972,7 @@ fn utility_help_groups_options_by_task() {
 	let shells_stdout = stdout_text(&shells);
 	assert!(shells_stdout.contains("Output options:"));
 	assert!(shells_stdout.contains("Print JSON with filters and searchFields metadata"));
+	assert!(shells_stdout.contains("--count-only"));
 	assert!(shells_stdout.contains("pullhook shells --search fish"));
 	assert!(shells_stdout.contains("pullhook shells --names-only"));
 	assert!(shells_stdout.contains("pullhook shells --commands-only"));
@@ -4937,6 +4984,7 @@ fn utility_help_groups_options_by_task() {
 	let formats_stdout = stdout_text(&formats);
 	assert!(formats_stdout.contains("Output options:"));
 	assert!(formats_stdout.contains("Print JSON with filters and searchFields metadata"));
+	assert!(formats_stdout.contains("--count-only"));
 	assert!(formats_stdout.contains("pullhook formats --search yaml"));
 	assert!(formats_stdout.contains("pullhook formats --names-only"));
 	assert!(formats_stdout.contains("pullhook formats --files-only"));
@@ -4949,6 +4997,7 @@ fn utility_help_groups_options_by_task() {
 	let managers_stdout = stdout_text(&managers);
 	assert!(managers_stdout.contains("Output options:"));
 	assert!(managers_stdout.contains("Print JSON with filters and searchFields metadata"));
+	assert!(managers_stdout.contains("--count-only"));
 	assert!(managers_stdout.contains("pullhook managers --search pnpm"));
 	assert!(managers_stdout.contains("pullhook managers --names-only"));
 	assert!(managers_stdout.contains("pullhook managers --patterns-only"));
@@ -4963,6 +5012,7 @@ fn utility_help_groups_options_by_task() {
 	let categories_stdout = stdout_text(&categories);
 	assert!(categories_stdout.contains("Output options:"));
 	assert!(categories_stdout.contains("Print JSON with filters and searchFields metadata"));
+	assert!(categories_stdout.contains("--count-only"));
 	assert!(categories_stdout.contains("pullhook categories --search workflow"));
 	assert!(categories_stdout.contains("pullhook categories --names-only"));
 	assert!(categories_stdout.contains("pullhook categories --commands-only"));
@@ -4976,6 +5026,7 @@ fn utility_help_groups_options_by_task() {
 	assert!(examples_stdout.contains("Filter options:"));
 	assert!(examples_stdout.contains("Output options:"));
 	assert!(examples_stdout.contains("Print JSON with filters and searchFields metadata"));
+	assert!(examples_stdout.contains("--count-only"));
 	assert!(examples_stdout.contains("pullhook examples --command run"));
 	assert!(examples_stdout.contains("pullhook examples --category workflow"));
 	assert!(examples_stdout.contains("pullhook examples --search install"));
@@ -4996,6 +5047,7 @@ fn utility_help_groups_options_by_task() {
 	assert!(codes_stdout.contains("Filter options:"));
 	assert!(codes_stdout.contains("Output options:"));
 	assert!(codes_stdout.contains("Print JSON with filters and searchFields metadata"));
+	assert!(codes_stdout.contains("--count-only"));
 	assert!(codes_stdout.contains("pullhook codes --surface run"));
 	assert!(codes_stdout.contains("pullhook codes --search config"));
 	assert!(codes_stdout.contains("pullhook codes --kinds-only"));
@@ -5014,6 +5066,7 @@ fn commands_help_describes_search_and_output_modes() {
 	assert!(commands_stdout.contains("Filter options:"));
 	assert!(commands_stdout.contains("Output options:"));
 	assert!(commands_stdout.contains("Print JSON with filters and searchFields metadata"));
+	assert!(commands_stdout.contains("--count-only"));
 	assert!(commands_stdout.contains("name, category, summary, or examples"));
 	assert!(commands_stdout.contains("pullhook commands --category diagnostic"));
 	assert!(commands_stdout.contains("pullhook commands --category diagnostic --names-only"));

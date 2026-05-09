@@ -156,6 +156,7 @@ const SHELLS_AFTER_HELP: &str = "\
 Examples:
   pullhook shells
   pullhook shells --search fish
+  pullhook shells --search fish --count-only
   pullhook shells --names-only
   pullhook shells --commands-only
   pullhook shells --descriptions-only
@@ -165,6 +166,7 @@ const FORMATS_AFTER_HELP: &str = "\
 Examples:
   pullhook formats
   pullhook formats --search yaml
+  pullhook formats --search yaml --count-only
   pullhook formats --names-only
   pullhook formats --files-only
   pullhook formats --init-commands-only
@@ -175,6 +177,7 @@ const MANAGERS_AFTER_HELP: &str = "\
 Examples:
   pullhook managers
   pullhook managers --search pnpm
+  pullhook managers --search pnpm --count-only
   pullhook managers --names-only
   pullhook managers --patterns-only
   pullhook managers --commands-only
@@ -187,6 +190,7 @@ const CATEGORIES_AFTER_HELP: &str = "\
 Examples:
   pullhook categories
   pullhook categories --search workflow
+  pullhook categories --search workflow --count-only
   pullhook categories --names-only
   pullhook categories --commands-only
   pullhook categories --example-commands-only
@@ -199,6 +203,7 @@ Examples:
   pullhook codes --kind doctor-check
   pullhook codes --surface run
   pullhook codes --search config
+  pullhook codes --search config --count-only
   pullhook codes --kinds-only
   pullhook codes --surfaces-only
   pullhook codes --search config --descriptions-only
@@ -211,6 +216,7 @@ Examples:
   pullhook commands --category diagnostic
   pullhook commands --category diagnostic --names-only
   pullhook commands --search config
+  pullhook commands --search config --count-only
   pullhook commands --repo-only
   pullhook commands --standalone-only --names-only
   pullhook commands --categories-only
@@ -224,6 +230,7 @@ Examples:
   pullhook examples --command run
   pullhook examples --category workflow
   pullhook examples --search install
+  pullhook examples --search install --count-only
   pullhook examples --search install --summaries-only
   pullhook examples --command run --commands-only
   pullhook examples --command rules --commands-only
@@ -1226,16 +1233,25 @@ pub struct ShellsArgs {
 	#[arg(
 		long = "json",
 		default_value_t = false,
-		conflicts_with_all = ["names_only", "commands_only", "descriptions_only"],
+		conflicts_with_all = ["count_only", "names_only", "commands_only", "descriptions_only"],
 		help_heading = "Output options"
 	)]
 	pub json: bool,
+
+	/// Print only the number of matching shells.
+	#[arg(
+		long = "count-only",
+		default_value_t = false,
+		conflicts_with_all = ["json", "names_only", "commands_only", "descriptions_only"],
+		help_heading = "Output options"
+	)]
+	pub count_only: bool,
 
 	/// Print only shell names, one per line.
 	#[arg(
 		long = "names-only",
 		default_value_t = false,
-		conflicts_with_all = ["json", "commands_only", "descriptions_only"],
+		conflicts_with_all = ["json", "count_only", "commands_only", "descriptions_only"],
 		help_heading = "Output options"
 	)]
 	pub names_only: bool,
@@ -1244,7 +1260,7 @@ pub struct ShellsArgs {
 	#[arg(
 		long = "commands-only",
 		default_value_t = false,
-		conflicts_with_all = ["json", "names_only", "descriptions_only"],
+		conflicts_with_all = ["json", "count_only", "names_only", "descriptions_only"],
 		help_heading = "Output options"
 	)]
 	pub commands_only: bool,
@@ -1253,7 +1269,7 @@ pub struct ShellsArgs {
 	#[arg(
 		long = "descriptions-only",
 		default_value_t = false,
-		conflicts_with_all = ["json", "names_only", "commands_only"],
+		conflicts_with_all = ["json", "count_only", "names_only", "commands_only"],
 		help_heading = "Output options"
 	)]
 	pub descriptions_only: bool,
@@ -1271,7 +1287,7 @@ pub struct FormatsArgs {
 	#[arg(
 		long = "json",
 		default_value_t = false,
-		conflicts_with_all = ["names_only", "files_only", "init_commands_only", "descriptions_only"],
+		conflicts_with_all = ["count_only", "names_only", "files_only", "init_commands_only", "descriptions_only"],
 		help_heading = "Output options"
 	)]
 	pub json: bool,
@@ -1287,11 +1303,20 @@ pub struct FormatsArgs {
 	reason = "clap line-output flags are clearer as independent switches"
 )]
 pub struct FormatsLineOutputArgs {
+	/// Print only the number of matching formats.
+	#[arg(
+		long = "count-only",
+		default_value_t = false,
+		conflicts_with_all = ["json", "names_only", "files_only", "init_commands_only", "descriptions_only"],
+		help_heading = "Output options"
+	)]
+	pub count_only: bool,
+
 	/// Print only config format names, one per line.
 	#[arg(
 		long = "names-only",
 		default_value_t = false,
-		conflicts_with_all = ["json", "files_only", "init_commands_only", "descriptions_only"],
+		conflicts_with_all = ["json", "count_only", "files_only", "init_commands_only", "descriptions_only"],
 		help_heading = "Output options"
 	)]
 	pub names_only: bool,
@@ -1300,7 +1325,7 @@ pub struct FormatsLineOutputArgs {
 	#[arg(
 		long = "files-only",
 		default_value_t = false,
-		conflicts_with_all = ["json", "names_only", "init_commands_only", "descriptions_only"],
+		conflicts_with_all = ["json", "count_only", "names_only", "init_commands_only", "descriptions_only"],
 		help_heading = "Output options"
 	)]
 	pub files_only: bool,
@@ -1309,7 +1334,7 @@ pub struct FormatsLineOutputArgs {
 	#[arg(
 		long = "init-commands-only",
 		default_value_t = false,
-		conflicts_with_all = ["json", "names_only", "files_only", "descriptions_only"],
+		conflicts_with_all = ["json", "count_only", "names_only", "files_only", "descriptions_only"],
 		help_heading = "Output options"
 	)]
 	pub init_commands_only: bool,
@@ -1318,7 +1343,7 @@ pub struct FormatsLineOutputArgs {
 	#[arg(
 		long = "descriptions-only",
 		default_value_t = false,
-		conflicts_with_all = ["json", "names_only", "files_only", "init_commands_only"],
+		conflicts_with_all = ["json", "count_only", "names_only", "files_only", "init_commands_only"],
 		help_heading = "Output options"
 	)]
 	pub descriptions_only: bool,
@@ -1337,6 +1362,7 @@ pub struct ManagersArgs {
 		long = "json",
 		default_value_t = false,
 		conflicts_with_all = [
+			"count_only",
 			"names_only",
 			"patterns_only",
 			"commands_only",
@@ -1359,12 +1385,30 @@ pub struct ManagersArgs {
 	reason = "clap line-output flags are clearer as independent switches"
 )]
 pub struct ManagersLineOutputArgs {
+	/// Print only the number of matching package managers.
+	#[arg(
+		long = "count-only",
+		default_value_t = false,
+		conflicts_with_all = [
+			"json",
+			"names_only",
+			"patterns_only",
+			"commands_only",
+			"lock_files_only",
+			"config_files_only",
+			"watched_files_only"
+		],
+		help_heading = "Output options"
+	)]
+	pub count_only: bool,
+
 	/// Print only package-manager names, one per line.
 	#[arg(
 		long = "names-only",
 		default_value_t = false,
 		conflicts_with_all = [
 			"json",
+			"count_only",
 			"patterns_only",
 			"commands_only",
 			"lock_files_only",
@@ -1381,6 +1425,7 @@ pub struct ManagersLineOutputArgs {
 		default_value_t = false,
 		conflicts_with_all = [
 			"json",
+			"count_only",
 			"names_only",
 			"commands_only",
 			"lock_files_only",
@@ -1397,6 +1442,7 @@ pub struct ManagersLineOutputArgs {
 		default_value_t = false,
 		conflicts_with_all = [
 			"json",
+			"count_only",
 			"names_only",
 			"patterns_only",
 			"lock_files_only",
@@ -1413,6 +1459,7 @@ pub struct ManagersLineOutputArgs {
 		default_value_t = false,
 		conflicts_with_all = [
 			"json",
+			"count_only",
 			"names_only",
 			"patterns_only",
 			"commands_only",
@@ -1429,6 +1476,7 @@ pub struct ManagersLineOutputArgs {
 		default_value_t = false,
 		conflicts_with_all = [
 			"json",
+			"count_only",
 			"names_only",
 			"patterns_only",
 			"commands_only",
@@ -1445,6 +1493,7 @@ pub struct ManagersLineOutputArgs {
 		default_value_t = false,
 		conflicts_with_all = [
 			"json",
+			"count_only",
 			"names_only",
 			"patterns_only",
 			"commands_only",
@@ -1472,16 +1521,25 @@ pub struct CategoriesArgs {
 	#[arg(
 		long = "json",
 		default_value_t = false,
-		conflicts_with_all = ["names_only", "commands_only", "example_commands_only", "descriptions_only"],
+		conflicts_with_all = ["count_only", "names_only", "commands_only", "example_commands_only", "descriptions_only"],
 		help_heading = "Output options"
 	)]
 	pub json: bool,
+
+	/// Print only the number of matching categories.
+	#[arg(
+		long = "count-only",
+		default_value_t = false,
+		conflicts_with_all = ["json", "names_only", "commands_only", "example_commands_only", "descriptions_only"],
+		help_heading = "Output options"
+	)]
+	pub count_only: bool,
 
 	/// Print only category names, one per line.
 	#[arg(
 		long = "names-only",
 		default_value_t = false,
-		conflicts_with_all = ["json", "commands_only", "example_commands_only", "descriptions_only"],
+		conflicts_with_all = ["json", "count_only", "commands_only", "example_commands_only", "descriptions_only"],
 		help_heading = "Output options"
 	)]
 	pub names_only: bool,
@@ -1490,7 +1548,7 @@ pub struct CategoriesArgs {
 	#[arg(
 		long = "commands-only",
 		default_value_t = false,
-		conflicts_with_all = ["json", "names_only", "example_commands_only", "descriptions_only"],
+		conflicts_with_all = ["json", "count_only", "names_only", "example_commands_only", "descriptions_only"],
 		help_heading = "Output options"
 	)]
 	pub commands_only: bool,
@@ -1499,7 +1557,7 @@ pub struct CategoriesArgs {
 	#[arg(
 		long = "example-commands-only",
 		default_value_t = false,
-		conflicts_with_all = ["json", "names_only", "commands_only", "descriptions_only"],
+		conflicts_with_all = ["json", "count_only", "names_only", "commands_only", "descriptions_only"],
 		help_heading = "Output options"
 	)]
 	pub example_commands_only: bool,
@@ -1508,7 +1566,7 @@ pub struct CategoriesArgs {
 	#[arg(
 		long = "descriptions-only",
 		default_value_t = false,
-		conflicts_with_all = ["json", "names_only", "commands_only", "example_commands_only"],
+		conflicts_with_all = ["json", "count_only", "names_only", "commands_only", "example_commands_only"],
 		help_heading = "Output options"
 	)]
 	pub descriptions_only: bool,
@@ -1534,7 +1592,7 @@ pub struct CodesArgs {
 	#[arg(
 		long = "json",
 		default_value_t = false,
-		conflicts_with_all = ["codes_only", "surfaces_only", "kinds_only", "descriptions_only"],
+		conflicts_with_all = ["count_only", "codes_only", "surfaces_only", "kinds_only", "descriptions_only"],
 		help_heading = "Output options"
 	)]
 	pub json: bool,
@@ -1556,11 +1614,20 @@ pub struct CodesLineOutputArgs {
 /// Value line-output mode arguments for `pullhook codes`.
 #[derive(Debug, Clone, Args)]
 pub struct CodesValueOutputArgs {
+	/// Print only the number of matching codes.
+	#[arg(
+		long = "count-only",
+		default_value_t = false,
+		conflicts_with_all = ["json", "codes_only", "surfaces_only", "kinds_only", "descriptions_only"],
+		help_heading = "Output options"
+	)]
+	pub count_only: bool,
+
 	/// Print only stable codes, one per line.
 	#[arg(
 		long = "codes-only",
 		default_value_t = false,
-		conflicts_with_all = ["json", "surfaces_only", "kinds_only", "descriptions_only"],
+		conflicts_with_all = ["json", "count_only", "surfaces_only", "kinds_only", "descriptions_only"],
 		help_heading = "Output options"
 	)]
 	pub codes_only: bool,
@@ -1569,7 +1636,7 @@ pub struct CodesValueOutputArgs {
 	#[arg(
 		long = "descriptions-only",
 		default_value_t = false,
-		conflicts_with_all = ["json", "codes_only", "kinds_only", "surfaces_only"],
+		conflicts_with_all = ["json", "count_only", "codes_only", "kinds_only", "surfaces_only"],
 		help_heading = "Output options"
 	)]
 	pub descriptions_only: bool,
@@ -1582,7 +1649,7 @@ pub struct CodesFacetOutputArgs {
 	#[arg(
 		long = "kinds-only",
 		default_value_t = false,
-		conflicts_with_all = ["json", "codes_only", "surfaces_only", "descriptions_only"],
+		conflicts_with_all = ["json", "count_only", "codes_only", "surfaces_only", "descriptions_only"],
 		help_heading = "Output options"
 	)]
 	pub kinds_only: bool,
@@ -1591,7 +1658,7 @@ pub struct CodesFacetOutputArgs {
 	#[arg(
 		long = "surfaces-only",
 		default_value_t = false,
-		conflicts_with_all = ["json", "codes_only", "kinds_only", "descriptions_only"],
+		conflicts_with_all = ["json", "count_only", "codes_only", "kinds_only", "descriptions_only"],
 		help_heading = "Output options"
 	)]
 	pub surfaces_only: bool,
@@ -1616,7 +1683,7 @@ pub struct CommandCatalogArgs {
 	#[arg(
 		long = "json",
 		default_value_t = false,
-		conflicts_with_all = ["names_only", "summaries_only", "categories_only", "example_commands_only"],
+		conflicts_with_all = ["count_only", "names_only", "summaries_only", "categories_only", "example_commands_only"],
 		help_heading = "Output options"
 	)]
 	pub json: bool,
@@ -1632,11 +1699,20 @@ pub struct CommandCatalogArgs {
 	reason = "clap line-output flags are clearer as independent switches"
 )]
 pub struct CommandCatalogLineOutputArgs {
+	/// Print only the number of matching commands.
+	#[arg(
+		long = "count-only",
+		default_value_t = false,
+		conflicts_with_all = ["json", "names_only", "summaries_only", "categories_only", "example_commands_only"],
+		help_heading = "Output options"
+	)]
+	pub count_only: bool,
+
 	/// Print only command names, one per line.
 	#[arg(
 		long = "names-only",
 		default_value_t = false,
-		conflicts_with_all = ["json", "summaries_only", "categories_only", "example_commands_only"],
+		conflicts_with_all = ["json", "count_only", "summaries_only", "categories_only", "example_commands_only"],
 		help_heading = "Output options"
 	)]
 	pub names_only: bool,
@@ -1645,7 +1721,7 @@ pub struct CommandCatalogLineOutputArgs {
 	#[arg(
 		long = "summaries-only",
 		default_value_t = false,
-		conflicts_with_all = ["json", "names_only", "categories_only", "example_commands_only"],
+		conflicts_with_all = ["json", "count_only", "names_only", "categories_only", "example_commands_only"],
 		help_heading = "Output options"
 	)]
 	pub summaries_only: bool,
@@ -1654,7 +1730,7 @@ pub struct CommandCatalogLineOutputArgs {
 	#[arg(
 		long = "categories-only",
 		default_value_t = false,
-		conflicts_with_all = ["json", "names_only", "summaries_only", "example_commands_only"],
+		conflicts_with_all = ["json", "count_only", "names_only", "summaries_only", "example_commands_only"],
 		help_heading = "Output options"
 	)]
 	pub categories_only: bool,
@@ -1663,7 +1739,7 @@ pub struct CommandCatalogLineOutputArgs {
 	#[arg(
 		long = "example-commands-only",
 		default_value_t = false,
-		conflicts_with_all = ["json", "names_only", "summaries_only", "categories_only"],
+		conflicts_with_all = ["json", "count_only", "names_only", "summaries_only", "categories_only"],
 		help_heading = "Output options"
 	)]
 	pub example_commands_only: bool,
@@ -1712,6 +1788,7 @@ pub struct ExamplesArgs {
 		long = "json",
 		default_value_t = false,
 		conflicts_with_all = [
+			"count_only",
 			"commands_only",
 			"command_names_only",
 			"titles_only",
@@ -1733,11 +1810,34 @@ pub struct ExamplesArgs {
 	reason = "clap line-output flags are clearer as independent switches"
 )]
 pub struct ExamplesLineOutputArgs {
+	/// Print only the number of matching examples.
+	#[arg(
+		long = "count-only",
+		default_value_t = false,
+		conflicts_with_all = [
+			"json",
+			"commands_only",
+			"command_names_only",
+			"titles_only",
+			"summaries_only",
+			"categories_only"
+		],
+		help_heading = "Output options"
+	)]
+	pub count_only: bool,
+
 	/// Print only example commands, one per line.
 	#[arg(
 		long = "commands-only",
 		default_value_t = false,
-		conflicts_with_all = ["json", "command_names_only", "titles_only", "summaries_only", "categories_only"],
+		conflicts_with_all = [
+			"json",
+			"count_only",
+			"command_names_only",
+			"titles_only",
+			"summaries_only",
+			"categories_only"
+		],
 		help_heading = "Output options"
 	)]
 	pub commands_only: bool,
@@ -1746,7 +1846,7 @@ pub struct ExamplesLineOutputArgs {
 	#[arg(
 		long = "command-names-only",
 		default_value_t = false,
-		conflicts_with_all = ["json", "commands_only", "titles_only", "summaries_only", "categories_only"],
+		conflicts_with_all = ["json", "count_only", "commands_only", "titles_only", "summaries_only", "categories_only"],
 		help_heading = "Output options"
 	)]
 	pub command_names_only: bool,
@@ -1755,7 +1855,7 @@ pub struct ExamplesLineOutputArgs {
 	#[arg(
 		long = "titles-only",
 		default_value_t = false,
-		conflicts_with_all = ["json", "commands_only", "command_names_only", "summaries_only", "categories_only"],
+		conflicts_with_all = ["json", "count_only", "commands_only", "command_names_only", "summaries_only", "categories_only"],
 		help_heading = "Output options"
 	)]
 	pub titles_only: bool,
@@ -1764,7 +1864,7 @@ pub struct ExamplesLineOutputArgs {
 	#[arg(
 		long = "summaries-only",
 		default_value_t = false,
-		conflicts_with_all = ["json", "commands_only", "command_names_only", "titles_only", "categories_only"],
+		conflicts_with_all = ["json", "count_only", "commands_only", "command_names_only", "titles_only", "categories_only"],
 		help_heading = "Output options"
 	)]
 	pub summaries_only: bool,
@@ -1773,7 +1873,7 @@ pub struct ExamplesLineOutputArgs {
 	#[arg(
 		long = "categories-only",
 		default_value_t = false,
-		conflicts_with_all = ["json", "commands_only", "command_names_only", "titles_only", "summaries_only"],
+		conflicts_with_all = ["json", "count_only", "commands_only", "command_names_only", "titles_only", "summaries_only"],
 		help_heading = "Output options"
 	)]
 	pub categories_only: bool,
