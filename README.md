@@ -298,6 +298,7 @@ pullhook commands --json
 pullhook codes
 pullhook codes --kind doctor-check
 pullhook codes --surface run
+pullhook codes --kinds-only
 pullhook codes --surfaces-only
 pullhook codes --kind doctor-check --codes-only
 pullhook codes --json
@@ -400,6 +401,7 @@ Use `pullhook codes` to inspect the stable code catalog in text form, or `pullho
 tool needs the catalog without scraping docs. Add `--kind error` or `--kind doctor-check` to narrow the list.
 Add `--surface run`, `--surface doctor`, or another surface fragment to focus codes by command area.
 Use `pullhook codes --codes-only` when a script or completion helper only needs stable code strings.
+Use `pullhook codes --kinds-only` when a script needs the distinct code kinds.
 Use `pullhook codes --surfaces-only` when a script needs the distinct code surfaces.
 
 Use `pullhook rules` to list configured rule and parallel group names before targeting a large config.

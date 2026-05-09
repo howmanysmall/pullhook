@@ -1118,6 +1118,11 @@ fn codes_json_lists_stable_json_codes() {
 		value["summary"]["codes"].as_u64().expect("code count"),
 		codes.len() as u64
 	);
+	assert_eq!(
+		value["summary"]["kinds"].as_u64().expect("kind count"),
+		2,
+		"codes summary should count distinct code kinds"
+	);
 	assert!(
 		value["summary"]["surfaces"].as_u64().expect("surface count") > 1,
 		"codes summary should count distinct surfaces"
@@ -1286,6 +1291,38 @@ fn codes_surfaces_only_prints_clean_surfaces() {
 }
 
 #[test]
+fn codes_kinds_only_prints_clean_kinds() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["codes", "--kinds-only"]);
+
+	assert!(output.status.success(), "codes --kinds-only should succeed");
+	let stdout = stdout_text(&output);
+	assert_eq!(stdout.lines().collect::<Vec<_>>(), vec!["doctor-check", "error"]);
+	let stderr = stderr_text(&output);
+	assert!(stderr.trim().is_empty(), "codes --kinds-only should not write stderr");
+}
+
+#[test]
+fn codes_kinds_only_honors_filters() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["codes", "--surface", "run", "--kinds-only"]);
+
+	assert!(
+		output.status.success(),
+		"codes --surface run --kinds-only should succeed"
+	);
+	let stdout = stdout_text(&output);
+	assert_eq!(stdout.lines().collect::<Vec<_>>(), vec!["error"]);
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"filtered codes --kinds-only should not write stderr"
+	);
+}
+
+#[test]
 fn codes_surfaces_only_honors_filters() {
 	let temp = tempfile::tempdir().expect("create temp dir");
 
@@ -1321,6 +1358,22 @@ fn codes_only_conflicts_with_json() {
 }
 
 #[test]
+fn codes_kinds_only_conflicts_with_json() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["codes", "--kinds-only", "--json"]);
+
+	assert!(
+		!output.status.success(),
+		"codes --kinds-only should conflict with --json"
+	);
+	let stderr = stderr_text(&output);
+	assert!(stderr.contains("cannot be used with"));
+	assert!(stderr.contains("--kinds-only"));
+	assert!(stderr.contains("--json"));
+}
+
+#[test]
 fn codes_surfaces_only_conflicts_with_json() {
 	let temp = tempfile::tempdir().expect("create temp dir");
 
@@ -1334,6 +1387,22 @@ fn codes_surfaces_only_conflicts_with_json() {
 	assert!(stderr.contains("cannot be used with"));
 	assert!(stderr.contains("--surfaces-only"));
 	assert!(stderr.contains("--json"));
+}
+
+#[test]
+fn codes_kinds_only_conflicts_with_codes_only() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["codes", "--kinds-only", "--codes-only"]);
+
+	assert!(
+		!output.status.success(),
+		"codes --kinds-only should conflict with --codes-only"
+	);
+	let stderr = stderr_text(&output);
+	assert!(stderr.contains("cannot be used with"));
+	assert!(stderr.contains("--kinds-only"));
+	assert!(stderr.contains("--codes-only"));
 }
 
 #[test]
@@ -2732,6 +2801,7 @@ fn utility_help_groups_options_by_task() {
 	assert!(codes_stdout.contains("Filter options:"));
 	assert!(codes_stdout.contains("Output options:"));
 	assert!(codes_stdout.contains("pullhook codes --surface run"));
+	assert!(codes_stdout.contains("pullhook codes --kinds-only"));
 	assert!(codes_stdout.contains("pullhook codes --surfaces-only"));
 	assert!(codes_stdout.contains("pullhook codes --kind error --codes-only"));
 

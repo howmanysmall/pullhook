@@ -1187,6 +1187,7 @@ fn codes_command(args: &CodesArgs) -> Result<()> {
 				"codes": codes,
 				"summary": {
 					"codes": codes.len(),
+					"kinds": unique_code_kinds(&codes).len(),
 					"surfaces": unique_code_surfaces(&codes).len(),
 				},
 			}))?
@@ -1194,14 +1195,21 @@ fn codes_command(args: &CodesArgs) -> Result<()> {
 		return Ok(());
 	}
 
-	if args.codes_only {
+	if args.output.codes_only {
 		for info in codes {
 			println!("{}", info.code);
 		}
 		return Ok(());
 	}
 
-	if args.surfaces_only {
+	if args.output.kinds_only {
+		for kind in unique_code_kinds(&codes) {
+			println!("{kind}");
+		}
+		return Ok(());
+	}
+
+	if args.output.surfaces_only {
 		for surface in unique_code_surfaces(&codes) {
 			println!("{surface}");
 		}
@@ -1229,6 +1237,15 @@ fn filtered_json_code_infos(kind: Option<CodeKind>, surface: Option<&str>) -> Ve
 		.copied()
 		.filter(|info| kind.is_none_or(|kind| info.kind == kind.label()))
 		.filter(|info| surface.is_none_or(|surface| info.surface.contains(surface)))
+		.collect()
+}
+
+fn unique_code_kinds(codes: &[JsonCodeInfo]) -> Vec<&'static str> {
+	codes
+		.iter()
+		.map(|info| info.kind)
+		.collect::<BTreeSet<_>>()
+		.into_iter()
 		.collect()
 }
 

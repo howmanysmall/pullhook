@@ -168,6 +168,7 @@ Examples:
   pullhook codes
   pullhook codes --kind doctor-check
   pullhook codes --surface run
+  pullhook codes --kinds-only
   pullhook codes --surfaces-only
   pullhook codes --kind error --codes-only
   pullhook codes --json";
@@ -1147,25 +1148,41 @@ pub struct CodesArgs {
 	#[arg(
 		long = "json",
 		default_value_t = false,
-		conflicts_with = "codes_only",
+		conflicts_with_all = ["codes_only", "surfaces_only", "kinds_only"],
 		help_heading = "Output options"
 	)]
 	pub json: bool,
 
+	#[command(flatten)]
+	pub output: CodesLineOutputArgs,
+}
+
+/// Line-output mode arguments for `pullhook codes`.
+#[derive(Debug, Clone, Args)]
+pub struct CodesLineOutputArgs {
 	/// Print only stable codes, one per line.
 	#[arg(
 		long = "codes-only",
 		default_value_t = false,
-		conflicts_with_all = ["json", "surfaces_only"],
+		conflicts_with_all = ["json", "surfaces_only", "kinds_only"],
 		help_heading = "Output options"
 	)]
 	pub codes_only: bool,
+
+	/// Print only matching code kinds, one per line.
+	#[arg(
+		long = "kinds-only",
+		default_value_t = false,
+		conflicts_with_all = ["json", "codes_only", "surfaces_only"],
+		help_heading = "Output options"
+	)]
+	pub kinds_only: bool,
 
 	/// Print only matching code surfaces, one per line.
 	#[arg(
 		long = "surfaces-only",
 		default_value_t = false,
-		conflicts_with_all = ["json", "codes_only"],
+		conflicts_with_all = ["json", "codes_only", "kinds_only"],
 		help_heading = "Output options"
 	)]
 	pub surfaces_only: bool,
