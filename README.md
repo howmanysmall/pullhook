@@ -387,6 +387,7 @@ Use `schema --check --output <path>` in CI when a checked-in schema file must st
 Add `--quiet` when successful schema or completion checks should only report through their exit code.
 `schema --check --json` and `completion <shell> --check --json` include top-level `status`, stable `code`, `error`, and
 `details` fields with the rerun command when generated output is stale.
+Catalog-style JSON commands that accept `--search` also include `searchFields`, so automation can show users exactly which fields were matched.
 Use `pullhook shells` to inspect supported shell completion targets in text form, or `pullhook shells --json`
 when another tool needs shell names and generation commands without scraping help text.
 Add `--search <text>` to match shell names, completion commands, or descriptions case-insensitively.
