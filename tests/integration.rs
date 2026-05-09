@@ -4964,12 +4964,18 @@ fn utility_help_groups_options_by_task() {
 	assert!(codes_stdout.contains("pullhook codes --surfaces-only"));
 	assert!(codes_stdout.contains("pullhook codes --search config --descriptions-only"));
 	assert!(codes_stdout.contains("pullhook codes --kind error --codes-only"));
+}
+
+#[test]
+fn commands_help_describes_search_and_output_modes() {
+	let temp = tempfile::tempdir().expect("create temp dir");
 
 	let commands = run_pullhook(temp.path(), &["commands", "--help"]);
 	assert!(commands.status.success(), "commands help should succeed");
 	let commands_stdout = stdout_text(&commands);
 	assert!(commands_stdout.contains("Filter options:"));
 	assert!(commands_stdout.contains("Output options:"));
+	assert!(commands_stdout.contains("name, category, summary, or examples"));
 	assert!(commands_stdout.contains("pullhook commands --category diagnostic"));
 	assert!(commands_stdout.contains("pullhook commands --category diagnostic --names-only"));
 	assert!(commands_stdout.contains("pullhook commands --search config"));

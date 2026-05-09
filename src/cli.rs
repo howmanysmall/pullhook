@@ -1605,7 +1605,7 @@ pub struct CommandCatalogArgs {
 	#[arg(long = "category", value_enum, help_heading = "Filter options")]
 	pub category: Option<CommandCategory>,
 
-	/// Only list commands whose name, category, or summary contains this text.
+	/// Only list commands whose name, category, summary, or examples contain this text.
 	#[arg(long = "search", value_name = "TEXT", help_heading = "Filter options")]
 	pub search: Option<String>,
 
