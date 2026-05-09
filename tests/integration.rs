@@ -2300,6 +2300,8 @@ fn rules_json_reports_rule_inventory() {
 		value["selectors"],
 		serde_json::json!(["checks", "install dependencies", "lint"])
 	);
+	assert_eq!(value["commands"], serde_json::json!(["cargo test -p lint"]));
+	assert_eq!(value["patterns"], serde_json::json!(["packages/a/package-lock.json"]));
 	let entries = value["entries"].as_array().expect("entries array");
 	assert_eq!(entries.len(), 2);
 	assert_eq!(entries[0]["type"], "rule");
@@ -2355,6 +2357,8 @@ fn rules_json_filters_inventory_by_kind() {
 	assert_eq!(value["rules"], 1);
 	assert_eq!(value["parallelGroups"], 0);
 	assert_eq!(value["selectors"], serde_json::json!(["install dependencies"]));
+	assert_eq!(value["commands"], serde_json::json!([]));
+	assert_eq!(value["patterns"], serde_json::json!([]));
 	let entries = value["entries"].as_array().expect("entries array");
 	assert_eq!(entries.len(), 1);
 	assert_eq!(entries[0]["name"], "install dependencies");

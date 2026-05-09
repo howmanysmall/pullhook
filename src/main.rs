@@ -1806,6 +1806,8 @@ fn config_rules_json(config: &Config, kind: RulesKind) -> serde_json::Value {
 		"onFailure": on_failure_label(config.on_failure),
 		"kind": rules_kind_label(kind),
 		"selectors": collect_rule_selectors_for_kind(config, kind),
+		"commands": collect_config_rule_commands_for_kind(config, kind),
+		"patterns": collect_config_rule_patterns_for_kind(config, kind),
 		"entries": config.entries.iter().filter_map(|entry| config_rule_inventory_json(entry, kind)).collect::<Vec<_>>(),
 		"rules": count_config_rules_for_kind(config, kind),
 		"parallelGroups": count_config_groups_for_kind(config, kind),
