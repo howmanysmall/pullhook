@@ -1560,6 +1560,7 @@ fn config_json_reports_discovered_config_path_without_validating_contents() {
 	assert_eq!(value["format"], "json");
 	assert_eq!(value["exists"], true);
 	assert_eq!(value["explicit"], false);
+	assert_eq!(value["source"], "discovered");
 	assert_eq!(value["error"], serde_json::Value::Null);
 	assert!(
 		value["repoRoot"]
@@ -1666,6 +1667,7 @@ fn config_require_existing_json_reports_missing_config_path_as_json() {
 	assert_eq!(value["format"], "yaml");
 	assert_eq!(value["exists"], false);
 	assert_eq!(value["explicit"], true);
+	assert_eq!(value["source"], "explicit");
 	assert_eq!(value["error"], "resolved config file does not exist");
 	let details = value["details"].as_array().expect("details array");
 	assert!(

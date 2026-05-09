@@ -729,6 +729,7 @@ fn config_command(args: &ConfigArgs) -> Result<()> {
 	let path = resolve_config_path_for_output(&cwd, &repo_root, args.config.as_deref(), args.json)?;
 	let format = config_format_from_path_for_output(&path, args.json)?;
 	let explicit = args.config.is_some();
+	let source = if explicit { "explicit" } else { "discovered" };
 	let exists = path.is_file();
 	if args.require_existing && !exists {
 		if args.json {
@@ -740,6 +741,7 @@ fn config_command(args: &ConfigArgs) -> Result<()> {
 					"format": format.label(),
 					"exists": false,
 					"explicit": explicit,
+					"source": source,
 					"repoRoot": repo_root.display().to_string(),
 					"error": "resolved config file does not exist",
 					"details": [
@@ -766,6 +768,7 @@ fn config_command(args: &ConfigArgs) -> Result<()> {
 				"format": format.label(),
 				"exists": exists,
 				"explicit": explicit,
+				"source": source,
 				"repoRoot": repo_root.display().to_string(),
 				"error": null,
 			}))?
