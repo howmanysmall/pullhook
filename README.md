@@ -347,6 +347,7 @@ pullhook commands --standalone-only --names-only
 pullhook commands --categories-only
 pullhook commands --category workflow --example-commands-only
 pullhook commands --search config --summaries-only
+pullhook commands --markdown
 pullhook commands --json
 pullhook codes
 pullhook codes --kind doctor-check
@@ -482,6 +483,7 @@ Use `pullhook commands --names-only` when a script or completion helper only nee
 Use `pullhook commands --summaries-only` when a script or command palette only needs command descriptions.
 Use `pullhook commands --categories-only` when a script only needs the matching command categories.
 Use `pullhook commands --example-commands-only` when a script needs example invocations for the matching commands.
+Use `pullhook commands --markdown` to generate a compact command-reference table for docs, issues, or release notes.
 Use `pullhook codes` to inspect the stable code catalog in text form, or `pullhook codes --json` when another
 tool needs the catalog without scraping docs. Add `--kind error` or `--kind doctor-check` to narrow the list.
 Add `--surface run`, `--surface doctor`, or another case-insensitive surface fragment to focus codes by command area.

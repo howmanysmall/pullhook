@@ -1620,6 +1620,11 @@ fn command_catalog_command(args: &CommandCatalogArgs) -> Result<()> {
 		return Ok(());
 	}
 
+	if args.markdown {
+		render_command_catalog_markdown(&commands, &top_level_examples);
+		return Ok(());
+	}
+
 	if args.output.count_only {
 		println!("{}", commands.len());
 		return Ok(());
@@ -1690,6 +1695,51 @@ fn command_info_json(info: CommandInfo) -> serde_json::Value {
 		"scriptFriendly": info.script_friendly,
 		"exampleCommands": example_commands_for_command(info),
 	})
+}
+
+fn render_command_catalog_markdown(commands: &[CommandInfo], top_level_examples: &[ExampleInfo]) {
+	println!("| Command | Category | Repo required | Summary | Examples |");
+	println!("| --- | --- | --- | --- | --- |");
+	for info in commands {
+		let examples = example_commands_for_command(*info);
+		println!(
+			"| `{}` | `{}` | {} | {} | {} |",
+			markdown_table_escape(info.name),
+			markdown_table_escape(info.category),
+			if info.requires_repo { "yes" } else { "no" },
+			markdown_table_escape(info.summary),
+			markdown_example_commands(&examples)
+		);
+	}
+	if top_level_examples.is_empty() {
+		return;
+	}
+
+	println!();
+	println!("Top-level examples:");
+	for example in top_level_examples {
+		println!(
+			"- `{}`: {}",
+			markdown_table_escape(example.command),
+			markdown_table_escape(example.summary)
+		);
+	}
+}
+
+fn markdown_example_commands(commands: &[&str]) -> String {
+	if commands.is_empty() {
+		return "none".to_owned();
+	}
+
+	commands
+		.iter()
+		.map(|command| format!("`{}`", markdown_table_escape(command)))
+		.collect::<Vec<_>>()
+		.join("<br>")
+}
+
+fn markdown_table_escape(value: &str) -> String {
+	value.replace('|', r"\|")
 }
 
 fn collect_command_catalog_categories(

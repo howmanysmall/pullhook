@@ -225,6 +225,7 @@ Examples:
   pullhook commands --categories-only
   pullhook commands --category workflow --example-commands-only
   pullhook commands --search config --summaries-only
+  pullhook commands --markdown
   pullhook commands --json";
 
 const EXAMPLES_AFTER_HELP: &str = "\
@@ -1753,10 +1754,26 @@ pub struct CommandCatalogArgs {
 	#[arg(
 		long = "json",
 		default_value_t = false,
-		conflicts_with_all = ["count_only", "names_only", "summaries_only", "categories_only", "example_commands_only"],
+		conflicts_with_all = [
+			"markdown",
+			"count_only",
+			"names_only",
+			"summaries_only",
+			"categories_only",
+			"example_commands_only"
+		],
 		help_heading = "Output options"
 	)]
 	pub json: bool,
+
+	/// Print a Markdown command reference table.
+	#[arg(
+		long = "markdown",
+		default_value_t = false,
+		conflicts_with_all = ["json", "count_only", "names_only", "summaries_only", "categories_only", "example_commands_only"],
+		help_heading = "Output options"
+	)]
+	pub markdown: bool,
 
 	#[command(flatten)]
 	pub output: CommandCatalogLineOutputArgs,
@@ -1773,7 +1790,7 @@ pub struct CommandCatalogLineOutputArgs {
 	#[arg(
 		long = "count-only",
 		default_value_t = false,
-		conflicts_with_all = ["json", "names_only", "summaries_only", "categories_only", "example_commands_only"],
+		conflicts_with_all = ["json", "markdown", "names_only", "summaries_only", "categories_only", "example_commands_only"],
 		help_heading = "Output options"
 	)]
 	pub count_only: bool,
@@ -1782,7 +1799,7 @@ pub struct CommandCatalogLineOutputArgs {
 	#[arg(
 		long = "names-only",
 		default_value_t = false,
-		conflicts_with_all = ["json", "count_only", "summaries_only", "categories_only", "example_commands_only"],
+		conflicts_with_all = ["json", "markdown", "count_only", "summaries_only", "categories_only", "example_commands_only"],
 		help_heading = "Output options"
 	)]
 	pub names_only: bool,
@@ -1791,7 +1808,7 @@ pub struct CommandCatalogLineOutputArgs {
 	#[arg(
 		long = "summaries-only",
 		default_value_t = false,
-		conflicts_with_all = ["json", "count_only", "names_only", "categories_only", "example_commands_only"],
+		conflicts_with_all = ["json", "markdown", "count_only", "names_only", "categories_only", "example_commands_only"],
 		help_heading = "Output options"
 	)]
 	pub summaries_only: bool,
@@ -1800,7 +1817,7 @@ pub struct CommandCatalogLineOutputArgs {
 	#[arg(
 		long = "categories-only",
 		default_value_t = false,
-		conflicts_with_all = ["json", "count_only", "names_only", "summaries_only", "example_commands_only"],
+		conflicts_with_all = ["json", "markdown", "count_only", "names_only", "summaries_only", "example_commands_only"],
 		help_heading = "Output options"
 	)]
 	pub categories_only: bool,
@@ -1809,7 +1826,7 @@ pub struct CommandCatalogLineOutputArgs {
 	#[arg(
 		long = "example-commands-only",
 		default_value_t = false,
-		conflicts_with_all = ["json", "count_only", "names_only", "summaries_only", "categories_only"],
+		conflicts_with_all = ["json", "markdown", "count_only", "names_only", "summaries_only", "categories_only"],
 		help_heading = "Output options"
 	)]
 	pub example_commands_only: bool,
