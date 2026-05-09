@@ -704,6 +704,11 @@ fn doctor_json_reports_repo_config_diff_base_and_install_detection() {
 	assert_eq!(checks[2]["name"], "diff base");
 	assert_eq!(checks[3]["name"], "install detection");
 	assert_eq!(checks[3]["summary"], "detected npm");
+	assert_eq!(
+		checks[1]["hint"],
+		"run `pullhook explain --all-matches` to preview rule matches"
+	);
+	assert_eq!(checks[3]["hint"], "use `install: true` for dependency-recovery rules");
 	let stderr = stderr_text(&output);
 	assert!(stderr.trim().is_empty(), "doctor --json should not write stderr");
 }
@@ -736,6 +741,7 @@ fn doctor_json_fails_when_config_is_invalid() {
 	let checks = value["checks"].as_array().expect("checks array");
 	assert_eq!(checks[1]["name"], "config");
 	assert_eq!(checks[1]["level"], "error");
+	assert_eq!(checks[1]["hint"], "run `pullhook validate` after editing the config");
 	let stderr = stderr_text(&output);
 	assert!(stderr.contains("doctor found blocking issues"));
 }

@@ -76,6 +76,7 @@ struct DoctorCheck {
 	level: DoctorLevel,
 	summary: String,
 	details: Vec<String>,
+	hint: Option<String>,
 }
 
 fn main() {
@@ -925,6 +926,7 @@ fn doctor_repository_check(repo_root: &std::path::Path) -> DoctorCheck {
 		level: DoctorLevel::Ok,
 		summary: format!("repo root resolved to {}", repo_root.display()),
 		details: vec![format!("cwd scope is inside `{}`", repo_root.display())],
+		hint: Some("run pullhook commands from anywhere inside this repository".to_owned()),
 	}
 }
 
@@ -950,6 +952,7 @@ fn doctor_config_check(
 						format!("rules: {}", count_config_rules(&config)),
 						format!("parallel groups: {}", count_config_groups(&config)),
 					],
+					hint: Some("run `pullhook explain --all-matches` to preview rule matches".to_owned()),
 				}
 			}
 			Err(error) => DoctorCheck {
@@ -957,6 +960,7 @@ fn doctor_config_check(
 				level: DoctorLevel::Error,
 				summary: format!("config is invalid: {}", path.display()),
 				details: vec![error.to_string()],
+				hint: Some("run `pullhook validate` after editing the config".to_owned()),
 			},
 		},
 		Err(error) if explicit_config.is_none() && error.to_string().contains("no pullhook config found") => {
@@ -965,6 +969,7 @@ fn doctor_config_check(
 				level: DoctorLevel::Warn,
 				summary: "no pullhook config found".to_owned(),
 				details: vec!["run `pullhook init` to create pullhook.json".to_owned()],
+				hint: Some("run `pullhook init` to create a starter config".to_owned()),
 			}
 		}
 		Err(error) => DoctorCheck {
@@ -972,6 +977,7 @@ fn doctor_config_check(
 			level: DoctorLevel::Error,
 			summary: "config discovery failed".to_owned(),
 			details: vec![error.to_string()],
+			hint: Some("fix the config path or pass `--config <path>` explicitly".to_owned()),
 		},
 	}
 }
@@ -983,18 +989,21 @@ fn doctor_diff_base_check(repo: &GitRepo) -> DoctorCheck {
 			level: DoctorLevel::Ok,
 			summary: format!("resolved {base}"),
 			details: vec![format!("changed files: {}", changed_files.len())],
+			hint: Some("pass `--base <rev>` to compare against a specific revision".to_owned()),
 		},
 		Err(error::PullhookError::DiffBaseUnavailable) => DoctorCheck {
 			name: "diff base",
 			level: DoctorLevel::Warn,
 			summary: "no automatic diff base available".to_owned(),
 			details: vec!["use `--base <rev>` or rely on `runIfBaseMissing` rules".to_owned()],
+			hint: Some("run with `--base <rev>` or add `runIfBaseMissing: true` to recovery rules".to_owned()),
 		},
 		Err(error) => DoctorCheck {
 			name: "diff base",
 			level: DoctorLevel::Error,
 			summary: "failed to inspect git history".to_owned(),
 			details: vec![error.to_string()],
+			hint: Some("check git history or pass `--base <rev>` explicitly".to_owned()),
 		},
 	}
 }
@@ -1009,24 +1018,28 @@ fn doctor_install_check(repo_root: &std::path::Path) -> DoctorCheck {
 				format!("command: {}", package_manager.install_command()),
 				format!("pattern: {}", package_manager.install_pattern()),
 			],
+			hint: Some("use `install: true` for dependency-recovery rules".to_owned()),
 		},
 		Err(error::PullhookError::PackageManagerNotFound { .. }) => DoctorCheck {
 			name: "install detection",
 			level: DoctorLevel::Warn,
 			summary: "no supported package manager files found".to_owned(),
 			details: vec!["`pullhook --install` would not work in this repo yet".to_owned()],
+			hint: Some("add a supported lockfile or use explicit `run` commands instead".to_owned()),
 		},
 		Err(error::PullhookError::AmbiguousPackageManagers { found }) => DoctorCheck {
 			name: "install detection",
 			level: DoctorLevel::Error,
 			summary: "multiple package managers detected".to_owned(),
 			details: vec![format!("found: {}", found.join(", "))],
+			hint: Some("remove extra lockfiles so package-manager detection is unambiguous".to_owned()),
 		},
 		Err(error) => DoctorCheck {
 			name: "install detection",
 			level: DoctorLevel::Error,
 			summary: "package-manager detection failed".to_owned(),
 			details: vec![error.to_string()],
+			hint: Some("fix package-manager files or avoid `install: true` rules".to_owned()),
 		},
 	}
 }
@@ -1041,6 +1054,9 @@ fn render_doctor_checks(checks: &[DoctorCheck], repo_root: &std::path::Path) {
 		println!("summary: {}", check.summary);
 		for detail in &check.details {
 			println!("detail: {detail}");
+		}
+		if let Some(hint) = &check.hint {
+			println!("hint: {hint}");
 		}
 		println!();
 	}
@@ -1058,6 +1074,7 @@ fn doctor_check_json(check: &DoctorCheck) -> serde_json::Value {
 		"level": check.level.label(),
 		"summary": check.summary,
 		"details": check.details,
+		"hint": check.hint,
 	})
 }
 

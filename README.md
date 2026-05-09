@@ -250,10 +250,10 @@ Styles respect `--render auto|always|never`; placeholders render in every mode.
 `pullhook config` shows the config path and format that pullhook will use without parsing the file.
 `validate --json` emits a compact config summary for scripts and still prints structured JSON when the
 config is invalid. `doctor` checks repo discovery, config health, diff-base availability, and `--install`
-detection in one pass. `explain --json` emits the evaluated rule plan, including changed files, matched
-files, commands, and skip reasons. `run --json` adds real execution results, captured stdout/stderr, and
-a final summary. `run --dry-run --json` emits the same plan plus `plannedCommands`, which is handy for CI
-or editor integrations.
+detection in one pass, with a short hint for each check. `explain --json` emits the evaluated rule plan,
+including changed files, matched files, commands, and skip reasons. `run --json` adds real execution
+results, captured stdout/stderr, and a final summary. `run --dry-run --json` emits the same plan plus
+`plannedCommands`, which is handy for CI or editor integrations.
 
 Legacy top-level mode also supports `--json`, including live execution results and dry-run plans.
 
