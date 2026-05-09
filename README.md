@@ -291,7 +291,8 @@ Use `doctor --quiet` to suppress all-ok text output without hiding warnings or e
 `doctor --json` includes `status` and `error` fields so automation can read the result without scraping stderr.
 `explain --json` emits the evaluated rule plan,
 including changed files, their source (`git`, `explicit`, or `base-missing`), matched files, commands, and
-skip reasons. `run --json` adds real execution results, captured stdout/stderr, and a final summary.
+skip reasons. `explain --json`, `run --dry-run --json`, and `run --json` include top-level `status` and
+`error` fields; `run --json` also adds real execution results, captured stdout/stderr, and a final summary.
 Use `explain --summary-only` when you only need changed-file, matched-file, and planned-command counts.
 Use `explain --commands-only` when another script should receive only the planned command lines.
 Use `explain --changed-files-only` when a script needs the resolved changed-file paths without parsing JSON.

@@ -2477,6 +2477,8 @@ fn explain_json_reports_matches_and_skips() {
 
 	assert!(output.status.success(), "explain --json should succeed");
 	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse explain json");
+	assert_eq!(value["status"], "ok");
+	assert_eq!(value["error"], serde_json::Value::Null);
 	assert_eq!(value["baseMissing"], false);
 	assert_eq!(value["onFailure"], "stop");
 	assert_eq!(
@@ -2701,6 +2703,26 @@ fn explain_require_match_fails_after_printing_empty_summary() {
 }
 
 #[test]
+fn explain_require_match_fails_after_printing_empty_json_plan() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_config_rule(repo_root, "skip markdown", "**/*.md", "cargo test");
+
+	let output = run_pullhook(repo_root, &["explain", "--json", "--require-match"]);
+
+	assert!(
+		!output.status.success(),
+		"explain --json --require-match should fail when no rules match"
+	);
+	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse explain json");
+	assert_eq!(value["status"], "error");
+	assert_eq!(value["error"], "no config rules matched changed files");
+	assert_eq!(value["matchedFiles"], serde_json::json!([]));
+	let stderr = stderr_text(&output);
+	assert!(stderr.contains("no config rules matched changed files"));
+}
+
+#[test]
 fn explain_require_match_succeeds_when_a_rule_matches() {
 	let temp = setup_repo_with_merge();
 	let repo_root = temp.path();
@@ -2876,6 +2898,8 @@ fn run_dry_run_json_reports_planned_commands() {
 
 	assert!(output.status.success(), "run --dry-run --json should succeed");
 	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse run json");
+	assert_eq!(value["status"], "ok");
+	assert_eq!(value["error"], serde_json::Value::Null);
 	assert_eq!(value["mode"], "dry-run");
 	assert_eq!(value["changedFilesSource"], "git");
 	assert_eq!(value["plannedCommands"], 1);
@@ -3077,6 +3101,8 @@ fn run_require_match_fails_after_printing_empty_json_plan() {
 		"run --require-match should fail when no rules match"
 	);
 	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse run json");
+	assert_eq!(value["status"], "error");
+	assert_eq!(value["error"], "no config rules matched changed files");
 	assert_eq!(value["plannedCommands"], 0);
 	assert_eq!(value["matchedFiles"], serde_json::json!([]));
 	assert!(
@@ -3458,6 +3484,8 @@ fn run_json_reports_execution_results() {
 
 	assert!(output.status.success(), "run --json should succeed");
 	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse run json");
+	assert_eq!(value["status"], "ok");
+	assert_eq!(value["error"], serde_json::Value::Null);
 	assert_eq!(value["mode"], "run");
 	assert_eq!(value["summary"]["passed"], 1);
 	assert_eq!(value["summary"]["failed"], 0);
@@ -3501,6 +3529,8 @@ fn run_json_reports_failure_results() {
 
 	assert!(!output.status.success(), "run --json should fail when a rule fails");
 	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse failed run json");
+	assert_eq!(value["status"], "error");
+	assert_eq!(value["error"], "1 config rule(s) failed");
 	assert_eq!(value["summary"]["passed"], 1);
 	assert_eq!(value["summary"]["failed"], 1);
 	let executions = value["executions"].as_array().expect("executions array");

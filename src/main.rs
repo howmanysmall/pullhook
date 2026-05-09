@@ -398,44 +398,20 @@ fn run_config_command(args: &ConfigRunArgs) -> Result<()> {
 		&args.rules,
 		args.json,
 	)?;
-	let matched_files = count_config_matched_files(&evaluation);
 
 	if args.json {
-		if args.dry_run {
-			let planned_commands = count_planned_commands(&evaluation);
-			println!(
-				"{}",
-				serde_json::to_string_pretty(&config_dry_run_json(
-					&config,
-					&changed_files,
-					base_missing,
-					changed_files_source,
-					&evaluation,
-					planned_commands,
-				))?
-			);
-			return ensure_required_config_match(args.require_match, &evaluation);
-		}
-
-		let (counts, executions) = execute_config_entries_json(config.on_failure, &evaluation, &repo_root, args)?;
-		let failure_count = counts.failed + counts.interrupted;
-		println!(
-			"{}",
-			serde_json::to_string_pretty(&config_run_json(
-				&config,
-				&changed_files,
-				base_missing,
-				changed_files_source,
-				&evaluation,
-				counts,
-				executions,
-			))?
+		return run_config_command_json(
+			args,
+			&config,
+			&changed_files,
+			base_missing,
+			changed_files_source,
+			&evaluation,
+			&repo_root,
 		);
-		if failure_count > 0 {
-			return Err(anyhow!("{failure_count} config rule(s) failed"));
-		}
-		return ensure_required_config_match(args.require_match, &evaluation);
 	}
+
+	let matched_files = count_config_matched_files(&evaluation);
 
 	if render_config_run_planning_only_output(args, &changed_files, base_missing, changed_files_source, &evaluation) {
 		return ensure_required_config_match(args.require_match, &evaluation);
@@ -471,6 +447,62 @@ fn run_config_command(args: &ConfigRunArgs) -> Result<()> {
 	}
 
 	ensure_required_config_match(args.require_match, &evaluation)
+}
+
+fn run_config_command_json(
+	args: &ConfigRunArgs,
+	config: &Config,
+	changed_files: &[std::path::PathBuf],
+	base_missing: bool,
+	changed_files_source: ChangedFilesSource,
+	evaluation: &[EvaluatedEntry],
+	repo_root: &std::path::Path,
+) -> Result<()> {
+	if args.dry_run {
+		let planned_commands = count_planned_commands(evaluation);
+		let error = required_config_match_error(args.require_match, evaluation);
+		let base = config_evaluation_json(
+			config,
+			changed_files,
+			base_missing,
+			changed_files_source,
+			evaluation,
+			error,
+		);
+		println!(
+			"{}",
+			serde_json::to_string_pretty(&config_dry_run_json(base, planned_commands))?
+		);
+		if let Some(error) = error {
+			return Err(anyhow!(error));
+		}
+		return Ok(());
+	}
+
+	let (counts, executions) = execute_config_entries_json(config.on_failure, evaluation, repo_root, args)?;
+	let failure_count = counts.failed + counts.interrupted;
+	let failure_error = (failure_count > 0).then(|| format!("{failure_count} config rule(s) failed"));
+	let require_match_error = required_config_match_error(args.require_match, evaluation);
+	let error = failure_error.as_deref().or(require_match_error);
+	let base = config_evaluation_json(
+		config,
+		changed_files,
+		base_missing,
+		changed_files_source,
+		evaluation,
+		error,
+	);
+	println!(
+		"{}",
+		serde_json::to_string_pretty(&config_run_json(base, evaluation, counts, executions))?
+	);
+	if let Some(error) = failure_error {
+		return Err(anyhow!(error));
+	}
+	if let Some(error) = require_match_error {
+		return Err(anyhow!(error));
+	}
+	Ok(())
 }
 
 fn render_config_run_planning_only_output(
@@ -509,11 +541,19 @@ fn render_config_run_planning_only_output(
 }
 
 fn ensure_required_config_match(require_match: bool, evaluation: &[EvaluatedEntry]) -> Result<()> {
-	if require_match && count_planned_commands(evaluation) == 0 {
-		return Err(anyhow!("no config rules matched changed files"));
+	if let Some(error) = required_config_match_error(require_match, evaluation) {
+		return Err(anyhow!(error));
 	}
 
 	Ok(())
+}
+
+fn required_config_match_error(require_match: bool, evaluation: &[EvaluatedEntry]) -> Option<&'static str> {
+	if require_match && count_planned_commands(evaluation) == 0 {
+		return Some("no config rules matched changed files");
+	}
+
+	None
 }
 
 fn explain_config_command(args: &ExplainArgs) -> Result<()> {
@@ -540,6 +580,7 @@ fn explain_config_command(args: &ExplainArgs) -> Result<()> {
 	)?;
 
 	if args.json {
+		let error = required_config_match_error(args.require_match, &evaluation);
 		println!(
 			"{}",
 			serde_json::to_string_pretty(&config_evaluation_json(
@@ -547,10 +588,14 @@ fn explain_config_command(args: &ExplainArgs) -> Result<()> {
 				&changed_files,
 				base_missing,
 				changed_files_source,
-				&evaluation
+				&evaluation,
+				error,
 			))?
 		);
-		return ensure_required_config_match(args.require_match, &evaluation);
+		if let Some(error) = error {
+			return Err(anyhow!(error));
+		}
+		return Ok(());
 	}
 
 	if args.summary_only {
@@ -1670,6 +1715,7 @@ fn config_evaluation_json(
 	base_missing: bool,
 	changed_files_source: ChangedFilesSource,
 	evaluation: &[EvaluatedEntry],
+	error: Option<&str>,
 ) -> serde_json::Value {
 	let entries = evaluation.iter().map(config_entry_json).collect::<Vec<_>>();
 	let matched_files = collect_matched_files(evaluation)
@@ -1678,6 +1724,8 @@ fn config_evaluation_json(
 		.collect::<Vec<_>>();
 
 	json!({
+		"status": if error.is_some() { "error" } else { "ok" },
+		"error": error,
 		"path": config.path.display().to_string(),
 		"onFailure": on_failure_label(config.on_failure),
 		"baseMissing": base_missing,
@@ -1688,15 +1736,7 @@ fn config_evaluation_json(
 	})
 }
 
-fn config_dry_run_json(
-	config: &Config,
-	changed_files: &[std::path::PathBuf],
-	base_missing: bool,
-	changed_files_source: ChangedFilesSource,
-	evaluation: &[EvaluatedEntry],
-	planned_commands: usize,
-) -> serde_json::Value {
-	let mut value = config_evaluation_json(config, changed_files, base_missing, changed_files_source, evaluation);
+fn config_dry_run_json(mut value: serde_json::Value, planned_commands: usize) -> serde_json::Value {
 	if let Some(object) = value.as_object_mut() {
 		object.insert("mode".to_owned(), json!("dry-run"));
 		object.insert("plannedCommands".to_owned(), json!(planned_commands));
@@ -1705,15 +1745,11 @@ fn config_dry_run_json(
 }
 
 fn config_run_json(
-	config: &Config,
-	changed_files: &[std::path::PathBuf],
-	base_missing: bool,
-	changed_files_source: ChangedFilesSource,
+	mut value: serde_json::Value,
 	evaluation: &[EvaluatedEntry],
 	counts: TaskCounters,
 	executions: Vec<serde_json::Value>,
 ) -> serde_json::Value {
-	let mut value = config_evaluation_json(config, changed_files, base_missing, changed_files_source, evaluation);
 	if let Some(object) = value.as_object_mut() {
 		object.insert("mode".to_owned(), json!("run"));
 		object.insert(
