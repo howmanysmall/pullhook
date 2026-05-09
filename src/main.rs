@@ -424,6 +424,13 @@ const EXAMPLE_INFOS: &[ExampleInfo] = &[
 		summary: "Print the config path pullhook would use without parsing the file.",
 	},
 	ExampleInfo {
+		title: "List configured rule commands",
+		category: "diagnostic",
+		command_name: "rules",
+		command: "pullhook rules --commands-only",
+		summary: "Print configured rule command lines without evaluating changed files.",
+	},
+	ExampleInfo {
 		title: "Write JSON Schema",
 		category: "generator",
 		command_name: "schema",

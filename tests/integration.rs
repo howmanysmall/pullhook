@@ -2805,6 +2805,11 @@ fn examples_json_lists_common_workflows() {
 	);
 	assert!(examples.iter().any(|entry| entry["commandName"] == "schema"
 		&& entry["command"] == "pullhook schema --output .vscode/pullhook.schema.json"));
+	assert!(
+		examples
+			.iter()
+			.any(|entry| entry["commandName"] == "rules" && entry["command"] == "pullhook rules --commands-only")
+	);
 	assert!(examples.iter().any(|entry| entry["commandName"] == "completion"
 		&& entry["command"] == "pullhook completion fish --output ~/.config/fish/completions/pullhook.fish"));
 	assert_eq!(
@@ -4876,6 +4881,7 @@ fn utility_help_groups_options_by_task() {
 	assert!(examples_stdout.contains("pullhook examples --search install"));
 	assert!(examples_stdout.contains("pullhook examples --search install --summaries-only"));
 	assert!(examples_stdout.contains("pullhook examples --command run --commands-only"));
+	assert!(examples_stdout.contains("pullhook examples --command rules --commands-only"));
 	assert!(examples_stdout.contains("pullhook examples --command schema --commands-only"));
 	assert!(examples_stdout.contains("pullhook examples --category reference --commands-only"));
 	assert!(examples_stdout.contains("pullhook examples --category reference --titles-only"));

@@ -323,6 +323,7 @@ pullhook examples --search install
 pullhook examples --search install --summaries-only
 pullhook examples --command run
 pullhook examples --command run --commands-only
+pullhook examples --command rules --commands-only
 pullhook examples --command schema --commands-only
 pullhook examples --command-names-only
 pullhook examples --categories-only
@@ -444,7 +445,7 @@ Legacy command-parse JSON errors include a `commandParse` object with the reject
 Use `pullhook examples` to inspect common workflows in text form, or `pullhook examples --json` when another
 tool needs example commands without scraping docs.
 Add `--command run`, `--command explain`, `--command validate`, `--command doctor`, `--command config`,
-`--command init`, `--command schema`, `--command completion`, `--command commands`, `--command shells`,
+`--command rules`, `--command init`, `--command schema`, `--command completion`, `--command commands`, `--command shells`,
 `--command formats`, `--command managers`, `--command codes`, or `--command legacy` to focus the example list.
 Use `pullhook examples --category reference` to narrow examples by command category.
 Add `--search <text>` to match example titles, commands, categories, or summaries case-insensitively.

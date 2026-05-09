@@ -226,6 +226,7 @@ Examples:
   pullhook examples --search install
   pullhook examples --search install --summaries-only
   pullhook examples --command run --commands-only
+  pullhook examples --command rules --commands-only
   pullhook examples --command schema --commands-only
   pullhook examples --category reference --commands-only
   pullhook examples --category reference --titles-only
@@ -1794,6 +1795,8 @@ pub enum ExampleCommand {
 	Doctor,
 	/// Config path discovery examples.
 	Config,
+	/// Config rule inventory examples.
+	Rules,
 	/// JSON Schema generation examples.
 	Schema,
 	/// Shell completion generation examples.
@@ -1822,6 +1825,7 @@ impl ExampleCommand {
 			Self::Validate => "validate",
 			Self::Doctor => "doctor",
 			Self::Config => "config",
+			Self::Rules => "rules",
 			Self::Schema => "schema",
 			Self::Completion => "completion",
 			Self::Commands => "commands",
