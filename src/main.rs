@@ -1299,6 +1299,23 @@ fn markdown_inline_list(values: &[&str]) -> String {
 		.join("<br>")
 }
 
+fn markdown_pattern_cell<'a>(values: impl Iterator<Item = &'a str>) -> String {
+	let values = values.map(markdown_code_cell).collect::<Vec<_>>();
+	if values.is_empty() {
+		String::new()
+	} else {
+		values.join("<br>")
+	}
+}
+
+fn markdown_code_cell(value: &str) -> String {
+	if value.is_empty() {
+		String::new()
+	} else {
+		format!("`{}`", markdown_table_escape(value))
+	}
+}
+
 fn filtered_package_managers(search: Option<&str>) -> Vec<PackageManager> {
 	let search = search.map(str::to_ascii_lowercase);
 	package_managers()
@@ -2786,6 +2803,11 @@ fn rules_command(args: &RulesArgs) -> Result<()> {
 				args.search.as_deref()
 			))?
 		);
+		return Ok(());
+	}
+
+	if args.markdown {
+		render_config_rules_markdown(&config, args.kind);
 		return Ok(());
 	}
 
@@ -4534,6 +4556,67 @@ fn config_rules_json(
 			"failText": fail_text_count,
 		},
 	})
+}
+
+fn render_config_rules_markdown(config: &Config, kind: RulesKind) {
+	println!("| Type | Name | Parent | Kind | Jobs | Command | Changed | Exclude | Fail text |");
+	println!("| --- | --- | --- | --- | --- | --- | --- | --- | --- |");
+	for entry in &config.entries {
+		match entry {
+			Entry::Rule(rule) if rules_kind_matches_rule(kind, rule) => {
+				render_config_rule_markdown_row(rule, "rule", "", "");
+			}
+			Entry::Rule(_) => {}
+			Entry::Group(group) if kind == RulesKind::Group => {
+				render_config_group_markdown_row(group);
+			}
+			Entry::Group(group) => {
+				let rules = group
+					.rules
+					.iter()
+					.filter(|rule| rules_kind_matches_rule(kind, rule))
+					.collect::<Vec<_>>();
+				if rules.is_empty() {
+					continue;
+				}
+				if kind == RulesKind::All {
+					render_config_group_markdown_row(group);
+				}
+				for rule in rules {
+					render_config_rule_markdown_row(rule, "rule", &group.name, "");
+				}
+			}
+		}
+	}
+}
+
+fn render_config_group_markdown_row(group: &config::Group) {
+	println!(
+		"| `group` | `{}` |  | `group` | {} |  |  |  | {} |",
+		markdown_table_escape(&group.name),
+		group.jobs.map_or_else(|| "default".to_owned(), |jobs| jobs.to_string()),
+		group
+			.fail_text
+			.as_ref()
+			.map_or_else(String::new, |fail_text| markdown_table_escape(fail_text.as_str()))
+	);
+}
+
+fn render_config_rule_markdown_row(rule: &config::Rule, row_type: &str, parent: &str, jobs: &str) {
+	println!(
+		"| `{}` | `{}` | {} | `{}` | {} | {} | {} | {} | {} |",
+		row_type,
+		markdown_table_escape(&rule.name),
+		markdown_code_cell(parent),
+		if rule.install { "install" } else { "run" },
+		jobs,
+		rule.run.as_deref().map_or_else(String::new, markdown_code_cell),
+		markdown_pattern_cell(rule.changed.iter().map(config::Pattern::as_str)),
+		markdown_pattern_cell(rule.exclude.iter().map(config::Pattern::as_str)),
+		rule.fail_text
+			.as_ref()
+			.map_or_else(String::new, |fail_text| markdown_table_escape(fail_text.as_str()))
+	);
 }
 
 fn collect_rules_output_selectors(

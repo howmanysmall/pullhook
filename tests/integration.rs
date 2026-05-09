@@ -4518,15 +4518,18 @@ fn rules_help_lists_script_friendly_output_modes() {
 	assert!(stdout.contains("pullhook rules --fail-text-only"));
 	assert!(stdout.contains("pullhook rules --rule lint --fail-text-only"));
 	assert!(stdout.contains("pullhook rules --rule lint --json"));
+	assert!(stdout.contains("pullhook rules --markdown"));
 	assert!(stdout.contains("Input options:"));
 	assert!(stdout.contains("Output options:"));
 	assert!(stdout.contains("Print JSON with filters and searchFields metadata"));
+	assert!(stdout.contains("Print a Markdown table of configured rules and groups"));
 	assert!(stdout.contains("Selection options:"));
 	assert!(stdout.contains("Display options:"));
 	assert!(stdout.contains("--search <text>"));
 	assert!(stdout.contains("--count-only"));
 	assert!(stdout.contains("--commands-only"));
 	assert!(stdout.contains("--patterns-only"));
+	assert!(stdout.contains("--markdown"));
 }
 
 #[test]
@@ -5171,6 +5174,17 @@ fn init_plan_line_outputs_require_dry_run_and_conflict() {
 #[test]
 fn rules_names_only_conflicts_with_json() {
 	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let markdown_output = run_pullhook(temp.path(), &["rules", "--markdown", "--json"]);
+
+	assert!(
+		!markdown_output.status.success(),
+		"--markdown should conflict with --json"
+	);
+	let markdown_stderr = stderr_text(&markdown_output);
+	assert!(markdown_stderr.contains("cannot be used with"));
+	assert!(markdown_stderr.contains("--markdown"));
+	assert!(markdown_stderr.contains("--json"));
 
 	let count_output = run_pullhook(temp.path(), &["rules", "--count-only", "--json"]);
 
@@ -7327,6 +7341,66 @@ fn rules_json_filters_inventory_by_rule_selector() {
 	let rules = entries[0]["rules"].as_array().expect("group rules");
 	assert_eq!(rules.len(), 1);
 	assert_eq!(rules[0]["name"], "lint");
+}
+
+#[test]
+fn rules_markdown_reports_filtered_inventory() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_file(
+		repo_root,
+		Path::new("pullhook.json"),
+		r#"{
+  "rules": [
+    {
+      "name": "install dependencies",
+      "install": true
+    },
+    {
+      "name": "checks",
+      "jobs": 2,
+      "failText": "{rule} group failed",
+      "parallel": [
+        {
+          "name": "lint",
+          "changed": "packages/a/package-lock.json",
+          "exclude": "packages/a/generated/**",
+          "failText": "{red.bold {rule} failed}",
+          "run": "cargo test -p lint"
+        },
+        {
+          "name": "typecheck",
+          "changed": "packages/b/package-lock.json",
+          "run": "cargo test -p typecheck"
+        }
+      ]
+    }
+  ]
+}
+"#,
+	);
+
+	let output = run_pullhook(repo_root, &["rules", "--search", "generated", "--markdown"]);
+
+	assert!(
+		output.status.success(),
+		"rules --search generated --markdown should succeed"
+	);
+	let stdout = stdout_text(&output);
+	assert!(stdout.contains("| Type | Name | Parent | Kind | Jobs | Command | Changed | Exclude | Fail text |"));
+	assert!(stdout.contains("| `group` | `checks` |  | `group` | 2 |  |  |  | {rule} group failed |"));
+	assert!(
+		stdout.contains(
+			"| `rule` | `lint` | `checks` | `run` |  | `cargo test -p lint` | `packages/a/package-lock.json` | `packages/a/generated/**` | {red.bold {rule} failed} |"
+		)
+	);
+	assert!(!stdout.contains("install dependencies"));
+	assert!(!stdout.contains("typecheck"));
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"rules --search generated --markdown should not write stderr"
+	);
 }
 
 #[test]

@@ -122,6 +122,7 @@ Examples:
   pullhook rules --fail-text-only
   pullhook rules --rule lint --fail-text-only
   pullhook rules --json
+  pullhook rules --markdown
   pullhook rules --rule lint --json
   pullhook rules --config config/pullhook.custom.json";
 
@@ -1046,6 +1047,7 @@ pub struct RulesArgs {
 		long = "json",
 		default_value_t = false,
 		conflicts_with_all = [
+			"markdown",
 			"count_only",
 			"names_only",
 			"commands_only",
@@ -1057,12 +1059,30 @@ pub struct RulesArgs {
 	)]
 	pub json: bool,
 
+	/// Print a Markdown table of configured rules and groups.
+	#[arg(
+		long = "markdown",
+		default_value_t = false,
+		conflicts_with_all = [
+			"json",
+			"count_only",
+			"names_only",
+			"commands_only",
+			"patterns_only",
+			"exclude_patterns_only",
+			"fail_text_only"
+		],
+		help_heading = "Output options"
+	)]
+	pub markdown: bool,
+
 	/// Print only the number of matching rule selectors.
 	#[arg(
 		long = "count-only",
 		default_value_t = false,
 		conflicts_with_all = [
 			"json",
+			"markdown",
 			"names_only",
 			"commands_only",
 			"patterns_only",
@@ -1079,6 +1099,7 @@ pub struct RulesArgs {
 		default_value_t = false,
 		conflicts_with_all = [
 			"json",
+			"markdown",
 			"count_only",
 			"commands_only",
 			"patterns_only",
@@ -1095,6 +1116,7 @@ pub struct RulesArgs {
 		default_value_t = false,
 		conflicts_with_all = [
 			"json",
+			"markdown",
 			"count_only",
 			"names_only",
 			"patterns_only",
@@ -1111,6 +1133,7 @@ pub struct RulesArgs {
 		default_value_t = false,
 		conflicts_with_all = [
 			"json",
+			"markdown",
 			"count_only",
 			"names_only",
 			"commands_only",
@@ -1127,6 +1150,7 @@ pub struct RulesArgs {
 		default_value_t = false,
 		conflicts_with_all = [
 			"json",
+			"markdown",
 			"count_only",
 			"names_only",
 			"commands_only",
@@ -1143,6 +1167,7 @@ pub struct RulesArgs {
 		default_value_t = false,
 		conflicts_with_all = [
 			"json",
+			"markdown",
 			"count_only",
 			"names_only",
 			"commands_only",

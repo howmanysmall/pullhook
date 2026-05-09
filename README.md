@@ -136,6 +136,7 @@ pullhook rules --search lint
 pullhook rules --search lint --count-only
 pullhook rules --count-only
 pullhook rules --rule lint --json
+pullhook rules --markdown
 pullhook rules --commands-only
 pullhook rules --rule lint --commands-only
 pullhook rules --patterns-only
@@ -509,6 +510,7 @@ Use `pullhook rules` to list configured rule and parallel group names before tar
 `rules --json` includes top-level `status`, stable `code`, `error`, `filters`, and `searchFields` fields like the
 catalog JSON commands, plus script-friendly `selectors`, `commands`, `patterns`, `excludePatterns`, and `failText`
 arrays with summary counts.
+Use `pullhook rules --markdown` to generate a compact configured-rule reference table for docs, issues, or migration notes.
 Unknown selector JSON errors include `unknownSelectors`, `availableSelectors`, and `suggestions`, so scripts
 do not need to scrape the human error message.
 Use `pullhook rules --count-only` when a script only needs the number of matching rule or group selectors.
