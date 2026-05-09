@@ -126,6 +126,7 @@ Examples:
   pullhook schema
   pullhook schema --output .vscode/pullhook.schema.json
   pullhook schema --check --output .vscode/pullhook.schema.json
+  pullhook schema --check --quiet --output .vscode/pullhook.schema.json
   pullhook schema --check --output .vscode/pullhook.schema.json --json";
 
 const INIT_AFTER_HELP: &str = "\
@@ -147,6 +148,7 @@ Examples:
   pullhook completion zsh > ~/.zfunc/_pullhook
   pullhook completion fish --output ~/.config/fish/completions/pullhook.fish
   pullhook completion fish --check --output ~/.config/fish/completions/pullhook.fish
+  pullhook completion fish --check --quiet --output ~/.config/fish/completions/pullhook.fish
   pullhook completion fish --check --output ~/.config/fish/completions/pullhook.fish --json";
 
 const SHELLS_AFTER_HELP: &str = "\
@@ -1137,9 +1139,20 @@ pub struct SchemaArgs {
 		long = "json",
 		default_value_t = false,
 		requires = "check",
+		conflicts_with = "quiet",
 		help_heading = "Output options"
 	)]
 	pub json: bool,
+
+	/// Suppress successful check output.
+	#[arg(
+		long = "quiet",
+		default_value_t = false,
+		requires = "check",
+		conflicts_with = "json",
+		help_heading = "Output options"
+	)]
+	pub quiet: bool,
 }
 
 /// Arguments for `pullhook completion`.
@@ -1167,9 +1180,20 @@ pub struct CompletionArgs {
 		long = "json",
 		default_value_t = false,
 		requires = "check",
+		conflicts_with = "quiet",
 		help_heading = "Output options"
 	)]
 	pub json: bool,
+
+	/// Suppress successful check output.
+	#[arg(
+		long = "quiet",
+		default_value_t = false,
+		requires = "check",
+		conflicts_with = "json",
+		help_heading = "Output options"
+	)]
+	pub quiet: bool,
 }
 
 /// Arguments for `pullhook shells`.

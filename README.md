@@ -143,6 +143,7 @@ pullhook rules --fail-text-only
 pullhook rules --rule lint --fail-text-only
 pullhook schema --output .vscode/pullhook.schema.json
 pullhook schema --check --output .vscode/pullhook.schema.json
+pullhook schema --check --quiet --output .vscode/pullhook.schema.json
 pullhook explain --changed-file packages/a/package-lock.json
 git diff --name-only HEAD~1 | pullhook explain --changed-files-file -
 pullhook explain --summary-only
@@ -173,6 +174,7 @@ pullhook completion zsh > "${fpath[1]}/_pullhook"
 pullhook completion fish > ~/.config/fish/completions/pullhook.fish
 pullhook completion fish --output ~/.config/fish/completions/pullhook.fish
 pullhook completion fish --check --output ~/.config/fish/completions/pullhook.fish
+pullhook completion fish --check --quiet --output ~/.config/fish/completions/pullhook.fish
 ```
 
 Limit parallel work:
@@ -377,6 +379,7 @@ Missing config JSON errors include setup details for `pullhook init` and `--conf
 Unsupported config-path JSON errors list the supported config filenames and an `init --output` recovery command.
 `pullhook schema` prints the config JSON Schema, and `pullhook schema --output <path>` writes it for editor setup.
 Use `schema --check --output <path>` in CI when a checked-in schema file must stay current.
+Add `--quiet` when successful schema or completion checks should only report through their exit code.
 `schema --check --json` and `completion <shell> --check --json` include top-level `status`, stable `code`, `error`, and
 `details` fields with the rerun command when generated output is stale.
 Use `pullhook shells` to inspect supported shell completion targets in text form, or `pullhook shells --json`

@@ -1690,6 +1690,85 @@ fn completion_check_succeeds_when_output_is_current() {
 }
 
 #[test]
+fn completion_check_quiet_suppresses_success_output() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+	let output_path = Path::new("completions/fish/pullhook.fish");
+	let output_path_str = output_path.to_str().expect("utf-8 path");
+	let write = run_pullhook(temp.path(), &["completion", "fish", "--output", output_path_str]);
+	assert!(write.status.success(), "completion --output should seed check file");
+
+	let output = run_pullhook(
+		temp.path(),
+		&["completion", "fish", "--check", "--quiet", "--output", output_path_str],
+	);
+
+	assert!(
+		output.status.success(),
+		"completion --check --quiet should pass for current completion"
+	);
+	let stdout = stdout_text(&output);
+	assert!(
+		stdout.trim().is_empty(),
+		"completion --check --quiet should not write stdout"
+	);
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"completion --check --quiet should not write stderr"
+	);
+}
+
+#[test]
+fn completion_check_quiet_still_reports_stale_output() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+	let output_path = Path::new("completions/fish/pullhook.fish");
+	let output_path_str = output_path.to_str().expect("utf-8 path");
+	write_file(temp.path(), output_path, "complete -c pullhook -f\n");
+
+	let output = run_pullhook(
+		temp.path(),
+		&["completion", "fish", "--check", "--quiet", "--output", output_path_str],
+	);
+
+	assert!(
+		!output.status.success(),
+		"completion --check --quiet should fail for stale completion"
+	);
+	assert!(
+		stdout_text(&output).trim().is_empty(),
+		"stale quiet completion check should not write stdout"
+	);
+	let stderr = stderr_text(&output);
+	assert!(stderr.contains("completion out of date"));
+}
+
+#[test]
+fn completion_check_quiet_conflicts_with_json() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+	let output = run_pullhook(
+		temp.path(),
+		&[
+			"completion",
+			"fish",
+			"--check",
+			"--quiet",
+			"--json",
+			"--output",
+			"pullhook.fish",
+		],
+	);
+
+	assert!(
+		!output.status.success(),
+		"completion --check --quiet should conflict with --json"
+	);
+	let stderr = stderr_text(&output);
+	assert!(stderr.contains("cannot be used with"));
+	assert!(stderr.contains("--quiet"));
+	assert!(stderr.contains("--json"));
+}
+
+#[test]
 fn completion_check_fails_when_output_is_stale() {
 	let temp = tempfile::tempdir().expect("create temp dir");
 	let output_path = Path::new("completions/fish/pullhook.fish");
@@ -4609,12 +4688,17 @@ fn utility_help_groups_options_by_task() {
 	let schema_stdout = stdout_text(&schema);
 	assert!(schema_stdout.contains("Output options:"));
 	assert!(schema_stdout.contains("Check options:"));
+	assert!(schema_stdout.contains("pullhook schema --check --quiet --output .vscode/pullhook.schema.json"));
 
 	let completion = run_pullhook(temp.path(), &["completion", "fish", "--help"]);
 	assert!(completion.status.success(), "completion help should succeed");
 	let completion_stdout = stdout_text(&completion);
 	assert!(completion_stdout.contains("Output options:"));
 	assert!(completion_stdout.contains("Check options:"));
+	assert!(
+		completion_stdout
+			.contains("pullhook completion fish --check --quiet --output ~/.config/fish/completions/pullhook.fish")
+	);
 	assert!(completion_stdout.contains("pullhook shells"));
 
 	let shells = run_pullhook(temp.path(), &["shells", "--help"]);
@@ -4759,6 +4843,84 @@ fn schema_check_succeeds_when_output_is_current() {
 	let stderr = stderr_text(&output);
 	assert!(stderr.trim().is_empty(), "schema --check should not write stderr");
 	assert!(predicate::path::is_file().eval(&output_path));
+}
+
+#[test]
+fn schema_check_quiet_suppresses_success_output() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+	let schema_path = ".vscode/pullhook.schema.json";
+	let write = run_pullhook(temp.path(), &["schema", "--output", schema_path]);
+	assert!(write.status.success(), "schema --output should seed check file");
+
+	let output = run_pullhook(temp.path(), &["schema", "--check", "--quiet", "--output", schema_path]);
+
+	assert!(
+		output.status.success(),
+		"schema --check --quiet should pass for current schema"
+	);
+	let stdout = stdout_text(&output);
+	assert!(
+		stdout.trim().is_empty(),
+		"schema --check --quiet should not write stdout"
+	);
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"schema --check --quiet should not write stderr"
+	);
+}
+
+#[test]
+fn schema_check_quiet_still_reports_stale_output() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+	write_file(temp.path(), Path::new(".vscode/pullhook.schema.json"), "{}\n");
+
+	let output = run_pullhook(
+		temp.path(),
+		&[
+			"schema",
+			"--check",
+			"--quiet",
+			"--output",
+			".vscode/pullhook.schema.json",
+		],
+	);
+
+	assert!(
+		!output.status.success(),
+		"schema --check --quiet should fail for stale schema"
+	);
+	assert!(
+		stdout_text(&output).trim().is_empty(),
+		"stale quiet schema check should not write stdout"
+	);
+	let stderr = stderr_text(&output);
+	assert!(stderr.contains("schema out of date"));
+}
+
+#[test]
+fn schema_check_quiet_conflicts_with_json() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+	let output = run_pullhook(
+		temp.path(),
+		&[
+			"schema",
+			"--check",
+			"--quiet",
+			"--json",
+			"--output",
+			"pullhook.schema.json",
+		],
+	);
+
+	assert!(
+		!output.status.success(),
+		"schema --check --quiet should conflict with --json"
+	);
+	let stderr = stderr_text(&output);
+	assert!(stderr.contains("cannot be used with"));
+	assert!(stderr.contains("--quiet"));
+	assert!(stderr.contains("--json"));
 }
 
 #[test]

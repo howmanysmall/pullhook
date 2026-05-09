@@ -1669,7 +1669,7 @@ fn completion_command(args: &CompletionArgs) -> Result<()> {
 		Some(path) => {
 			let completion = Cli::completion_string(args.shell);
 			if args.check {
-				return check_completion_output(path, args.shell, &completion, args.json);
+				return check_completion_output(path, args.shell, &completion, args.json, args.quiet);
 			}
 
 			if let Some(parent) = path.parent()
@@ -1696,6 +1696,7 @@ fn check_completion_output(
 	shell: clap_complete::Shell,
 	expected_completion: &str,
 	json_output: bool,
+	quiet: bool,
 ) -> Result<()> {
 	let shell_label = completion_shell_label(shell);
 	let existing_completion = match std::fs::read_to_string(path) {
@@ -1738,7 +1739,7 @@ fn check_completion_output(
 		);
 	}
 	if matches {
-		if !json_output {
+		if !json_output && !quiet {
 			println!("completion up to date: {}", path.display());
 		}
 		return Ok(());
@@ -2473,7 +2474,7 @@ fn filter_config_entries_by_selectors(entries: &[Entry], requested: &BTreeSet<&s
 fn schema_command(args: &SchemaArgs) -> Result<()> {
 	if let Some(path) = args.output.as_deref() {
 		if args.check {
-			return check_schema_output(path, args.json);
+			return check_schema_output(path, args.json, args.quiet);
 		}
 
 		if let Some(parent) = path.parent()
@@ -2491,7 +2492,7 @@ fn schema_command(args: &SchemaArgs) -> Result<()> {
 	Ok(())
 }
 
-fn check_schema_output(path: &std::path::Path, json_output: bool) -> Result<()> {
+fn check_schema_output(path: &std::path::Path, json_output: bool, quiet: bool) -> Result<()> {
 	let existing_schema = match std::fs::read_to_string(path) {
 		Ok(schema) => schema,
 		Err(error) => {
@@ -2524,7 +2525,7 @@ fn check_schema_output(path: &std::path::Path, json_output: bool) -> Result<()> 
 		);
 	}
 	if matches {
-		if !json_output {
+		if !json_output && !quiet {
 			println!("schema up to date: {}", path.display());
 		}
 		return Ok(());
