@@ -66,6 +66,7 @@ Commands:
   explain     Explain which configured rules match changed files
   validate    Validate the pullhook config file
   doctor      Inspect repository and config readiness
+  config      Show the resolved pullhook config path
   rules       List configured rule and group names
   schema      Print or write the pullhook JSON Schema
   init        Create a starter pullhook config file
