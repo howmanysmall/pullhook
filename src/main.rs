@@ -1153,6 +1153,13 @@ fn categories_command(args: &CategoriesArgs) -> Result<()> {
 		return Ok(());
 	}
 
+	if args.descriptions_only {
+		for category in categories {
+			println!("{}", category.description);
+		}
+		return Ok(());
+	}
+
 	println!("Command categories");
 	if let Some(search) = &args.search {
 		println!("filter: search={search}");

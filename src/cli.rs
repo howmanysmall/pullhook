@@ -168,6 +168,7 @@ Examples:
   pullhook categories
   pullhook categories --search workflow
   pullhook categories --names-only
+  pullhook categories --descriptions-only
   pullhook categories --json";
 
 const CODES_AFTER_HELP: &str = "\
@@ -1188,7 +1189,7 @@ pub struct CategoriesArgs {
 	#[arg(
 		long = "json",
 		default_value_t = false,
-		conflicts_with = "names_only",
+		conflicts_with_all = ["names_only", "descriptions_only"],
 		help_heading = "Output options"
 	)]
 	pub json: bool,
@@ -1197,10 +1198,19 @@ pub struct CategoriesArgs {
 	#[arg(
 		long = "names-only",
 		default_value_t = false,
-		conflicts_with = "json",
+		conflicts_with_all = ["json", "descriptions_only"],
 		help_heading = "Output options"
 	)]
 	pub names_only: bool,
+
+	/// Print only category descriptions, one per line.
+	#[arg(
+		long = "descriptions-only",
+		default_value_t = false,
+		conflicts_with_all = ["json", "names_only"],
+		help_heading = "Output options"
+	)]
+	pub descriptions_only: bool,
 }
 
 /// Arguments for `pullhook codes`.

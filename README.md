@@ -289,6 +289,7 @@ pullhook managers --json
 pullhook categories
 pullhook categories --search workflow
 pullhook categories --names-only
+pullhook categories --descriptions-only
 pullhook categories --json
 pullhook examples
 pullhook examples --category reference
@@ -415,6 +416,7 @@ Use `pullhook examples --titles-only` when a script or completion helper only ne
 Use `pullhook examples --summaries-only` when a script or command palette only needs short descriptions.
 Use `pullhook categories` to inspect command categories with command and example counts.
 Add `--search <text>` to match category names or descriptions case-insensitively.
+Use `pullhook categories --descriptions-only` when a script or command palette only needs category descriptions.
 Use `pullhook commands` to inspect the command catalog in text form, or `pullhook commands --json` when another
 tool needs supported commands, categories, and repo requirements without scraping help text.
 Add `--category workflow`, `--category diagnostic`, `--category generator`, or `--category reference` to narrow
