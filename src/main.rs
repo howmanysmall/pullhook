@@ -417,6 +417,27 @@ const EXAMPLE_INFOS: &[ExampleInfo] = &[
 		summary: "Check repository, config, diff-base, and package-manager readiness.",
 	},
 	ExampleInfo {
+		title: "Print resolved config path",
+		category: "diagnostic",
+		command_name: "config",
+		command: "pullhook config --path-only",
+		summary: "Print the config path pullhook would use without parsing the file.",
+	},
+	ExampleInfo {
+		title: "Write JSON Schema",
+		category: "generator",
+		command_name: "schema",
+		command: "pullhook schema --output .vscode/pullhook.schema.json",
+		summary: "Write the pullhook config schema for editor validation.",
+	},
+	ExampleInfo {
+		title: "Write fish completion",
+		category: "generator",
+		command_name: "completion",
+		command: "pullhook completion fish --output ~/.config/fish/completions/pullhook.fish",
+		summary: "Generate shell completion output for a supported shell.",
+	},
+	ExampleInfo {
 		title: "Install after lockfile changes",
 		category: "workflow",
 		command_name: "legacy",
@@ -1489,6 +1510,13 @@ fn command_catalog_command(args: &CommandCatalogArgs) -> Result<()> {
 		return Ok(());
 	}
 
+	if args.output.example_commands_only {
+		for command in collect_command_example_commands(&commands) {
+			println!("{command}");
+		}
+		return Ok(());
+	}
+
 	println!("Pullhook commands");
 	println!("legacy one-off mode is available through top-level options");
 	if let Some(category) = args.category {
@@ -1515,6 +1543,21 @@ fn collect_command_categories(commands: &[CommandInfo]) -> Vec<&'static str> {
 		}
 	}
 	categories
+}
+
+fn collect_command_example_commands(commands: &[CommandInfo]) -> Vec<&'static str> {
+	let mut example_commands = Vec::new();
+	for command in commands {
+		for example in EXAMPLE_INFOS
+			.iter()
+			.filter(|example| example.command_name == command.name)
+		{
+			if !example_commands.contains(&example.command) {
+				example_commands.push(example.command);
+			}
+		}
+	}
+	example_commands
 }
 
 fn filtered_command_infos(

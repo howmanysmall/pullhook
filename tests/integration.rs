@@ -2800,6 +2800,10 @@ fn examples_json_lists_common_workflows() {
 			.iter()
 			.any(|entry| entry["commandName"] == "categories" && entry["command"] == "pullhook categories --json")
 	);
+	assert!(examples.iter().any(|entry| entry["commandName"] == "schema"
+		&& entry["command"] == "pullhook schema --output .vscode/pullhook.schema.json"));
+	assert!(examples.iter().any(|entry| entry["commandName"] == "completion"
+		&& entry["command"] == "pullhook completion fish --output ~/.config/fish/completions/pullhook.fish"));
 	assert_eq!(
 		value["categories"],
 		serde_json::json!(["generator", "workflow", "diagnostic", "reference"])
@@ -3716,6 +3720,62 @@ fn commands_search_filter_composes_with_categories_only() {
 }
 
 #[test]
+fn commands_example_commands_only_prints_matching_example_commands() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(
+		temp.path(),
+		&["commands", "--category", "workflow", "--example-commands-only"],
+	);
+
+	assert!(
+		output.status.success(),
+		"commands --category workflow --example-commands-only should succeed"
+	);
+	let stdout = stdout_text(&output);
+	let commands = stdout.lines().collect::<Vec<_>>();
+	assert!(commands.contains(&"pullhook run --dry-run"));
+	assert!(commands.contains(&"pullhook run --commands-only"));
+	assert!(commands.contains(&"pullhook explain --all-matches"));
+	assert!(
+		!commands.contains(&"pullhook validate --json"),
+		"diagnostic examples should not appear for workflow commands"
+	);
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"commands --example-commands-only should not write stderr"
+	);
+}
+
+#[test]
+fn commands_search_filter_composes_with_example_commands_only() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(
+		temp.path(),
+		&["commands", "--search", "schema", "--example-commands-only"],
+	);
+
+	assert!(
+		output.status.success(),
+		"commands --search schema --example-commands-only should succeed"
+	);
+	let stdout = stdout_text(&output);
+	let commands = stdout.lines().collect::<Vec<_>>();
+	assert!(commands.contains(&"pullhook schema --output .vscode/pullhook.schema.json"));
+	assert!(
+		commands.iter().all(|command| command.starts_with("pullhook schema")),
+		"search-limited example commands should only cover schema"
+	);
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"filtered commands --example-commands-only should not write stderr"
+	);
+}
+
+#[test]
 fn commands_names_only_conflicts_with_json() {
 	let temp = tempfile::tempdir().expect("create temp dir");
 
@@ -3772,6 +3832,29 @@ fn commands_categories_only_conflicts_with_other_output_modes() {
 		let stderr = stderr_text(&output);
 		assert!(stderr.contains("cannot be used with"));
 		assert!(stderr.contains("--categories-only"));
+	}
+}
+
+#[test]
+fn commands_example_commands_only_conflicts_with_other_output_modes() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+	let conflicting_modes: &[&[&str]] = &[
+		&["commands", "--example-commands-only", "--json"],
+		&["commands", "--example-commands-only", "--names-only"],
+		&["commands", "--example-commands-only", "--summaries-only"],
+		&["commands", "--example-commands-only", "--categories-only"],
+	];
+
+	for args in conflicting_modes {
+		let output = run_pullhook(temp.path(), args);
+
+		assert!(
+			!output.status.success(),
+			"commands --example-commands-only should conflict for args {args:?}"
+		);
+		let stderr = stderr_text(&output);
+		assert!(stderr.contains("cannot be used with"));
+		assert!(stderr.contains("--example-commands-only"));
 	}
 }
 
@@ -4757,6 +4840,7 @@ fn utility_help_groups_options_by_task() {
 	assert!(examples_stdout.contains("pullhook examples --search install"));
 	assert!(examples_stdout.contains("pullhook examples --search install --summaries-only"));
 	assert!(examples_stdout.contains("pullhook examples --command run --commands-only"));
+	assert!(examples_stdout.contains("pullhook examples --command schema --commands-only"));
 	assert!(examples_stdout.contains("pullhook examples --category reference --commands-only"));
 	assert!(examples_stdout.contains("pullhook examples --category reference --titles-only"));
 	assert!(examples_stdout.contains("pullhook examples --command-names-only"));
@@ -4786,6 +4870,7 @@ fn utility_help_groups_options_by_task() {
 	assert!(commands_stdout.contains("pullhook commands --repo-only"));
 	assert!(commands_stdout.contains("pullhook commands --standalone-only --names-only"));
 	assert!(commands_stdout.contains("pullhook commands --categories-only"));
+	assert!(commands_stdout.contains("pullhook commands --category workflow --example-commands-only"));
 	assert!(commands_stdout.contains("pullhook commands --search config --summaries-only"));
 }
 

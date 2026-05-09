@@ -214,6 +214,7 @@ Examples:
   pullhook commands --repo-only
   pullhook commands --standalone-only --names-only
   pullhook commands --categories-only
+  pullhook commands --category workflow --example-commands-only
   pullhook commands --search config --summaries-only
   pullhook commands --json";
 
@@ -225,6 +226,7 @@ Examples:
   pullhook examples --search install
   pullhook examples --search install --summaries-only
   pullhook examples --command run --commands-only
+  pullhook examples --command schema --commands-only
   pullhook examples --category reference --commands-only
   pullhook examples --category reference --titles-only
   pullhook examples --command-names-only
@@ -1612,7 +1614,7 @@ pub struct CommandCatalogArgs {
 	#[arg(
 		long = "json",
 		default_value_t = false,
-		conflicts_with_all = ["names_only", "summaries_only", "categories_only"],
+		conflicts_with_all = ["names_only", "summaries_only", "categories_only", "example_commands_only"],
 		help_heading = "Output options"
 	)]
 	pub json: bool,
@@ -1623,12 +1625,16 @@ pub struct CommandCatalogArgs {
 
 /// Line-output mode arguments for `pullhook commands`.
 #[derive(Debug, Clone, Args)]
+#[expect(
+	clippy::struct_excessive_bools,
+	reason = "clap line-output flags are clearer as independent switches"
+)]
 pub struct CommandCatalogLineOutputArgs {
 	/// Print only command names, one per line.
 	#[arg(
 		long = "names-only",
 		default_value_t = false,
-		conflicts_with_all = ["json", "summaries_only", "categories_only"],
+		conflicts_with_all = ["json", "summaries_only", "categories_only", "example_commands_only"],
 		help_heading = "Output options"
 	)]
 	pub names_only: bool,
@@ -1637,7 +1643,7 @@ pub struct CommandCatalogLineOutputArgs {
 	#[arg(
 		long = "summaries-only",
 		default_value_t = false,
-		conflicts_with_all = ["json", "names_only", "categories_only"],
+		conflicts_with_all = ["json", "names_only", "categories_only", "example_commands_only"],
 		help_heading = "Output options"
 	)]
 	pub summaries_only: bool,
@@ -1646,10 +1652,19 @@ pub struct CommandCatalogLineOutputArgs {
 	#[arg(
 		long = "categories-only",
 		default_value_t = false,
-		conflicts_with_all = ["json", "names_only", "summaries_only"],
+		conflicts_with_all = ["json", "names_only", "summaries_only", "example_commands_only"],
 		help_heading = "Output options"
 	)]
 	pub categories_only: bool,
+
+	/// Print example commands for matching commands, one per line.
+	#[arg(
+		long = "example-commands-only",
+		default_value_t = false,
+		conflicts_with_all = ["json", "names_only", "summaries_only", "categories_only"],
+		help_heading = "Output options"
+	)]
+	pub example_commands_only: bool,
 }
 
 /// Filter arguments for `pullhook commands`.
@@ -1777,6 +1792,12 @@ pub enum ExampleCommand {
 	Validate,
 	/// Repository diagnostic examples.
 	Doctor,
+	/// Config path discovery examples.
+	Config,
+	/// JSON Schema generation examples.
+	Schema,
+	/// Shell completion generation examples.
+	Completion,
 	/// Command catalog examples.
 	Commands,
 	/// Shell completion target examples.
@@ -1800,6 +1821,9 @@ impl ExampleCommand {
 			Self::Run => "run",
 			Self::Validate => "validate",
 			Self::Doctor => "doctor",
+			Self::Config => "config",
+			Self::Schema => "schema",
+			Self::Completion => "completion",
 			Self::Commands => "commands",
 			Self::Shells => "shells",
 			Self::Formats => "formats",

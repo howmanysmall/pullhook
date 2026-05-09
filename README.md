@@ -323,6 +323,7 @@ pullhook examples --search install
 pullhook examples --search install --summaries-only
 pullhook examples --command run
 pullhook examples --command run --commands-only
+pullhook examples --command schema --commands-only
 pullhook examples --command-names-only
 pullhook examples --categories-only
 pullhook examples --json
@@ -333,6 +334,7 @@ pullhook commands --search config
 pullhook commands --repo-only
 pullhook commands --standalone-only --names-only
 pullhook commands --categories-only
+pullhook commands --category workflow --example-commands-only
 pullhook commands --search config --summaries-only
 pullhook commands --json
 pullhook codes
@@ -441,9 +443,9 @@ Pattern JSON errors include a `patternError` object with the rejected glob and p
 Legacy command-parse JSON errors include a `commandParse` object with the rejected command and parser reason.
 Use `pullhook examples` to inspect common workflows in text form, or `pullhook examples --json` when another
 tool needs example commands without scraping docs.
-Add `--command run`, `--command explain`, `--command validate`, `--command doctor`, `--command init`,
-`--command commands`, `--command shells`, `--command formats`, `--command managers`, `--command codes`,
-or `--command legacy` to focus the example list.
+Add `--command run`, `--command explain`, `--command validate`, `--command doctor`, `--command config`,
+`--command init`, `--command schema`, `--command completion`, `--command commands`, `--command shells`,
+`--command formats`, `--command managers`, `--command codes`, or `--command legacy` to focus the example list.
 Use `pullhook examples --category reference` to narrow examples by command category.
 Add `--search <text>` to match example titles, commands, categories, or summaries case-insensitively.
 Use `pullhook examples --commands-only` when a script or completion helper only needs example command lines.
@@ -465,6 +467,7 @@ Use `--repo-only` or `--standalone-only` to split commands by whether they need 
 Use `pullhook commands --names-only` when a script or completion helper only needs command names.
 Use `pullhook commands --summaries-only` when a script or command palette only needs command descriptions.
 Use `pullhook commands --categories-only` when a script only needs the matching command categories.
+Use `pullhook commands --example-commands-only` when a script needs example invocations for the matching commands.
 Use `pullhook codes` to inspect the stable code catalog in text form, or `pullhook codes --json` when another
 tool needs the catalog without scraping docs. Add `--kind error` or `--kind doctor-check` to narrow the list.
 Add `--surface run`, `--surface doctor`, or another case-insensitive surface fragment to focus codes by command area.
