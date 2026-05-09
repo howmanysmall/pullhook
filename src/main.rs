@@ -3995,12 +3995,14 @@ fn config_rule_inventory_json(entry: &Entry, kind: RulesKind) -> Option<serde_js
 			"exclude": rule.exclude.iter().map(config::Pattern::as_str).collect::<Vec<_>>(),
 			"command": rule.run,
 			"runIfBaseMissing": rule.run_if_base_missing,
+			"failText": rule.fail_text.as_ref().map(config::FailText::as_str),
 		})),
 		Entry::Rule(_) => None,
 		Entry::Group(group) if kind == RulesKind::All || kind == RulesKind::Group => Some(json!({
 			"type": "group",
 			"name": group.name,
 			"jobs": group.jobs,
+			"failText": group.fail_text.as_ref().map(config::FailText::as_str),
 			"rules": group.rules.iter().map(|rule| json!({
 				"name": rule.name,
 				"kind": if rule.install { "install" } else { "run" },
@@ -4008,6 +4010,7 @@ fn config_rule_inventory_json(entry: &Entry, kind: RulesKind) -> Option<serde_js
 				"exclude": rule.exclude.iter().map(config::Pattern::as_str).collect::<Vec<_>>(),
 				"command": rule.run,
 				"runIfBaseMissing": rule.run_if_base_missing,
+				"failText": rule.fail_text.as_ref().map(config::FailText::as_str),
 			})).collect::<Vec<_>>(),
 		})),
 		Entry::Group(group) => {
@@ -4023,6 +4026,7 @@ fn config_rule_inventory_json(entry: &Entry, kind: RulesKind) -> Option<serde_js
 						"exclude": rule.exclude.iter().map(config::Pattern::as_str).collect::<Vec<_>>(),
 						"command": rule.run,
 						"runIfBaseMissing": rule.run_if_base_missing,
+						"failText": rule.fail_text.as_ref().map(config::FailText::as_str),
 					})
 				})
 				.collect::<Vec<_>>();
@@ -4033,6 +4037,7 @@ fn config_rule_inventory_json(entry: &Entry, kind: RulesKind) -> Option<serde_js
 					"type": "group",
 					"name": group.name,
 					"jobs": group.jobs,
+					"failText": group.fail_text.as_ref().map(config::FailText::as_str),
 					"rules": rules,
 				}))
 			}
@@ -4198,6 +4203,7 @@ fn render_config_rule_inventory(rule: &config::Rule) {
 	if rule.run_if_base_missing {
 		println!("runIfBaseMissing: true");
 	}
+	render_fail_text(rule.fail_text.as_ref(), "");
 	println!();
 }
 
@@ -4208,6 +4214,7 @@ fn render_config_group_inventory(group: &config::Group, kind: RulesKind) {
 			Some(jobs) => println!("jobs: {jobs}"),
 			None => println!("jobs: default"),
 		}
+		render_fail_text(group.fail_text.as_ref(), "");
 		println!();
 		return;
 	}
@@ -4226,6 +4233,7 @@ fn render_config_group_inventory(group: &config::Group, kind: RulesKind) {
 		Some(jobs) => println!("jobs: {jobs}"),
 		None => println!("jobs: default"),
 	}
+	render_fail_text(group.fail_text.as_ref(), "");
 	for rule in rules {
 		println!("- {}", rule.name);
 		println!("  kind: {}", if rule.install { "install" } else { "run" });
@@ -4236,6 +4244,7 @@ fn render_config_group_inventory(group: &config::Group, kind: RulesKind) {
 		if rule.run_if_base_missing {
 			println!("  runIfBaseMissing: true");
 		}
+		render_fail_text(rule.fail_text.as_ref(), "  ");
 	}
 	println!();
 }
@@ -4246,6 +4255,12 @@ fn render_rule_patterns(rule: &config::Rule, indent: &str) {
 	}
 	if !rule.exclude.is_empty() {
 		println!("{indent}exclude: {}", render_pattern_list(&rule.exclude));
+	}
+}
+
+fn render_fail_text(fail_text: Option<&config::FailText>, indent: &str) {
+	if let Some(fail_text) = fail_text {
+		println!("{indent}failText: {}", fail_text.as_str());
 	}
 }
 

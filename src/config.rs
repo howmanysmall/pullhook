@@ -412,6 +412,12 @@ pub struct FailText {
 }
 
 impl FailText {
+	/// Return the original validated template.
+	#[must_use]
+	pub fn as_str(&self) -> &str {
+		&self.raw
+	}
+
 	/// Render without ANSI styling.
 	#[must_use]
 	pub fn render_plain(&self, context: &FailTextContext<'_>) -> String {

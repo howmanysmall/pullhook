@@ -5147,14 +5147,17 @@ fn rules_json_reports_rule_inventory() {
   "rules": [
     {
       "name": "install dependencies",
-      "install": true
+      "install": true,
+      "failText": "{rule} install failed"
     },
     {
       "name": "checks",
+      "failText": "{rule} group failed",
       "parallel": [
         {
           "name": "lint",
           "changed": "packages/a/package-lock.json",
+          "failText": "{red.bold {rule} failed}",
           "run": "cargo test -p lint"
         }
       ]
@@ -5192,14 +5195,17 @@ fn rules_json_reports_rule_inventory() {
 	assert_eq!(entries[0]["kind"], "install");
 	assert_eq!(entries[0]["changed"], serde_json::json!([]));
 	assert_eq!(entries[0]["exclude"], serde_json::json!([]));
+	assert_eq!(entries[0]["failText"], "{rule} install failed");
 	assert_eq!(entries[1]["type"], "group");
 	assert_eq!(entries[1]["name"], "checks");
+	assert_eq!(entries[1]["failText"], "{rule} group failed");
 	assert_eq!(entries[1]["rules"][0]["name"], "lint");
 	assert_eq!(
 		entries[1]["rules"][0]["changed"],
 		serde_json::json!(["packages/a/package-lock.json"])
 	);
 	assert_eq!(entries[1]["rules"][0]["exclude"], serde_json::json!([]));
+	assert_eq!(entries[1]["rules"][0]["failText"], "{red.bold {rule} failed}");
 }
 
 #[test]
@@ -5908,11 +5914,13 @@ fn rules_text_lists_group_members() {
   "rules": [
     {
       "name": "checks",
+      "failText": "{rule} group failed",
       "parallel": [
         {
           "name": "lint",
           "changed": "packages/a/package-lock.json",
           "exclude": "packages/a/generated/**",
+          "failText": "{red.bold {rule} failed}",
           "run": "cargo test -p lint"
         },
         {
@@ -5934,10 +5942,12 @@ fn rules_text_lists_group_members() {
 	assert!(stdout.contains("config:"));
 	assert!(stdout.contains("Rules"));
 	assert!(stdout.contains("[group] checks"));
+	assert!(stdout.contains("failText: {rule} group failed"));
 	assert!(stdout.contains("- lint"));
 	assert!(stdout.contains("- typecheck"));
 	assert!(stdout.contains("changed: packages/a/package-lock.json"));
 	assert!(stdout.contains("exclude: packages/a/generated/**"));
+	assert!(stdout.contains("failText: {red.bold {rule} failed}"));
 	assert!(stdout.contains("changed: packages/a/package.json, packages/a/package-lock.json"));
 	assert!(stdout.contains("command: cargo test -p lint"));
 }
@@ -5955,6 +5965,7 @@ fn rules_text_lists_standalone_rule_patterns() {
       "name": "format",
       "changed": ["src/**/*.rs", "tests/**/*.rs"],
       "exclude": "src/generated/**",
+      "failText": "{rule} failed",
       "run": "cargo fmt --all"
     }
   ]
@@ -5969,6 +5980,7 @@ fn rules_text_lists_standalone_rule_patterns() {
 	assert!(stdout.contains("[rule] format"));
 	assert!(stdout.contains("changed: src/**/*.rs, tests/**/*.rs"));
 	assert!(stdout.contains("exclude: src/generated/**"));
+	assert!(stdout.contains("failText: {rule} failed"));
 	assert!(stdout.contains("command: cargo fmt --all"));
 	let stderr = stderr_text(&output);
 	assert!(stderr.trim().is_empty(), "rules should not write stderr");
