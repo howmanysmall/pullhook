@@ -3380,6 +3380,64 @@ fn examples_search_filter_composes_with_categories_only() {
 }
 
 #[test]
+fn examples_markdown_prints_filtered_workflow_table() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["examples", "--command", "rules", "--markdown"]);
+
+	assert!(
+		output.status.success(),
+		"examples --command rules --markdown should succeed"
+	);
+	let stdout = stdout_text(&output);
+	let lines = stdout.lines().collect::<Vec<_>>();
+	assert_eq!(lines.first().copied(), Some("| Title | Category | Command | Summary |"));
+	assert!(
+		lines.contains(
+			&"| List configured rule commands | `diagnostic` | `pullhook rules --commands-only` | Print configured rule command lines without evaluating changed files. |"
+		),
+		"rules markdown table should include the commands-only example"
+	);
+	assert!(
+		lines.contains(
+			&"| Search configured rules | `diagnostic` | `pullhook rules --search lint --names-only` | Find configured rule selectors by name, kind, command, patterns, or fail text. |"
+		),
+		"rules markdown table should include the search example"
+	);
+	assert!(
+		!stdout.contains("pullhook run --dry-run"),
+		"command filter should exclude run examples"
+	);
+	let stderr = stderr_text(&output);
+	assert!(stderr.trim().is_empty(), "examples --markdown should not write stderr");
+}
+
+#[test]
+fn examples_markdown_conflicts_with_other_output_modes() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+	let conflicting_modes: &[&[&str]] = &[
+		&["examples", "--markdown", "--json"],
+		&["examples", "--markdown", "--commands-only"],
+		&["examples", "--markdown", "--command-names-only"],
+		&["examples", "--markdown", "--titles-only"],
+		&["examples", "--markdown", "--summaries-only"],
+		&["examples", "--markdown", "--categories-only"],
+	];
+
+	for args in conflicting_modes {
+		let output = run_pullhook(temp.path(), args);
+
+		assert!(
+			!output.status.success(),
+			"examples --markdown should conflict for args {args:?}"
+		);
+		let stderr = stderr_text(&output);
+		assert!(stderr.contains("cannot be used with"));
+		assert!(stderr.contains("--markdown"));
+	}
+}
+
+#[test]
 fn examples_commands_only_conflicts_with_json() {
 	let temp = tempfile::tempdir().expect("create temp dir");
 
@@ -3393,6 +3451,17 @@ fn examples_commands_only_conflicts_with_json() {
 	assert!(stderr.contains("cannot be used with"));
 	assert!(stderr.contains("--commands-only"));
 	assert!(stderr.contains("--json"));
+
+	let markdown_output = run_pullhook(temp.path(), &["examples", "--commands-only", "--markdown"]);
+
+	assert!(
+		!markdown_output.status.success(),
+		"examples --commands-only should conflict with --markdown"
+	);
+	let markdown_stderr = stderr_text(&markdown_output);
+	assert!(markdown_stderr.contains("cannot be used with"));
+	assert!(markdown_stderr.contains("--commands-only"));
+	assert!(markdown_stderr.contains("--markdown"));
 }
 
 #[test]
@@ -3400,6 +3469,7 @@ fn examples_command_names_only_conflicts_with_other_output_modes() {
 	let temp = tempfile::tempdir().expect("create temp dir");
 	let conflicting_modes: &[&[&str]] = &[
 		&["examples", "--command-names-only", "--json"],
+		&["examples", "--command-names-only", "--markdown"],
 		&["examples", "--command-names-only", "--commands-only"],
 		&["examples", "--command-names-only", "--titles-only"],
 		&["examples", "--command-names-only", "--summaries-only"],
@@ -3424,6 +3494,7 @@ fn examples_titles_only_conflicts_with_other_output_modes() {
 	let temp = tempfile::tempdir().expect("create temp dir");
 	let conflicting_modes: &[&[&str]] = &[
 		&["examples", "--titles-only", "--json"],
+		&["examples", "--titles-only", "--markdown"],
 		&["examples", "--titles-only", "--commands-only"],
 		&["examples", "--titles-only", "--command-names-only"],
 		&["examples", "--titles-only", "--categories-only"],
@@ -3447,6 +3518,7 @@ fn examples_summaries_only_conflicts_with_other_output_modes() {
 	let temp = tempfile::tempdir().expect("create temp dir");
 	let conflicting_modes: &[&[&str]] = &[
 		&["examples", "--summaries-only", "--json"],
+		&["examples", "--summaries-only", "--markdown"],
 		&["examples", "--summaries-only", "--commands-only"],
 		&["examples", "--summaries-only", "--command-names-only"],
 		&["examples", "--summaries-only", "--titles-only"],
@@ -3471,6 +3543,7 @@ fn examples_categories_only_conflicts_with_other_output_modes() {
 	let temp = tempfile::tempdir().expect("create temp dir");
 	let conflicting_modes: &[&[&str]] = &[
 		&["examples", "--categories-only", "--json"],
+		&["examples", "--categories-only", "--markdown"],
 		&["examples", "--categories-only", "--commands-only"],
 		&["examples", "--categories-only", "--command-names-only"],
 		&["examples", "--categories-only", "--titles-only"],
@@ -5182,27 +5255,6 @@ fn utility_help_groups_options_by_task() {
 	assert!(categories_stdout.contains("pullhook categories --descriptions-only"));
 	assert!(categories_stdout.contains("pullhook categories --json"));
 
-	let examples = run_pullhook(temp.path(), &["examples", "--help"]);
-	assert!(examples.status.success(), "examples help should succeed");
-	let examples_stdout = stdout_text(&examples);
-	assert!(examples_stdout.contains("Filter options:"));
-	assert!(examples_stdout.contains("Output options:"));
-	assert!(examples_stdout.contains("Print JSON with filters and searchFields metadata"));
-	assert!(examples_stdout.contains("--count-only"));
-	assert!(examples_stdout.contains("pullhook examples --command run"));
-	assert!(examples_stdout.contains("pullhook examples --category workflow"));
-	assert!(examples_stdout.contains("pullhook examples --search install"));
-	assert!(examples_stdout.contains("pullhook examples --search install --summaries-only"));
-	assert!(examples_stdout.contains("pullhook examples --command run --commands-only"));
-	assert!(examples_stdout.contains("pullhook examples --command rules --commands-only"));
-	assert!(examples_stdout.contains("pullhook examples --command schema --commands-only"));
-	assert!(examples_stdout.contains("pullhook examples --command examples --commands-only"));
-	assert!(examples_stdout.contains("pullhook examples --category reference --commands-only"));
-	assert!(examples_stdout.contains("pullhook examples --category reference --titles-only"));
-	assert!(examples_stdout.contains("pullhook examples --command-names-only"));
-	assert!(examples_stdout.contains("pullhook examples --categories-only"));
-	assert!(examples_stdout.contains("pullhook examples --json"));
-
 	let codes = run_pullhook(temp.path(), &["codes", "--help"]);
 	assert!(codes.status.success(), "codes help should succeed");
 	let codes_stdout = stdout_text(&codes);
@@ -5216,6 +5268,34 @@ fn utility_help_groups_options_by_task() {
 	assert!(codes_stdout.contains("pullhook codes --surfaces-only"));
 	assert!(codes_stdout.contains("pullhook codes --search config --descriptions-only"));
 	assert!(codes_stdout.contains("pullhook codes --kind error --codes-only"));
+}
+
+#[test]
+fn examples_help_describes_search_and_output_modes() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let examples = run_pullhook(temp.path(), &["examples", "--help"]);
+	assert!(examples.status.success(), "examples help should succeed");
+	let examples_stdout = stdout_text(&examples);
+	assert!(examples_stdout.contains("Filter options:"));
+	assert!(examples_stdout.contains("Output options:"));
+	assert!(examples_stdout.contains("Print JSON with filters and searchFields metadata"));
+	assert!(examples_stdout.contains("Print a Markdown example workflow table"));
+	assert!(examples_stdout.contains("--count-only"));
+	assert!(examples_stdout.contains("pullhook examples --command run"));
+	assert!(examples_stdout.contains("pullhook examples --category workflow"));
+	assert!(examples_stdout.contains("pullhook examples --search install"));
+	assert!(examples_stdout.contains("pullhook examples --search install --summaries-only"));
+	assert!(examples_stdout.contains("pullhook examples --command run --commands-only"));
+	assert!(examples_stdout.contains("pullhook examples --command rules --commands-only"));
+	assert!(examples_stdout.contains("pullhook examples --command schema --commands-only"));
+	assert!(examples_stdout.contains("pullhook examples --command examples --commands-only"));
+	assert!(examples_stdout.contains("pullhook examples --category reference --commands-only"));
+	assert!(examples_stdout.contains("pullhook examples --category reference --titles-only"));
+	assert!(examples_stdout.contains("pullhook examples --command-names-only"));
+	assert!(examples_stdout.contains("pullhook examples --categories-only"));
+	assert!(examples_stdout.contains("pullhook examples --markdown"));
+	assert!(examples_stdout.contains("pullhook examples --json"));
 }
 
 #[test]

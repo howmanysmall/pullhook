@@ -336,6 +336,7 @@ pullhook examples --command schema --commands-only
 pullhook examples --command examples --commands-only
 pullhook examples --command-names-only
 pullhook examples --categories-only
+pullhook examples --markdown
 pullhook examples --json
 pullhook commands
 pullhook commands --category diagnostic
@@ -468,6 +469,7 @@ Use `pullhook examples --command-names-only` when a script only needs the comman
 Use `pullhook examples --titles-only` when a script or completion helper only needs example titles.
 Use `pullhook examples --summaries-only` when a script or command palette only needs short descriptions.
 Use `pullhook examples --categories-only` when a script only needs the matching example categories.
+Use `pullhook examples --markdown` to generate a compact workflow table for docs, issues, or release notes.
 Use `pullhook categories` to inspect command categories with command and example counts.
 Add `--search <text>` to match category names or descriptions case-insensitively.
 Use `pullhook categories --descriptions-only` when a script or command palette only needs category descriptions.

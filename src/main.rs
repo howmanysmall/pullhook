@@ -1473,6 +1473,11 @@ fn examples_command(args: &ExamplesArgs) -> Result<()> {
 		return Ok(());
 	}
 
+	if args.markdown {
+		render_examples_markdown(&examples);
+		return Ok(());
+	}
+
 	if args.output.count_only {
 		println!("{}", examples.len());
 		return Ok(());
@@ -1541,6 +1546,20 @@ fn collect_example_command_names(examples: &[ExampleInfo]) -> Vec<&'static str> 
 				.then_some(command.label())
 		})
 		.collect()
+}
+
+fn render_examples_markdown(examples: &[ExampleInfo]) {
+	println!("| Title | Category | Command | Summary |");
+	println!("| --- | --- | --- | --- |");
+	for example in examples {
+		println!(
+			"| {} | `{}` | `{}` | {} |",
+			markdown_table_escape(example.title),
+			markdown_table_escape(example.category),
+			markdown_table_escape(example.command),
+			markdown_table_escape(example.summary)
+		);
+	}
 }
 
 fn collect_example_categories(examples: &[ExampleInfo]) -> Vec<&'static str> {
