@@ -31,6 +31,7 @@ Examples:
   pullhook run
   pullhook run --dry-run
   pullhook run --json
+  pullhook run --changed-file packages/a/package-lock.json --dry-run
   pullhook run --rule lint --rule typecheck
   pullhook run --config config/pullhook.custom.json --all-matches";
 
@@ -38,6 +39,7 @@ const EXPLAIN_AFTER_HELP: &str = "\
 Examples:
   pullhook explain
   pullhook explain --all-matches
+  pullhook explain --changed-file packages/a/package-lock.json
   pullhook explain --rule lint --all-matches
   pullhook explain --json";
 
@@ -195,6 +197,10 @@ pub struct ConfigRunArgs {
 	#[arg(long = "base", value_name = "rev")]
 	pub base: Option<String>,
 
+	/// Evaluate as if this file changed; repeat for multiple files.
+	#[arg(long = "changed-file", value_name = "path", conflicts_with = "base")]
+	pub changed_files: Vec<PathBuf>,
+
 	/// Max concurrent jobs for top-level work.
 	#[arg(long = "jobs", value_name = "n")]
 	pub jobs: Option<NonZeroUsize>,
@@ -235,6 +241,10 @@ pub struct ExplainArgs {
 	/// Override the git base revision.
 	#[arg(long = "base", value_name = "rev")]
 	pub base: Option<String>,
+
+	/// Evaluate as if this file changed; repeat for multiple files.
+	#[arg(long = "changed-file", value_name = "path", conflicts_with = "base")]
+	pub changed_files: Vec<PathBuf>,
 
 	/// Show skipped rules as well as matched rules.
 	#[arg(long = "all-matches", default_value_t = false)]

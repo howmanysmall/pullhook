@@ -272,7 +272,8 @@ fn run_config_command(args: &ConfigRunArgs) -> Result<()> {
 
 	let renderer = Renderer::new(args.render);
 	let (repo, repo_root, config) = load_config_from_cwd(args.debug, args.config.as_deref())?;
-	let (changed_files, base_missing) = resolve_config_changed_files(&repo, &config, args.base.as_deref(), args.debug)?;
+	let (changed_files, base_missing) =
+		resolve_config_changed_files(&repo, &config, args.base.as_deref(), &args.changed_files, args.debug)?;
 	let evaluation = filter_config_evaluation(
 		evaluate_config(&config, &changed_files, base_missing, &repo_root)?,
 		&args.rules,
@@ -344,7 +345,8 @@ fn run_config_command(args: &ConfigRunArgs) -> Result<()> {
 
 fn explain_config_command(args: &ExplainArgs) -> Result<()> {
 	let (repo, repo_root, config) = load_config_from_cwd(args.debug, args.config.as_deref())?;
-	let (changed_files, base_missing) = resolve_config_changed_files(&repo, &config, args.base.as_deref(), args.debug)?;
+	let (changed_files, base_missing) =
+		resolve_config_changed_files(&repo, &config, args.base.as_deref(), &args.changed_files, args.debug)?;
 	let evaluation = filter_config_evaluation(
 		evaluate_config(&config, &changed_files, base_missing, &repo_root)?,
 		&args.rules,
@@ -529,8 +531,19 @@ fn resolve_config_changed_files(
 	repo: &GitRepo,
 	config: &Config,
 	base: Option<&str>,
+	explicit_changed_files: &[std::path::PathBuf],
 	debug_enabled: bool,
 ) -> Result<(Vec<std::path::PathBuf>, bool)> {
+	if !explicit_changed_files.is_empty() {
+		if debug_enabled {
+			debug!(
+				changed = explicit_changed_files.len(),
+				"using explicit config changed files"
+			);
+		}
+		return Ok((explicit_changed_files.to_vec(), false));
+	}
+
 	match repo.resolve_base_and_changed_files(base, debug_enabled) {
 		Ok((resolved_base, changed_files)) => {
 			if debug_enabled {

@@ -118,6 +118,8 @@ Preview commands without executing:
 pullhook --pattern "**/*.rs" --command "cargo test" --dry-run
 pullhook --pattern "**/*.rs" --command "cargo test" --dry-run --json
 pullhook rules
+pullhook explain --changed-file packages/a/package-lock.json
+pullhook run --changed-file packages/a/package-lock.json --dry-run
 pullhook run --rule lint --dry-run
 ```
 
@@ -250,6 +252,8 @@ Legacy top-level mode also supports `--json`, including live execution results a
 Use `pullhook rules` to list configured rule and parallel group names before targeting a large config.
 Use `--rule <name>` with `run` or `explain` to focus on specific rule names or parallel groups in large configs.
 Repeat it to target more than one selector, for example `pullhook run --rule lint --rule typecheck`.
+Use `--changed-file <path>` with `run` or `explain` to evaluate against explicit paths instead of the git diff;
+repeat it to simulate several changed files.
 
 Use `--config <path>` with `run`, `explain`, `validate`, `doctor`, or `rules` when you want to point at a
 specific config file instead of repo-root discovery.

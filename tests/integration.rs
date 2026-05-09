@@ -770,6 +770,22 @@ fn explain_json_filters_to_requested_rule() {
 }
 
 #[test]
+fn explain_json_uses_explicit_changed_files() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_config_rule(repo_root, "docs check", "docs/*.md", "cargo test -p docs");
+
+	let output = run_pullhook(repo_root, &["explain", "--changed-file", "docs/guide.md", "--json"]);
+
+	assert!(output.status.success(), "explain with --changed-file should succeed");
+	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse explain json");
+	assert_eq!(value["changedFiles"], serde_json::json!(["docs/guide.md"]));
+	assert_eq!(value["matchedFiles"], serde_json::json!(["docs/guide.md"]));
+	assert_eq!(value["entries"][0]["status"], "match");
+	assert_eq!(value["entries"][0]["command"], "cargo test -p docs");
+}
+
+#[test]
 fn run_dry_run_json_reports_planned_commands() {
 	let temp = setup_repo_with_merge();
 	let repo_root = temp.path();
@@ -808,6 +824,53 @@ fn run_dry_run_json_reports_planned_commands() {
 	assert_eq!(entries[1]["status"], "skip");
 	let stderr = stderr_text(&output);
 	assert!(stderr.trim().is_empty(), "run --dry-run --json should not write stderr");
+}
+
+#[test]
+fn run_dry_run_json_uses_explicit_changed_files() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_config_rule(repo_root, "docs check", "docs/*.md", "cargo test -p docs");
+
+	let output = run_pullhook(
+		repo_root,
+		&["run", "--dry-run", "--changed-file", "docs/guide.md", "--json"],
+	);
+
+	assert!(
+		output.status.success(),
+		"run --dry-run with --changed-file should succeed"
+	);
+	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse run json");
+	assert_eq!(value["mode"], "dry-run");
+	assert_eq!(value["plannedCommands"], 1);
+	assert_eq!(value["changedFiles"], serde_json::json!(["docs/guide.md"]));
+	assert_eq!(value["entries"][0]["status"], "match");
+}
+
+#[test]
+fn run_rejects_changed_file_with_base() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_config_rule(repo_root, "docs check", "docs/*.md", "cargo test -p docs");
+
+	let output = run_pullhook(
+		repo_root,
+		&[
+			"run",
+			"--dry-run",
+			"--changed-file",
+			"docs/guide.md",
+			"--base",
+			"HEAD~1",
+		],
+	);
+
+	assert!(!output.status.success(), "run should reject --changed-file with --base");
+	let stderr = stderr_text(&output);
+	assert!(stderr.contains("cannot be used with"));
+	assert!(stderr.contains("--changed-file <path>"));
+	assert!(stderr.contains("--base <rev>"));
 }
 
 #[test]
