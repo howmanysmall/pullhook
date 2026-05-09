@@ -116,6 +116,7 @@ Preview commands without executing:
 ```bash
 pullhook --pattern "**/*.rs" --command "cargo test" --dry-run
 pullhook --pattern "**/*.rs" --command "cargo test" --dry-run --json
+pullhook run --rule lint --dry-run
 ```
 
 Generate shell completions:
@@ -243,6 +244,9 @@ adds real execution results, captured stdout/stderr, and a final summary. `run -
 the same plan plus `plannedCommands`, which is handy for CI or editor integrations.
 
 Legacy top-level mode also supports `--json`, including live execution results and dry-run plans.
+
+Use `--rule <name>` with `run` or `explain` to focus on specific rule names or parallel groups in large configs.
+Repeat it to target more than one selector, for example `pullhook run --rule lint --rule typecheck`.
 
 Use `--config <path>` with `run`, `explain`, `validate`, or `doctor` when you want to point at a
 specific config file instead of repo-root discovery.

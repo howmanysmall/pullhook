@@ -31,12 +31,14 @@ Examples:
   pullhook run
   pullhook run --dry-run
   pullhook run --json
+  pullhook run --rule lint --rule typecheck
   pullhook run --config config/pullhook.custom.json --all-matches";
 
 const EXPLAIN_AFTER_HELP: &str = "\
 Examples:
   pullhook explain
   pullhook explain --all-matches
+  pullhook explain --rule lint --all-matches
   pullhook explain --json";
 
 const VALIDATE_AFTER_HELP: &str = "\
@@ -201,6 +203,10 @@ pub struct ConfigRunArgs {
 	#[arg(long = "all-matches", default_value_t = false)]
 	pub all_matches: bool,
 
+	/// Limit execution to one or more named rules or parallel groups.
+	#[arg(long = "rule", value_name = "name")]
+	pub rules: Vec<String>,
+
 	/// Enable debug logging.
 	#[arg(short = 'd', long = "debug", default_value_t = false)]
 	pub debug: bool,
@@ -225,6 +231,10 @@ pub struct ExplainArgs {
 	/// Show skipped rules as well as matched rules.
 	#[arg(long = "all-matches", default_value_t = false)]
 	pub all_matches: bool,
+
+	/// Limit output to one or more named rules or parallel groups.
+	#[arg(long = "rule", value_name = "name")]
+	pub rules: Vec<String>,
 
 	/// Print machine-readable JSON instead of text output.
 	#[arg(long = "json", default_value_t = false)]

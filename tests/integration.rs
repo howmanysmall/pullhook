@@ -647,6 +647,44 @@ fn explain_json_reports_matches_and_skips() {
 }
 
 #[test]
+fn explain_json_filters_to_requested_rule() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_file(
+		repo_root,
+		Path::new("pullhook.json"),
+		r#"{
+  "rules": [
+    {
+      "name": "rebuild package a",
+      "changed": "packages/a/package-lock.json",
+      "run": "cargo test -p package-a"
+    },
+    {
+      "name": "skip markdown",
+      "changed": "**/*.md",
+      "run": "cargo test"
+    }
+  ]
+}
+"#,
+	);
+
+	let output = run_pullhook(
+		repo_root,
+		&["explain", "--all-matches", "--rule", "skip markdown", "--json"],
+	);
+
+	assert!(output.status.success(), "explain with --rule should succeed");
+	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse explain json");
+	let entries = value["entries"].as_array().expect("entries array");
+	assert_eq!(entries.len(), 1);
+	assert_eq!(entries[0]["name"], "skip markdown");
+	assert_eq!(entries[0]["status"], "skip");
+	assert_eq!(entries[0]["skipReason"], "no matching changed files");
+}
+
+#[test]
 fn run_dry_run_json_reports_planned_commands() {
 	let temp = setup_repo_with_merge();
 	let repo_root = temp.path();
@@ -685,6 +723,49 @@ fn run_dry_run_json_reports_planned_commands() {
 	assert_eq!(entries[1]["status"], "skip");
 	let stderr = stderr_text(&output);
 	assert!(stderr.trim().is_empty(), "run --dry-run --json should not write stderr");
+}
+
+#[test]
+fn run_dry_run_json_filters_parallel_group_rules() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_file(
+		repo_root,
+		Path::new("pullhook.json"),
+		r#"{
+  "rules": [
+    {
+      "name": "checks",
+      "parallel": [
+        {
+          "name": "lint",
+          "changed": "packages/a/package-lock.json",
+          "run": "cargo test -p lint"
+        },
+        {
+          "name": "typecheck",
+          "changed": "packages/a/package-lock.json",
+          "run": "cargo test -p typecheck"
+        }
+      ]
+    }
+  ]
+}
+"#,
+	);
+
+	let output = run_pullhook(repo_root, &["run", "--dry-run", "--rule", "typecheck", "--json"]);
+
+	assert!(output.status.success(), "run --dry-run with --rule should succeed");
+	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse run json");
+	assert_eq!(value["plannedCommands"], 1);
+	let entries = value["entries"].as_array().expect("entries array");
+	assert_eq!(entries.len(), 1);
+	assert_eq!(entries[0]["type"], "group");
+	let rules = entries[0]["rules"].as_array().expect("group rules");
+	assert_eq!(rules.len(), 1);
+	assert_eq!(rules[0]["name"], "typecheck");
+	assert_eq!(rules[0]["status"], "match");
 }
 
 #[test]
@@ -754,6 +835,20 @@ fn run_json_reports_failure_results() {
 	assert_eq!(executions[1]["state"], "success");
 	let stderr = stderr_text(&output);
 	assert!(stderr.contains("1 config rule(s) failed"));
+}
+
+#[test]
+fn run_rejects_unknown_rule_selector() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_config_rule(repo_root, "write marker", "packages/a/package-lock.json", "true");
+
+	let output = run_pullhook(repo_root, &["run", "--dry-run", "--rule", "missing rule", "--json"]);
+
+	assert!(!output.status.success(), "run should fail for an unknown rule selector");
+	let stderr = stderr_text(&output);
+	assert!(stderr.contains("unknown rule selector(s): missing rule"));
+	assert!(stderr.contains("available: write marker"));
 }
 
 #[test]

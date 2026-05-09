@@ -269,7 +269,10 @@ fn run_config_command(args: &ConfigRunArgs) -> Result<()> {
 	let renderer = Renderer::new(args.render);
 	let (repo, repo_root, config) = load_config_from_cwd(args.debug, args.config.as_deref())?;
 	let (changed_files, base_missing) = resolve_config_changed_files(&repo, &config, args.base.as_deref(), args.debug)?;
-	let evaluation = evaluate_config(&config, &changed_files, base_missing, &repo_root)?;
+	let evaluation = filter_config_evaluation(
+		evaluate_config(&config, &changed_files, base_missing, &repo_root)?,
+		&args.rules,
+	)?;
 	let matched_files = count_config_matched_files(&evaluation);
 
 	if args.json {
@@ -338,7 +341,10 @@ fn run_config_command(args: &ConfigRunArgs) -> Result<()> {
 fn explain_config_command(args: &ExplainArgs) -> Result<()> {
 	let (repo, repo_root, config) = load_config_from_cwd(args.debug, args.config.as_deref())?;
 	let (changed_files, base_missing) = resolve_config_changed_files(&repo, &config, args.base.as_deref(), args.debug)?;
-	let evaluation = evaluate_config(&config, &changed_files, base_missing, &repo_root)?;
+	let evaluation = filter_config_evaluation(
+		evaluate_config(&config, &changed_files, base_missing, &repo_root)?,
+		&args.rules,
+	)?;
 
 	if args.json {
 		println!(
@@ -539,6 +545,74 @@ fn evaluate_config(
 		Ok((Some(command), patterns))
 	})
 	.map_err(Into::into)
+}
+
+fn filter_config_evaluation(evaluation: Vec<EvaluatedEntry>, selectors: &[String]) -> Result<Vec<EvaluatedEntry>> {
+	if selectors.is_empty() {
+		return Ok(evaluation);
+	}
+
+	let requested = selectors.iter().map(String::as_str).collect::<BTreeSet<_>>();
+	let mut available = BTreeSet::new();
+	let mut filtered = Vec::new();
+
+	for entry in evaluation {
+		match entry {
+			EvaluatedEntry::Rule(rule) => {
+				let rule_name = rule.rule.name.clone();
+				available.insert(rule_name.clone());
+				if requested.contains(rule_name.as_str()) {
+					filtered.push(EvaluatedEntry::Rule(rule));
+				}
+			}
+			EvaluatedEntry::Group(group) => {
+				let group_name = group.group.name.clone();
+				let group_selected = requested.contains(group_name.as_str());
+				available.insert(group_name);
+
+				if group_selected {
+					for rule in &group.rules {
+						available.insert(rule.rule.name.clone());
+					}
+					filtered.push(EvaluatedEntry::Group(group));
+					continue;
+				}
+
+				let rules = group
+					.rules
+					.into_iter()
+					.filter(|rule| {
+						available.insert(rule.rule.name.clone());
+						requested.contains(rule.rule.name.as_str())
+					})
+					.collect::<Vec<_>>();
+
+				if !rules.is_empty() {
+					filtered.push(EvaluatedEntry::Group(EvaluatedGroup {
+						group: group.group,
+						rules,
+					}));
+				}
+			}
+		}
+	}
+
+	let unknown = selectors
+		.iter()
+		.filter(|selector| !available.contains(selector.as_str()))
+		.cloned()
+		.collect::<Vec<_>>();
+
+	if !unknown.is_empty() {
+		let available = available.into_iter().collect::<Vec<_>>();
+		return Err(anyhow!(
+			"unknown rule selector(s): {} (available: {})",
+			unknown.join(", "),
+			available.join(", "),
+		));
+	}
+
+	Ok(filtered)
 }
 
 fn render_config_evaluation(config: &Config, evaluation: &[EvaluatedEntry], all_matches: bool, dry_run: bool) {
