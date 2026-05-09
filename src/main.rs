@@ -718,6 +718,10 @@ fn rules_command(args: &RulesArgs) -> Result<()> {
 
 fn schema_command(args: &SchemaArgs) -> Result<()> {
 	if let Some(path) = args.output.as_deref() {
+		if args.check {
+			return check_schema_output(path, args.json);
+		}
+
 		if let Some(parent) = path.parent()
 			&& !parent.as_os_str().is_empty()
 		{
@@ -731,6 +735,45 @@ fn schema_command(args: &SchemaArgs) -> Result<()> {
 
 	print!("{}", config::CONFIG_SCHEMA_JSON);
 	Ok(())
+}
+
+fn check_schema_output(path: &std::path::Path, json_output: bool) -> Result<()> {
+	let existing_schema = match std::fs::read_to_string(path) {
+		Ok(schema) => schema,
+		Err(error) => {
+			if json_output {
+				println!(
+					"{}",
+					serde_json::to_string_pretty(&schema_check_json(
+						path,
+						false,
+						false,
+						Some(&format!("failed to read schema file: {error}")),
+					))?
+				);
+			}
+			return Err(anyhow!("failed to read schema file `{}`: {error}", path.display()));
+		}
+	};
+	let matches = existing_schema == config::CONFIG_SCHEMA_JSON;
+	if json_output {
+		println!(
+			"{}",
+			serde_json::to_string_pretty(&schema_check_json(path, true, matches, None))?
+		);
+	}
+	if matches {
+		if !json_output {
+			println!("schema up to date: {}", path.display());
+		}
+		return Ok(());
+	}
+
+	Err(anyhow!(
+		"schema out of date: {} (rerun `pullhook schema --output {}`)",
+		path.display(),
+		path.display()
+	))
 }
 
 fn ensure_json_without_debug(json_output: bool, debug_enabled: bool) -> Result<()> {
@@ -1488,6 +1531,15 @@ fn init_plan_json(
 		"dryRun": dry_run,
 		"action": if existed { "overwrite" } else { "create" },
 		"written": !dry_run && error.is_none(),
+		"error": error,
+	})
+}
+
+fn schema_check_json(path: &std::path::Path, exists: bool, matches: bool, error: Option<&str>) -> serde_json::Value {
+	json!({
+		"path": path.display().to_string(),
+		"exists": exists,
+		"matches": matches,
 		"error": error,
 	})
 }

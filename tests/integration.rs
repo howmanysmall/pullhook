@@ -1000,6 +1000,81 @@ fn schema_can_write_to_output_file() {
 }
 
 #[test]
+fn schema_check_succeeds_when_output_is_current() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+	let output_path = temp.path().join(".vscode/pullhook.schema.json");
+	let write = run_pullhook(temp.path(), &["schema", "--output", ".vscode/pullhook.schema.json"]);
+	assert!(write.status.success(), "schema --output should seed check file");
+
+	let output = run_pullhook(
+		temp.path(),
+		&["schema", "--check", "--output", ".vscode/pullhook.schema.json"],
+	);
+
+	assert!(output.status.success(), "schema --check should pass for current schema");
+	let stdout = stdout_text(&output);
+	assert!(stdout.contains("schema up to date"));
+	assert!(stdout.contains(".vscode/pullhook.schema.json"));
+	let stderr = stderr_text(&output);
+	assert!(stderr.trim().is_empty(), "schema --check should not write stderr");
+	assert!(predicate::path::is_file().eval(&output_path));
+}
+
+#[test]
+fn schema_check_fails_when_output_is_stale() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+	write_file(temp.path(), Path::new(".vscode/pullhook.schema.json"), "{}\n");
+
+	let output = run_pullhook(
+		temp.path(),
+		&["schema", "--check", "--output", ".vscode/pullhook.schema.json"],
+	);
+
+	assert!(!output.status.success(), "schema --check should fail for stale schema");
+	assert!(
+		stdout_text(&output).trim().is_empty(),
+		"stale schema check should not write stdout"
+	);
+	let stderr = stderr_text(&output);
+	assert!(stderr.contains("schema out of date"));
+	assert!(stderr.contains("pullhook schema --output .vscode/pullhook.schema.json"));
+}
+
+#[test]
+fn schema_check_json_reports_match_status() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+	write_file(temp.path(), Path::new(".vscode/pullhook.schema.json"), "{}\n");
+
+	let output = run_pullhook(
+		temp.path(),
+		&[
+			"schema",
+			"--check",
+			"--output",
+			".vscode/pullhook.schema.json",
+			"--json",
+		],
+	);
+
+	assert!(
+		!output.status.success(),
+		"schema --check --json should fail for stale schema"
+	);
+	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse schema check json");
+	assert!(
+		value["path"]
+			.as_str()
+			.expect("path")
+			.ends_with(".vscode/pullhook.schema.json")
+	);
+	assert_eq!(value["exists"], true);
+	assert_eq!(value["matches"], false);
+	assert_eq!(value["error"], serde_json::Value::Null);
+	let stderr = stderr_text(&output);
+	assert!(stderr.contains("schema out of date"));
+}
+
+#[test]
 fn completion_command_rejects_run_arguments() {
 	let output = run_pullhook(Path::new("."), &["--install", "completion", "bash"]);
 

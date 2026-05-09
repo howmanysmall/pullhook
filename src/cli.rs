@@ -96,7 +96,9 @@ Examples:
 const SCHEMA_AFTER_HELP: &str = "\
 Examples:
   pullhook schema
-  pullhook schema --output .vscode/pullhook.schema.json";
+  pullhook schema --output .vscode/pullhook.schema.json
+  pullhook schema --check --output .vscode/pullhook.schema.json
+  pullhook schema --check --output .vscode/pullhook.schema.json --json";
 
 const INIT_AFTER_HELP: &str = "\
 Examples:
@@ -657,6 +659,14 @@ pub struct SchemaArgs {
 	/// Write the schema to a file instead of stdout.
 	#[arg(long = "output", value_name = "path")]
 	pub output: Option<PathBuf>,
+
+	/// Check that the output file already matches the embedded schema.
+	#[arg(long = "check", default_value_t = false, requires = "output")]
+	pub check: bool,
+
+	/// Print machine-readable check results instead of text output.
+	#[arg(long = "json", default_value_t = false, requires = "check")]
+	pub json: bool,
 }
 
 /// Arguments for `pullhook completion`.

@@ -124,6 +124,7 @@ pullhook rules --kind install
 pullhook rules --commands-only
 pullhook rules --patterns-only
 pullhook schema --output .vscode/pullhook.schema.json
+pullhook schema --check --output .vscode/pullhook.schema.json
 pullhook explain --changed-file packages/a/package-lock.json
 pullhook explain --summary-only
 pullhook explain --commands-only
@@ -280,6 +281,7 @@ Placeholders render in every mode.
 Use `pullhook config --path-only` when a script needs the resolved path as one clean line.
 Add `--require-existing` when that script should fail instead of returning a planned-but-missing config path.
 `pullhook schema` prints the config JSON Schema, and `pullhook schema --output <path>` writes it for editor setup.
+Use `schema --check --output <path>` in CI when a checked-in schema file must stay current.
 `validate --json` emits a compact config summary for scripts and still prints structured JSON when the
 config is invalid. Use `validate --quiet` when CI only needs the exit code. `doctor` checks repo discovery, config health, diff-base availability, and `--install`
 detection in one pass, with a short hint for each check. Use `doctor --strict` when CI should fail on warnings.
