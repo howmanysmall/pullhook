@@ -4129,6 +4129,7 @@ fn rules_help_lists_script_friendly_output_modes() {
 
 	assert!(output.status.success(), "rules help should succeed");
 	let stdout = stdout_text(&output);
+	assert!(stdout.contains("pullhook rules --count-only"));
 	assert!(stdout.contains("pullhook rules --names-only"));
 	assert!(stdout.contains("pullhook rules --commands-only"));
 	assert!(stdout.contains("pullhook rules --patterns-only"));
@@ -4141,6 +4142,7 @@ fn rules_help_lists_script_friendly_output_modes() {
 	assert!(stdout.contains("Output options:"));
 	assert!(stdout.contains("Selection options:"));
 	assert!(stdout.contains("Display options:"));
+	assert!(stdout.contains("--count-only"));
 	assert!(stdout.contains("--commands-only"));
 	assert!(stdout.contains("--patterns-only"));
 }
@@ -4788,6 +4790,17 @@ fn init_plan_line_outputs_require_dry_run_and_conflict() {
 fn rules_names_only_conflicts_with_json() {
 	let temp = tempfile::tempdir().expect("create temp dir");
 
+	let count_output = run_pullhook(temp.path(), &["rules", "--count-only", "--json"]);
+
+	assert!(
+		!count_output.status.success(),
+		"--count-only should conflict with --json"
+	);
+	let count_stderr = stderr_text(&count_output);
+	assert!(count_stderr.contains("cannot be used with"));
+	assert!(count_stderr.contains("--count-only"));
+	assert!(count_stderr.contains("--json"));
+
 	let json_output = run_pullhook(temp.path(), &["rules", "--names-only", "--json"]);
 
 	assert!(
@@ -4854,6 +4867,7 @@ fn rules_patterns_only_conflicts_with_other_output_modes() {
 	let temp = tempfile::tempdir().expect("create temp dir");
 	let conflicting_modes: &[&[&str]] = &[
 		&["rules", "--patterns-only", "--json"],
+		&["rules", "--patterns-only", "--count-only"],
 		&["rules", "--patterns-only", "--names-only"],
 		&["rules", "--patterns-only", "--commands-only"],
 		&["rules", "--patterns-only", "--exclude-patterns-only"],
@@ -4878,6 +4892,7 @@ fn rules_exclude_patterns_only_conflicts_with_other_output_modes() {
 	let temp = tempfile::tempdir().expect("create temp dir");
 	let conflicting_modes: &[&[&str]] = &[
 		&["rules", "--exclude-patterns-only", "--json"],
+		&["rules", "--exclude-patterns-only", "--count-only"],
 		&["rules", "--exclude-patterns-only", "--names-only"],
 		&["rules", "--exclude-patterns-only", "--commands-only"],
 		&["rules", "--exclude-patterns-only", "--patterns-only"],
@@ -4902,6 +4917,7 @@ fn rules_fail_text_only_conflicts_with_other_output_modes() {
 	let temp = tempfile::tempdir().expect("create temp dir");
 	let conflicting_modes: &[&[&str]] = &[
 		&["rules", "--fail-text-only", "--json"],
+		&["rules", "--fail-text-only", "--count-only"],
 		&["rules", "--fail-text-only", "--names-only"],
 		&["rules", "--fail-text-only", "--commands-only"],
 		&["rules", "--fail-text-only", "--patterns-only"],
@@ -6998,6 +7014,73 @@ fn rules_names_only_respects_rule_selector_filter() {
 	assert!(
 		stderr.trim().is_empty(),
 		"rules --rule lint --names-only should not write stderr"
+	);
+}
+
+#[test]
+fn rules_count_only_prints_matching_selector_count() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_file(
+		repo_root,
+		Path::new("pullhook.json"),
+		r#"{
+  "rules": [
+    {
+      "name": "install dependencies",
+      "install": true
+    },
+    {
+      "name": "checks",
+      "parallel": [
+        {
+          "name": "lint",
+          "changed": "packages/a/package-lock.json",
+          "run": "cargo test -p lint"
+        },
+        {
+          "name": "typecheck",
+          "changed": "packages/a/package-lock.json",
+          "run": "cargo test -p typecheck"
+        }
+      ]
+    }
+  ]
+}
+"#,
+	);
+
+	let output = run_pullhook(repo_root, &["rules", "--count-only"]);
+
+	assert!(output.status.success(), "rules --count-only should succeed");
+	assert_eq!(stdout_text(&output), "4\n");
+	let stderr = stderr_text(&output);
+	assert!(stderr.trim().is_empty(), "rules --count-only should not write stderr");
+
+	let run_output = run_pullhook(repo_root, &["rules", "--kind", "run", "--count-only"]);
+
+	assert!(
+		run_output.status.success(),
+		"rules --kind run --count-only should succeed"
+	);
+	assert_eq!(stdout_text(&run_output), "2\n");
+	let stderr = stderr_text(&run_output);
+	assert!(
+		stderr.trim().is_empty(),
+		"rules --kind run --count-only should not write stderr"
+	);
+
+	let selector_output = run_pullhook(repo_root, &["rules", "--rule", "lint", "--count-only"]);
+
+	assert!(
+		selector_output.status.success(),
+		"rules --rule lint --count-only should succeed"
+	);
+	assert_eq!(stdout_text(&selector_output), "1\n");
+	let stderr = stderr_text(&selector_output);
+	assert!(
+		stderr.trim().is_empty(),
+		"rules --rule lint --count-only should not write stderr"
 	);
 }
 

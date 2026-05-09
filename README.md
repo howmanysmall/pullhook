@@ -132,6 +132,7 @@ pullhook --pattern "**/*.rs" --command "cargo test" --dry-run
 pullhook --pattern "**/*.rs" --command "cargo test" --dry-run --json
 pullhook rules
 pullhook rules --kind install
+pullhook rules --count-only
 pullhook rules --rule lint --json
 pullhook rules --commands-only
 pullhook rules --rule lint --commands-only
@@ -493,6 +494,7 @@ Use `pullhook rules` to list configured rule and parallel group names before tar
 script-friendly `selectors`, `commands`, `patterns`, `excludePatterns`, and `failText` arrays with summary counts.
 Unknown selector JSON errors include `unknownSelectors`, `availableSelectors`, and `suggestions`, so scripts
 do not need to scrape the human error message.
+Use `pullhook rules --count-only` when a script only needs the number of matching rule or group selectors.
 Use `pullhook rules --names-only` when a script or completion helper only needs valid selector names.
 Use `pullhook rules --commands-only` when a script only needs configured `run` command lines without evaluating changed files.
 Use `pullhook rules --patterns-only` when a script needs the configured `changed` globs without evaluating changed files.

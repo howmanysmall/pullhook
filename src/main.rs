@@ -2537,6 +2537,14 @@ fn rules_command(args: &RulesArgs) -> Result<()> {
 		return Ok(());
 	}
 
+	if args.count_only {
+		println!(
+			"{}",
+			collect_rules_output_selectors(&config, args.kind, &args.rules).len()
+		);
+		return Ok(());
+	}
+
 	if args.names_only {
 		for selector in collect_rules_output_selectors(&config, args.kind, &args.rules) {
 			println!("{selector}");

@@ -109,6 +109,7 @@ const RULES_AFTER_HELP: &str = "\
 Examples:
   pullhook rules
   pullhook rules --kind install
+  pullhook rules --count-only
   pullhook rules --names-only
   pullhook rules --commands-only
   pullhook rules --rule lint --commands-only
@@ -1032,14 +1033,49 @@ pub struct RulesArgs {
 	pub config: Option<PathBuf>,
 
 	/// Print machine-readable JSON instead of text output.
-	#[arg(long = "json", default_value_t = false, help_heading = "Output options")]
+	#[arg(
+		long = "json",
+		default_value_t = false,
+		conflicts_with_all = [
+			"count_only",
+			"names_only",
+			"commands_only",
+			"patterns_only",
+			"exclude_patterns_only",
+			"fail_text_only"
+		],
+		help_heading = "Output options"
+	)]
 	pub json: bool,
+
+	/// Print only the number of matching rule selectors.
+	#[arg(
+		long = "count-only",
+		default_value_t = false,
+		conflicts_with_all = [
+			"json",
+			"names_only",
+			"commands_only",
+			"patterns_only",
+			"exclude_patterns_only",
+			"fail_text_only"
+		],
+		help_heading = "Output options"
+	)]
+	pub count_only: bool,
 
 	/// Print only rule and group selector names, one per line.
 	#[arg(
 		long = "names-only",
 		default_value_t = false,
-		conflicts_with_all = ["json", "commands_only", "patterns_only", "exclude_patterns_only", "fail_text_only"],
+		conflicts_with_all = [
+			"json",
+			"count_only",
+			"commands_only",
+			"patterns_only",
+			"exclude_patterns_only",
+			"fail_text_only"
+		],
 		help_heading = "Output options"
 	)]
 	pub names_only: bool,
@@ -1048,7 +1084,14 @@ pub struct RulesArgs {
 	#[arg(
 		long = "commands-only",
 		default_value_t = false,
-		conflicts_with_all = ["json", "names_only", "patterns_only", "exclude_patterns_only", "fail_text_only"],
+		conflicts_with_all = [
+			"json",
+			"count_only",
+			"names_only",
+			"patterns_only",
+			"exclude_patterns_only",
+			"fail_text_only"
+		],
 		help_heading = "Output options"
 	)]
 	pub commands_only: bool,
@@ -1057,7 +1100,14 @@ pub struct RulesArgs {
 	#[arg(
 		long = "patterns-only",
 		default_value_t = false,
-		conflicts_with_all = ["json", "names_only", "commands_only", "exclude_patterns_only", "fail_text_only"],
+		conflicts_with_all = [
+			"json",
+			"count_only",
+			"names_only",
+			"commands_only",
+			"exclude_patterns_only",
+			"fail_text_only"
+		],
 		help_heading = "Output options"
 	)]
 	pub patterns_only: bool,
@@ -1066,7 +1116,14 @@ pub struct RulesArgs {
 	#[arg(
 		long = "exclude-patterns-only",
 		default_value_t = false,
-		conflicts_with_all = ["json", "names_only", "commands_only", "patterns_only", "fail_text_only"],
+		conflicts_with_all = [
+			"json",
+			"count_only",
+			"names_only",
+			"commands_only",
+			"patterns_only",
+			"fail_text_only"
+		],
 		help_heading = "Output options"
 	)]
 	pub exclude_patterns_only: bool,
@@ -1075,7 +1132,14 @@ pub struct RulesArgs {
 	#[arg(
 		long = "fail-text-only",
 		default_value_t = false,
-		conflicts_with_all = ["json", "names_only", "commands_only", "patterns_only", "exclude_patterns_only"],
+		conflicts_with_all = [
+			"json",
+			"count_only",
+			"names_only",
+			"commands_only",
+			"patterns_only",
+			"exclude_patterns_only"
+		],
 		help_heading = "Output options"
 	)]
 	pub fail_text_only: bool,
