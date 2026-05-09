@@ -195,6 +195,7 @@ Examples:
   pullhook commands --search config
   pullhook commands --repo-only
   pullhook commands --standalone-only --names-only
+  pullhook commands --categories-only
   pullhook commands --search config --summaries-only
   pullhook commands --json";
 
@@ -1337,7 +1338,7 @@ pub struct CommandCatalogArgs {
 	#[arg(
 		long = "json",
 		default_value_t = false,
-		conflicts_with_all = ["names_only", "summaries_only"],
+		conflicts_with_all = ["names_only", "summaries_only", "categories_only"],
 		help_heading = "Output options"
 	)]
 	pub json: bool,
@@ -1353,7 +1354,7 @@ pub struct CommandCatalogLineOutputArgs {
 	#[arg(
 		long = "names-only",
 		default_value_t = false,
-		conflicts_with_all = ["json", "summaries_only"],
+		conflicts_with_all = ["json", "summaries_only", "categories_only"],
 		help_heading = "Output options"
 	)]
 	pub names_only: bool,
@@ -1362,10 +1363,19 @@ pub struct CommandCatalogLineOutputArgs {
 	#[arg(
 		long = "summaries-only",
 		default_value_t = false,
-		conflicts_with_all = ["json", "names_only"],
+		conflicts_with_all = ["json", "names_only", "categories_only"],
 		help_heading = "Output options"
 	)]
 	pub summaries_only: bool,
+
+	/// Print only command categories, one per line.
+	#[arg(
+		long = "categories-only",
+		default_value_t = false,
+		conflicts_with_all = ["json", "names_only", "summaries_only"],
+		help_heading = "Output options"
+	)]
+	pub categories_only: bool,
 }
 
 /// Filter arguments for `pullhook commands`.

@@ -1304,6 +1304,8 @@ fn example_info_matches_search(example: &ExampleInfo, search: &str) -> bool {
 
 fn command_catalog_command(args: &CommandCatalogArgs) -> Result<()> {
 	let commands = filtered_command_infos(args.category, args.search.as_deref(), repo_requirement_filter(args));
+	let categories = collect_command_categories(&commands);
+	let category_count = categories.len();
 	if args.json {
 		println!(
 			"{}",
@@ -1315,8 +1317,10 @@ fn command_catalog_command(args: &CommandCatalogArgs) -> Result<()> {
 					"search": args.search.as_deref(),
 					"requiresRepo": repo_requirement_filter(args),
 				},
+				"categories": categories,
 				"commands": commands,
 				"summary": {
+					"categories": category_count,
 					"commands": commands.len(),
 					"json": commands.iter().filter(|info| info.json).count(),
 					"scriptFriendly": commands.iter().filter(|info| info.script_friendly).count(),
@@ -1340,6 +1344,13 @@ fn command_catalog_command(args: &CommandCatalogArgs) -> Result<()> {
 		return Ok(());
 	}
 
+	if args.output.categories_only {
+		for category in categories {
+			println!("{category}");
+		}
+		return Ok(());
+	}
+
 	println!("Pullhook commands");
 	println!("legacy one-off mode is available through top-level options");
 	if let Some(category) = args.category {
@@ -1356,6 +1367,16 @@ fn command_catalog_command(args: &CommandCatalogArgs) -> Result<()> {
 		println!("{} [{}] {}", info.name, info.category, info.summary);
 	}
 	Ok(())
+}
+
+fn collect_command_categories(commands: &[CommandInfo]) -> Vec<&'static str> {
+	let mut categories = Vec::new();
+	for command in commands {
+		if !categories.contains(&command.category) {
+			categories.push(command.category);
+		}
+	}
+	categories
 }
 
 fn filtered_command_infos(
