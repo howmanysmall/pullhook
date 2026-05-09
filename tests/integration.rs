@@ -2463,12 +2463,14 @@ fn categories_json_lists_command_coverage() {
 	assert!(
 		categories
 			.iter()
-			.any(|entry| entry["name"] == "reference" && entry["commands"] == 7 && entry["examples"] == 6)
+			.any(|entry| entry["name"] == "reference" && entry["commands"] == 7 && entry["examples"] == 7)
 	);
 	assert_eq!(
 		value["summary"]["categories"].as_u64().expect("category count"),
 		categories.len() as u64
 	);
+	assert_eq!(value["summary"]["commands"], 16);
+	assert_eq!(value["summary"]["examples"], 19);
 	let stderr = stderr_text(&output);
 	assert!(stderr.trim().is_empty(), "categories --json should not write stderr");
 }
@@ -2490,6 +2492,8 @@ fn categories_search_filter_limits_results() {
 	assert_eq!(categories.len(), 1, "diagnostic search should only keep diagnostic");
 	assert_eq!(categories[0]["name"], "diagnostic");
 	assert_eq!(value["summary"]["categories"], 1);
+	assert_eq!(value["summary"]["commands"], 4);
+	assert_eq!(value["summary"]["examples"], 4);
 	let stderr = stderr_text(&output);
 	assert!(
 		stderr.trim().is_empty(),

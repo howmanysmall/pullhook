@@ -1226,6 +1226,14 @@ fn categories_command(args: &CategoriesArgs) -> Result<()> {
 			.iter()
 			.map(|category| category_info_json(*category))
 			.collect::<Vec<_>>();
+		let command_count = categories
+			.iter()
+			.filter_map(|category| category["commands"].as_u64())
+			.sum::<u64>();
+		let example_count = categories
+			.iter()
+			.filter_map(|category| category["examples"].as_u64())
+			.sum::<u64>();
 		println!(
 			"{}",
 			serde_json::to_string_pretty(&json!({
@@ -1237,6 +1245,8 @@ fn categories_command(args: &CategoriesArgs) -> Result<()> {
 				"categories": categories,
 				"summary": {
 					"categories": categories.len(),
+					"commands": command_count,
+					"examples": example_count,
 				},
 			}))?
 		);
