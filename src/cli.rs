@@ -32,6 +32,7 @@ Examples:
   pullhook run --dry-run
   pullhook run --json
   pullhook run --quiet
+  pullhook run --commands-only
   pullhook run --changed-file packages/a/package-lock.json --dry-run
   pullhook run --changed-files-file .pullhook-changed --dry-run
   git diff --name-only HEAD~1 | pullhook run --changed-files-stdin --dry-run
@@ -258,6 +259,10 @@ pub struct ConfigRunArgs {
 	/// Suppress successful text output while still reporting failures.
 	#[arg(long = "quiet", default_value_t = false, conflicts_with_all = ["json", "dry_run"])]
 	pub quiet: bool,
+
+	/// Print only planned commands and exit without executing.
+	#[arg(long = "commands-only", default_value_t = false, conflicts_with_all = ["json", "quiet"])]
+	pub commands_only: bool,
 
 	/// Show skipped rules as well as matched rules.
 	#[arg(long = "all-matches", default_value_t = false)]

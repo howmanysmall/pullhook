@@ -125,6 +125,7 @@ pullhook schema --output .vscode/pullhook.schema.json
 pullhook explain --changed-file packages/a/package-lock.json
 pullhook explain --summary-only
 pullhook explain --commands-only
+pullhook run --commands-only
 pullhook run --changed-file packages/a/package-lock.json --dry-run
 git diff --name-only HEAD~1 | pullhook run --changed-files-stdin --dry-run
 pullhook run --rule lint --dry-run
@@ -275,6 +276,7 @@ including changed files, their source (`git`, `explicit`, or `base-missing`), ma
 skip reasons. `run --json` adds real execution results, captured stdout/stderr, and a final summary.
 Use `explain --summary-only` when you only need changed-file, matched-file, and planned-command counts.
 Use `explain --commands-only` when another script should receive only the planned command lines.
+Use `run --commands-only` for the same clean command list from the execution subcommand; it exits before running anything.
 `run --dry-run --json` emits the same plan plus `plannedCommands`, which is handy for CI or editor integrations.
 Use `run --quiet` when successful text output would be noise; failures still print the failed task, any `failText`,
 and the final summary.

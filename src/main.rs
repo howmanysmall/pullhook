@@ -359,6 +359,11 @@ fn run_config_command(args: &ConfigRunArgs) -> Result<()> {
 		return Ok(());
 	}
 
+	if args.commands_only {
+		render_config_evaluation_commands(&evaluation);
+		return Ok(());
+	}
+
 	if !args.quiet {
 		render_config_evaluation(&config, &evaluation, args.all_matches || args.dry_run, args.dry_run);
 	}
