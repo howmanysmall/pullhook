@@ -385,12 +385,13 @@ fn run_config_command(args: &ConfigRunArgs) -> Result<()> {
 		args.changed_files_stdin,
 		args.json,
 	)?;
-	let (changed_files, base_missing, changed_files_source) = resolve_config_changed_files(
+	let (changed_files, base_missing, changed_files_source) = resolve_config_changed_files_for_output(
 		&repo,
 		&config,
 		args.base.as_deref(),
 		&explicit_changed_files,
 		args.debug,
+		args.json,
 	)?;
 	let evaluation = filter_config_evaluation_for_output(
 		evaluate_config(&config, &changed_files, base_missing, &repo_root)?,
@@ -565,12 +566,13 @@ fn explain_config_command(args: &ExplainArgs) -> Result<()> {
 		args.changed_files_stdin,
 		args.json,
 	)?;
-	let (changed_files, base_missing, changed_files_source) = resolve_config_changed_files(
+	let (changed_files, base_missing, changed_files_source) = resolve_config_changed_files_for_output(
 		&repo,
 		&config,
 		args.base.as_deref(),
 		&explicit_changed_files,
 		args.debug,
+		args.json,
 	)?;
 	let evaluation = filter_config_evaluation_for_output(
 		evaluate_config(&config, &changed_files, base_missing, &repo_root)?,
@@ -1219,6 +1221,25 @@ fn resolve_config_changed_files(
 			Ok((Vec::new(), true, ChangedFilesSource::BaseMissing))
 		}
 		Err(error) => Err(error).context("failed to resolve diff base or read changed files"),
+	}
+}
+
+fn resolve_config_changed_files_for_output(
+	repo: &GitRepo,
+	config: &Config,
+	base: Option<&str>,
+	explicit_changed_files: &[std::path::PathBuf],
+	debug_enabled: bool,
+	json_output: bool,
+) -> Result<(Vec<std::path::PathBuf>, bool, ChangedFilesSource)> {
+	match resolve_config_changed_files(repo, config, base, explicit_changed_files, debug_enabled) {
+		Ok(resolved) => Ok(resolved),
+		Err(error) => {
+			if json_output {
+				print_json_error(&error)?;
+			}
+			Err(error)
+		}
 	}
 }
 

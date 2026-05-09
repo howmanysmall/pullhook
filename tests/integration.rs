@@ -1922,6 +1922,43 @@ fn explain_json_reports_missing_config_as_json() {
 }
 
 #[test]
+fn run_json_reports_diff_base_errors_as_json() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_config_rule(repo_root, "write marker", "packages/a/package-lock.json", "true");
+
+	let output = run_pullhook(repo_root, &["run", "--base", "missing-base-ref", "--json"]);
+
+	assert!(!output.status.success(), "run --json should fail for an invalid base");
+	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse run base error json");
+	assert_eq!(value["status"], "error");
+	let error = value["error"].as_str().expect("error");
+	assert!(error.contains("failed to resolve diff base or read changed files"));
+	let stderr = stderr_text(&output);
+	assert!(stderr.contains("failed to resolve diff base or read changed files"));
+}
+
+#[test]
+fn explain_json_reports_diff_base_errors_as_json() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_config_rule(repo_root, "write marker", "packages/a/package-lock.json", "true");
+
+	let output = run_pullhook(repo_root, &["explain", "--base", "missing-base-ref", "--json"]);
+
+	assert!(
+		!output.status.success(),
+		"explain --json should fail for an invalid base"
+	);
+	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse explain base error json");
+	assert_eq!(value["status"], "error");
+	let error = value["error"].as_str().expect("error");
+	assert!(error.contains("failed to resolve diff base or read changed files"));
+	let stderr = stderr_text(&output);
+	assert!(stderr.contains("failed to resolve diff base or read changed files"));
+}
+
+#[test]
 fn rules_json_reports_missing_config_as_json() {
 	let temp = setup_repo_with_merge();
 	let repo_root = temp.path();
