@@ -21,40 +21,14 @@ use crate::config::{
 };
 use crate::git::GitRepo;
 use crate::output::{DryRunSummary, NonSuccessReport, RenderMode, Renderer, Summary, TaskBlock};
-use crate::pm::{PackageManager, detect_package_manager};
+use crate::pm::detect_package_manager;
 
 #[derive(Debug, Clone)]
 struct RunConfig {
-	match_strategy: MatchStrategy,
+	pattern: String,
 	command: Option<String>,
 	script: Option<String>,
 	once: bool,
-}
-
-impl RunConfig {
-	fn pattern(&self) -> &str {
-		self.match_strategy.pattern()
-	}
-}
-
-#[derive(Debug, Clone)]
-enum MatchStrategy {
-	Glob(String),
-	Install { pattern: String },
-}
-
-impl MatchStrategy {
-	fn from_package_manager(package_manager: PackageManager) -> Self {
-		Self::Install {
-			pattern: package_manager.install_pattern(),
-		}
-	}
-
-	fn pattern(&self) -> &str {
-		match self {
-			Self::Glob(pattern) | Self::Install { pattern, .. } => pattern,
-		}
-	}
 }
 
 fn main() {
@@ -110,14 +84,14 @@ fn run_legacy(cli: &RunArgs) -> Result<()> {
 	let repo_root = repo.root().to_path_buf();
 	let run_config = resolve_run_config(cli, &repo_root)?;
 
-	renderer.render_prepare_stage(run_config.pattern());
+	renderer.render_prepare_stage(&run_config.pattern);
 
 	let (changed_count, matched_files) = collect_matches(cli, &repo, &run_config)?;
 
 	renderer.render_discovery_stage(changed_count, matched_files.len());
 
 	if matched_files.is_empty() {
-		renderer.render_no_match_stage(run_config.pattern(), changed_count, matched_files.len());
+		renderer.render_no_match_stage(&run_config.pattern, changed_count, matched_files.len());
 		return Ok(());
 	}
 
@@ -529,7 +503,7 @@ fn render_group_fail_text(group: &EvaluatedGroup, render_mode: RenderMode) {
 }
 
 fn resolve_run_config(cli: &RunArgs, repo_root: &std::path::Path) -> Result<RunConfig> {
-	let mut match_strategy = MatchStrategy::Glob(cli.pattern.clone().unwrap_or_default());
+	let mut pattern = cli.pattern.clone().unwrap_or_default();
 	let mut command = cli.command.clone();
 	let script = cli.script.clone();
 	let mut once = cli.effective_once();
@@ -537,14 +511,14 @@ fn resolve_run_config(cli: &RunArgs, repo_root: &std::path::Path) -> Result<RunC
 	if cli.install {
 		let package_manager =
 			detect_package_manager(repo_root).context("failed to detect package manager for --install")?;
-		match_strategy = MatchStrategy::from_package_manager(package_manager);
+		pattern = package_manager.install_pattern();
 		command = Some(package_manager.install_command());
 		once = true;
 
 		if cli.debug {
 			debug!(
 				package_manager = package_manager.name(),
-				pattern = match_strategy.pattern(),
+				pattern = pattern,
 				command = command.as_deref().unwrap_or_default(),
 				"resolved --install settings"
 			);
@@ -552,7 +526,7 @@ fn resolve_run_config(cli: &RunArgs, repo_root: &std::path::Path) -> Result<RunC
 	}
 
 	Ok(RunConfig {
-		match_strategy,
+		pattern,
 		command,
 		script,
 		once,
@@ -560,38 +534,13 @@ fn resolve_run_config(cli: &RunArgs, repo_root: &std::path::Path) -> Result<RunC
 }
 
 fn collect_matches(cli: &RunArgs, repo: &GitRepo, run_config: &RunConfig) -> Result<(usize, Vec<std::path::PathBuf>)> {
-	let (base, changed_count, matched_files) = match &run_config.match_strategy {
-		MatchStrategy::Glob(pattern) => {
-			let (base, changed_files) = repo
-				.resolve_base_and_changed_files(cli.base.as_deref(), cli.debug)
-				.context("failed to resolve diff base or read changed files")?;
-			let changed_count = changed_files.len();
-
-			if cli.debug {
-				debug!(count = changed_count, "loaded changed files");
-				for path in &changed_files {
-					debug!(changed = %path.display(), "changed file");
-				}
-			}
-
-			let matcher = matcher::compile(pattern).context("failed to compile pattern")?;
-			let matched_files = changed_files
-				.into_iter()
-				.filter(|path| matcher.is_match(path))
-				.collect();
-
-			(base, changed_count, matched_files)
-		}
-		MatchStrategy::Install { pattern } => {
-			let matcher = matcher::compile(pattern).context("failed to compile pattern")?;
-			let (base, changed_count, matched_files) = repo
-				.resolve_install_matches(cli.base.as_deref(), |path| matcher.is_match(path), cli.debug)
-				.context("failed to resolve diff base or read changed files")?;
-			(base, changed_count, matched_files)
-		}
-	};
+	let matcher = matcher::compile(&run_config.pattern).context("failed to compile pattern")?;
+	let (base, changed_count, matched_files) = repo
+		.resolve_install_matches(cli.base.as_deref(), |path| matcher.is_match(path), cli.debug)
+		.context("failed to resolve diff base or read changed files")?;
 
 	if cli.debug {
+		debug!(count = changed_count, "loaded changed files");
 		debug!(%base, "resolved diff base");
 		debug!(count = matched_files.len(), "matched changed files");
 		for path in &matched_files {

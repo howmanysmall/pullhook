@@ -62,14 +62,8 @@ impl GitRepo {
 		explicit: Option<&str>,
 		debug_enabled: bool,
 	) -> Result<(String, Vec<PathBuf>), PullhookError> {
-		let repo = self.repo.to_thread_local();
-		let base = resolve_base(&repo, explicit, debug_enabled)?;
-		let changes = diff_changes(&repo, &base)?;
-		let files = changes
-			.into_iter()
-			.map(|change| relative_path_from_bstr(change.location()))
-			.collect();
-		Ok((base.name, files))
+		let (base, _count, files) = self.resolve_install_matches(explicit, |_| true, debug_enabled)?;
+		Ok((base, files))
 	}
 
 	/// Resolve base and collect install matches without materializing all changed paths.
