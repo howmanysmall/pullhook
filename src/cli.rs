@@ -103,6 +103,10 @@ pub struct RunArgs {
 	#[arg(long = "dry-run", default_value_t = false)]
 	pub dry_run: bool,
 
+	/// Print machine-readable JSON instead of text output.
+	#[arg(long = "json", default_value_t = false)]
+	pub json: bool,
+
 	/// Dedupe directories before per-match execution.
 	#[arg(long = "unique-cwd", default_value_t = false)]
 	pub unique_cwd: bool,

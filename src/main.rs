@@ -41,6 +41,15 @@ struct InstallPlan {
 	command: String,
 }
 
+#[derive(Debug, Clone)]
+struct LegacyJsonContext {
+	changed_count: usize,
+	run_config: RunConfig,
+	matched_files: Vec<std::path::PathBuf>,
+	invocations: Vec<runner::Invocation>,
+	tasks: Vec<std::path::PathBuf>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum DoctorLevel {
 	Ok,
@@ -116,17 +125,35 @@ fn run_legacy(cli: &RunArgs) -> Result<()> {
 			"missing required argument: use `--pattern <glob>`, `--install`, or the `run` subcommand"
 		));
 	}
+	if cli.json && cli.debug {
+		return Err(anyhow!("--json cannot be used with --debug"));
+	}
 
 	let renderer = Renderer::new(cli.render);
 	let cwd = std::env::current_dir().context("failed to read current working directory")?;
 	let repo = GitRepo::discover(&cwd, cli.debug).context("failed to resolve repository root")?;
 	let repo_root = repo.root().to_path_buf();
 	let run_config = resolve_run_config(cli, &repo_root)?;
+	let (changed_count, matched_files) = collect_matches(cli, &repo, &run_config)?;
+	let invocations = runner::prepare_invocations(run_config.command.as_deref(), run_config.script.as_deref())
+		.context("failed to prepare command invocations")?;
+	let tasks = runner::build_task_dirs(&repo_root, &matched_files, run_config.once, cli.unique_cwd);
+
+	if cli.json {
+		return run_legacy_json(
+			cli,
+			LegacyJsonContext {
+				changed_count,
+				run_config,
+				matched_files,
+				invocations,
+				tasks,
+			},
+			&repo_root,
+		);
+	}
 
 	renderer.render_prepare_stage(&run_config.pattern);
-
-	let (changed_count, matched_files) = collect_matches(cli, &repo, &run_config)?;
-
 	renderer.render_discovery_stage(changed_count, matched_files.len());
 
 	if matched_files.is_empty() {
@@ -138,9 +165,6 @@ fn run_legacy(cli: &RunArgs) -> Result<()> {
 		renderer.render_message_stage(message);
 	}
 
-	let invocations = runner::prepare_invocations(run_config.command.as_deref(), run_config.script.as_deref())
-		.context("failed to prepare command invocations")?;
-
 	if invocations.is_empty() {
 		renderer.render_summary_stage(Summary {
 			matched_files: matched_files.len(),
@@ -151,9 +175,6 @@ fn run_legacy(cli: &RunArgs) -> Result<()> {
 		});
 		return Ok(());
 	}
-
-	let tasks = runner::build_task_dirs(&repo_root, &matched_files, run_config.once, cli.unique_cwd);
-
 	if cli.dry_run {
 		let planned_commands = print_dry_run(&renderer, &tasks, &invocations, &repo_root);
 		renderer.render_dry_run_summary_stage(DryRunSummary {
@@ -174,6 +195,65 @@ fn run_legacy(cli: &RunArgs) -> Result<()> {
 	let failure_count = counts.failed + counts.interrupted;
 	render_summary(&renderer, matched_files.len(), counts);
 
+	if failure_count > 0 {
+		return Err(anyhow!("{failure_count} task(s) failed"));
+	}
+
+	Ok(())
+}
+
+fn run_legacy_json(cli: &RunArgs, context: LegacyJsonContext, repo_root: &std::path::Path) -> Result<()> {
+	if cli.dry_run {
+		let planned_commands = context.tasks.len() * context.invocations.len();
+		println!(
+			"{}",
+			serde_json::to_string_pretty(&legacy_dry_run_json(cli, &context, planned_commands, repo_root))?
+		);
+		return Ok(());
+	}
+
+	let LegacyJsonContext {
+		changed_count,
+		run_config,
+		matched_files,
+		invocations,
+		tasks,
+	} = context;
+
+	if matched_files.is_empty() || invocations.is_empty() {
+		println!(
+			"{}",
+			serde_json::to_string_pretty(&legacy_run_json(
+				cli,
+				&run_config,
+				changed_count,
+				&matched_files,
+				TaskCounters::default(),
+				&[],
+			))?
+		);
+		return Ok(());
+	}
+
+	let results = runner::run_tasks(&tasks, &invocations, cli.effective_jobs(), cli.shell, cli.debug)
+		.context("failed to execute tasks")?;
+	let counts = summarize_results(&results);
+	let failure_count = counts.failed + counts.interrupted;
+	let executions = results
+		.iter()
+		.map(|result| task_result_json(result, repo_root))
+		.collect::<Vec<_>>();
+	println!(
+		"{}",
+		serde_json::to_string_pretty(&legacy_run_json(
+			cli,
+			&run_config,
+			changed_count,
+			&matched_files,
+			counts,
+			&executions,
+		))?
+	);
 	if failure_count > 0 {
 		return Err(anyhow!("{failure_count} task(s) failed"));
 	}
@@ -756,6 +836,66 @@ fn config_run_json(
 	value
 }
 
+fn legacy_dry_run_json(
+	cli: &RunArgs,
+	context: &LegacyJsonContext,
+	planned_commands: usize,
+	repo_root: &std::path::Path,
+) -> serde_json::Value {
+	let LegacyJsonContext {
+		changed_count,
+		run_config,
+		matched_files,
+		invocations,
+		tasks,
+	} = context;
+	json!({
+		"mode": "dry-run",
+		"pattern": run_config.pattern,
+		"command": run_config.command,
+		"script": run_config.script,
+		"message": cli.message,
+		"once": run_config.once,
+		"shell": cli.shell,
+		"jobs": cli.effective_jobs(),
+		"changedCount": changed_count,
+		"matchedFiles": matched_files.iter().map(|path| path.display().to_string()).collect::<Vec<_>>(),
+		"tasks": tasks.iter().map(|cwd| runner::relative_cwd_label(cwd, repo_root)).collect::<Vec<_>>(),
+		"invocations": invocations.iter().map(|invocation| invocation.display().into_owned()).collect::<Vec<_>>(),
+		"plannedCommands": planned_commands,
+	})
+}
+
+fn legacy_run_json(
+	cli: &RunArgs,
+	run_config: &RunConfig,
+	changed_count: usize,
+	matched_files: &[std::path::PathBuf],
+	counts: TaskCounters,
+	results: &[serde_json::Value],
+) -> serde_json::Value {
+	json!({
+		"mode": "run",
+		"pattern": run_config.pattern,
+		"command": run_config.command,
+		"script": run_config.script,
+		"message": cli.message,
+		"once": run_config.once,
+		"shell": cli.shell,
+		"jobs": cli.effective_jobs(),
+		"changedCount": changed_count,
+		"matchedFiles": matched_files.iter().map(|path| path.display().to_string()).collect::<Vec<_>>(),
+		"summary": {
+			"matchedFiles": matched_files.len(),
+			"taskDirs": counts.task_dirs,
+			"passed": counts.passed,
+			"failed": counts.failed,
+			"interrupted": counts.interrupted,
+		},
+		"results": results,
+	})
+}
+
 fn config_entry_json(entry: &EvaluatedEntry) -> serde_json::Value {
 	match entry {
 		EvaluatedEntry::Rule(rule) => config_rule_json(rule),
@@ -1112,6 +1252,15 @@ fn invocation_output_json(output: &runner::InvocationOutput) -> serde_json::Valu
 		"stderr": output.stderr,
 		"state": result_state_label(output.state),
 		"exitCode": output.exit_code,
+	})
+}
+
+fn task_result_json(result: &runner::TaskResult, repo_root: &std::path::Path) -> serde_json::Value {
+	json!({
+		"cwd": runner::relative_cwd_label(&result.cwd, repo_root),
+		"state": result_state_label(result.state),
+		"error": result.error.as_ref().map(ToString::to_string),
+		"outputs": result.outputs.iter().map(invocation_output_json).collect::<Vec<_>>(),
 	})
 }
 

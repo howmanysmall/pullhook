@@ -131,6 +131,120 @@ fn install_accepts_explicit_base() {
 }
 
 #[test]
+fn legacy_dry_run_json_reports_plan() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+
+	let output = run_pullhook(
+		repo_root,
+		&[
+			"--pattern",
+			"packages/*/package-lock.json",
+			"--command",
+			"npm install",
+			"--dry-run",
+			"--json",
+		],
+	);
+
+	assert!(output.status.success(), "legacy dry-run json should succeed");
+	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse legacy dry-run json");
+	assert_eq!(value["mode"], "dry-run");
+	assert_eq!(value["pattern"], "packages/*/package-lock.json");
+	assert_eq!(value["plannedCommands"], 2);
+	assert_eq!(
+		value["matchedFiles"],
+		serde_json::json!(["packages/a/package-lock.json", "packages/b/package-lock.json"])
+	);
+	assert_eq!(value["tasks"], serde_json::json!(["packages/a", "packages/b"]));
+	let stderr = stderr_text(&output);
+	assert!(stderr.trim().is_empty(), "legacy dry-run json should not write stderr");
+}
+
+#[test]
+fn legacy_run_json_reports_execution_results() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+
+	let output = run_pullhook(
+		repo_root,
+		&[
+			"--pattern",
+			"packages/*/package-lock.json",
+			"--command",
+			"sh -c 'echo legacy-stdout; echo legacy-stderr >&2'",
+			"--once",
+			"--json",
+		],
+	);
+
+	assert!(output.status.success(), "legacy run json should succeed");
+	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse legacy run json");
+	assert_eq!(value["mode"], "run");
+	assert_eq!(value["summary"]["passed"], 1);
+	assert_eq!(value["summary"]["failed"], 0);
+	let results = value["results"].as_array().expect("results array");
+	assert_eq!(results.len(), 1);
+	assert_eq!(results[0]["cwd"], ".");
+	assert_eq!(results[0]["state"], "success");
+	assert_eq!(results[0]["outputs"][0]["stdout"], "legacy-stdout\n");
+	assert_eq!(results[0]["outputs"][0]["stderr"], "legacy-stderr\n");
+	let stderr = stderr_text(&output);
+	assert!(stderr.trim().is_empty(), "legacy run json should not write stderr");
+}
+
+#[test]
+fn legacy_run_json_reports_failures() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+
+	let output = run_pullhook(
+		repo_root,
+		&[
+			"--pattern",
+			"packages/*/package-lock.json",
+			"--command",
+			"sh -c 'echo nope >&2; exit 7'",
+			"--once",
+			"--json",
+		],
+	);
+
+	assert!(
+		!output.status.success(),
+		"legacy run json should fail on command failure"
+	);
+	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse failed legacy run json");
+	assert_eq!(value["summary"]["passed"], 0);
+	assert_eq!(value["summary"]["failed"], 1);
+	assert_eq!(value["results"][0]["state"], "failed");
+	let stderr = stderr_text(&output);
+	assert!(stderr.contains("1 task(s) failed"));
+}
+
+#[test]
+fn legacy_run_json_rejects_debug_mode() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+
+	let output = run_pullhook(
+		repo_root,
+		&[
+			"--pattern",
+			"packages/*/package-lock.json",
+			"--command",
+			"true",
+			"--json",
+			"--debug",
+		],
+	);
+
+	assert!(!output.status.success(), "legacy run json should reject debug mode");
+	let stderr = stderr_text(&output);
+	assert!(stderr.contains("--json cannot be used with --debug"));
+}
+
+#[test]
 fn completion_command_succeeds_outside_git_repo() {
 	let temp = tempfile::tempdir().expect("create temp dir");
 

@@ -112,6 +112,7 @@ Preview commands without executing:
 
 ```bash
 pullhook --pattern "**/*.rs" --command "cargo test" --dry-run
+pullhook --pattern "**/*.rs" --command "cargo test" --dry-run --json
 ```
 
 Generate shell completions:
@@ -237,6 +238,8 @@ health, diff-base availability, and `--install` detection in one pass. `explain 
 evaluated rule plan, including changed files, matched files, commands, and skip reasons. `run --json`
 adds real execution results, captured stdout/stderr, and a final summary. `run --dry-run --json` emits
 the same plan plus `plannedCommands`, which is handy for CI or editor integrations.
+
+Legacy top-level mode also supports `--json`, including live execution results and dry-run plans.
 
 Use `--config <path>` with `run`, `explain`, `validate`, or `doctor` when you want to point at a
 specific config file instead of repo-root discovery.
