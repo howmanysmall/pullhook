@@ -1534,7 +1534,7 @@ fn command_catalog_command(args: &CommandCatalogArgs) -> Result<()> {
 	println!();
 	for info in commands {
 		println!("{} [{}] {}", info.name, info.category, info.summary);
-		if let Some(example) = example_commands_for_command(info).first() {
+		for example in example_commands_for_command(info) {
 			println!("  example: {example}");
 		}
 	}

@@ -2420,6 +2420,7 @@ fn commands_text_lists_cli_catalog() {
 	assert!(stdout.contains("legacy one-off mode is available through top-level options"));
 	assert!(stdout.contains("run [workflow]"));
 	assert!(stdout.contains("example: pullhook run"));
+	assert!(stdout.contains("example: pullhook run --dry-run"));
 	assert!(stdout.contains("examples [reference]"));
 	assert!(stdout.contains("example: pullhook commands --json"));
 	assert!(stdout.contains("codes [reference]"));
