@@ -713,6 +713,7 @@ fn validate_config_command(args: &ValidateArgs) -> Result<()> {
 						None,
 						&error.to_string(),
 						&json_error_details(&error),
+						None,
 					))?
 				);
 				return Err(error);
@@ -727,6 +728,7 @@ fn validate_config_command(args: &ValidateArgs) -> Result<()> {
 						Some(&path),
 						&error.to_string(),
 						&config_load_error_details(&error),
+						Some(&error),
 					))?
 				);
 				return Err(anyhow!("config invalid"));
@@ -2092,15 +2094,29 @@ fn config_summary_json(config: &Config) -> serde_json::Value {
 	})
 }
 
-fn config_validation_error_json(path: Option<&std::path::Path>, error: &str, details: &[String]) -> serde_json::Value {
-	json!({
+fn config_validation_error_json(
+	path: Option<&std::path::Path>,
+	error: &str,
+	details: &[String],
+	config_error: Option<&error::PullhookError>,
+) -> serde_json::Value {
+	let mut value = json!({
 		"status": "error",
 		"valid": false,
 		"path": path.map(|path| path.display().to_string()),
 		"error": error,
 		"details": details,
 		"validationErrors": details,
-	})
+	});
+
+	if let Some(error::PullhookError::ConfigParse { path, reason }) = config_error {
+		value["parseError"] = json!({
+			"path": path,
+			"reason": reason,
+		});
+	}
+
+	value
 }
 
 fn init_plan_json(

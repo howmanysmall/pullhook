@@ -2174,6 +2174,42 @@ fn validate_json_reports_invalid_config_as_json() {
 }
 
 #[test]
+fn validate_json_reports_config_parse_errors_as_json() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_file(repo_root, Path::new("pullhook.json"), r#"{ "rules": [ "#);
+
+	let output = run_pullhook(repo_root, &["validate", "--json"]);
+
+	assert!(!output.status.success(), "unparseable config should fail");
+	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse validate json");
+	assert_eq!(value["status"], "error");
+	assert_eq!(value["valid"], false);
+	assert!(value["path"].as_str().expect("path").ends_with("pullhook.json"));
+	assert!(
+		value["error"]
+			.as_str()
+			.expect("error")
+			.contains("failed to parse config")
+	);
+	assert!(
+		value["parseError"]["path"]
+			.as_str()
+			.expect("parse path")
+			.ends_with("pullhook.json")
+	);
+	assert!(!value["parseError"]["reason"].as_str().expect("parse reason").is_empty());
+	let details = value["details"].as_array().expect("details array");
+	assert!(
+		details
+			.iter()
+			.any(|detail| detail.as_str().expect("detail") == value["parseError"]["reason"])
+	);
+	let stderr = stderr_text(&output);
+	assert!(stderr.contains("config invalid"));
+}
+
+#[test]
 fn validate_json_reports_missing_config_as_json() {
 	let temp = setup_repo_with_merge();
 	let repo_root = temp.path();
