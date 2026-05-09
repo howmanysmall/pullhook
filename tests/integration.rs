@@ -630,6 +630,7 @@ fn run_help_lists_json_examples() {
 	assert!(stdout.contains("pullhook run --matched-files-only"));
 	assert!(stdout.contains("pullhook run --matched-rules-only"));
 	assert!(stdout.contains("pullhook run --require-match --dry-run"));
+	assert!(stdout.contains("git diff --name-only HEAD~1 | pullhook run --changed-files-file - --dry-run"));
 	assert!(stdout.contains("pullhook run --config config/pullhook.custom.json --all-matches"));
 	assert!(stdout.contains("--no-color"));
 	assert!(stdout.contains("--quiet"));
@@ -670,6 +671,7 @@ fn explain_help_lists_summary_only_example() {
 	assert!(stdout.contains("pullhook explain --matched-files-only"));
 	assert!(stdout.contains("pullhook explain --matched-rules-only"));
 	assert!(stdout.contains("pullhook explain --require-match"));
+	assert!(stdout.contains("git diff --name-only HEAD~1 | pullhook explain --changed-files-file -"));
 	assert!(stdout.contains("--summary-only"));
 	assert!(stdout.contains("--commands-only"));
 	assert!(stdout.contains("--changed-files-only"));

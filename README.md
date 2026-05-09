@@ -126,6 +126,7 @@ pullhook rules --patterns-only
 pullhook schema --output .vscode/pullhook.schema.json
 pullhook schema --check --output .vscode/pullhook.schema.json
 pullhook explain --changed-file packages/a/package-lock.json
+git diff --name-only HEAD~1 | pullhook explain --changed-files-file -
 pullhook explain --summary-only
 pullhook explain --commands-only
 pullhook explain --changed-files-only
@@ -138,6 +139,7 @@ pullhook run --matched-files-only
 pullhook run --matched-rules-only
 pullhook run --require-match --dry-run
 pullhook run --changed-file packages/a/package-lock.json --dry-run
+git diff --name-only HEAD~1 | pullhook run --changed-files-file - --dry-run
 git diff --name-only HEAD~1 | pullhook run --changed-files-stdin --dry-run
 pullhook run --rule lint --dry-run
 ```

@@ -40,6 +40,7 @@ Examples:
   pullhook run --require-match --dry-run
   pullhook run --changed-file packages/a/package-lock.json --dry-run
   pullhook run --changed-files-file .pullhook-changed --dry-run
+  git diff --name-only HEAD~1 | pullhook run --changed-files-file - --dry-run
   git diff --name-only HEAD~1 | pullhook run --changed-files-stdin --dry-run
   pullhook run --rule lint --rule typecheck
   pullhook run --config config/pullhook.custom.json --all-matches";
@@ -50,6 +51,7 @@ Examples:
   pullhook explain --all-matches
   pullhook explain --changed-file packages/a/package-lock.json
   pullhook explain --changed-files-file .pullhook-changed
+  git diff --name-only HEAD~1 | pullhook explain --changed-files-file -
   git diff --name-only HEAD~1 | pullhook explain --changed-files-stdin
   pullhook explain --rule lint --all-matches
   pullhook explain --summary-only
