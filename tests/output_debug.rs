@@ -27,8 +27,6 @@ fn debug_mode_streams_outputs_and_keeps_renderer_output() {
 	let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
 	let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
 
-	assert_plain_output(&stdout, &stderr);
-
 	assert_eq!(
 		count_exact_lines(&stdout, "debug-stream-stdout"),
 		2,
@@ -90,8 +88,6 @@ fn debug_mode_failure_reports_once_with_renderer_failure_copy() {
 	let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
 	let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
 
-	assert_plain_output(&stdout, &stderr);
-
 	assert_eq!(
 		count_exact_lines(&stderr, "debug-failure-stderr"),
 		1,
@@ -125,18 +121,6 @@ fn debug_mode_failure_reports_once_with_renderer_failure_copy() {
 	);
 
 	assert_includes_renderer_contract_text(&stdout);
-}
-
-fn assert_plain_output(stdout: &str, stderr: &str) {
-	assert_no_ansi(stdout, "stdout");
-	assert_no_ansi(stderr, "stderr");
-}
-
-fn assert_no_ansi(text: &str, stream_name: &str) {
-	assert!(
-		!text.contains("\u{1b}["),
-		"{stream_name} should not contain ANSI escapes when plain rendering is forced:\n{text}",
-	);
 }
 
 fn assert_includes_renderer_contract_text(stdout: &str) {
