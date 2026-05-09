@@ -1054,6 +1054,52 @@ fn formats_search_filter_composes_with_init_commands_only() {
 }
 
 #[test]
+fn formats_descriptions_only_prints_clean_descriptions() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["formats", "--descriptions-only"]);
+
+	assert!(output.status.success(), "formats --descriptions-only should succeed");
+	let stdout = stdout_text(&output);
+	assert_eq!(
+		stdout.lines().collect::<Vec<_>>(),
+		vec![
+			"JSON config file.",
+			"JSON config file with comments.",
+			"YAML config file; .yml is not supported.",
+			"TOML config file."
+		]
+	);
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"formats --descriptions-only should not write stderr"
+	);
+}
+
+#[test]
+fn formats_search_filter_composes_with_descriptions_only() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["formats", "--search", "comment", "--descriptions-only"]);
+
+	assert!(
+		output.status.success(),
+		"formats --search comment --descriptions-only should succeed"
+	);
+	let stdout = stdout_text(&output);
+	assert_eq!(
+		stdout.lines().collect::<Vec<_>>(),
+		vec!["JSON config file with comments."]
+	);
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"formats --search comment --descriptions-only should not write stderr"
+	);
+}
+
+#[test]
 fn formats_script_outputs_conflict_with_json() {
 	let temp = tempfile::tempdir().expect("create temp dir");
 
@@ -1089,6 +1135,17 @@ fn formats_script_outputs_conflict_with_json() {
 	assert!(init_commands_stderr.contains("cannot be used with"));
 	assert!(init_commands_stderr.contains("--init-commands-only"));
 	assert!(init_commands_stderr.contains("--json"));
+
+	let descriptions_output = run_pullhook(temp.path(), &["formats", "--descriptions-only", "--json"]);
+
+	assert!(
+		!descriptions_output.status.success(),
+		"formats --descriptions-only should conflict with --json"
+	);
+	let descriptions_stderr = stderr_text(&descriptions_output);
+	assert!(descriptions_stderr.contains("cannot be used with"));
+	assert!(descriptions_stderr.contains("--descriptions-only"));
+	assert!(descriptions_stderr.contains("--json"));
 }
 
 #[test]
@@ -1097,7 +1154,10 @@ fn formats_line_outputs_conflict_with_each_other() {
 	let conflicting_modes: &[&[&str]] = &[
 		&["formats", "--init-commands-only", "--names-only"],
 		&["formats", "--init-commands-only", "--files-only"],
+		&["formats", "--init-commands-only", "--descriptions-only"],
 		&["formats", "--names-only", "--files-only"],
+		&["formats", "--names-only", "--descriptions-only"],
+		&["formats", "--files-only", "--descriptions-only"],
 	];
 
 	for args in conflicting_modes {
@@ -4054,6 +4114,7 @@ fn utility_help_groups_options_by_task() {
 	assert!(formats_stdout.contains("pullhook formats --names-only"));
 	assert!(formats_stdout.contains("pullhook formats --files-only"));
 	assert!(formats_stdout.contains("pullhook formats --init-commands-only"));
+	assert!(formats_stdout.contains("pullhook formats --descriptions-only"));
 	assert!(formats_stdout.contains("pullhook formats --json"));
 
 	let managers = run_pullhook(temp.path(), &["managers", "--help"]);

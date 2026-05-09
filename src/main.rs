@@ -965,6 +965,13 @@ fn formats_command(args: &FormatsArgs) -> Result<()> {
 		return Ok(());
 	}
 
+	if args.output.descriptions_only {
+		for format in formats {
+			println!("{}", format.description);
+		}
+		return Ok(());
+	}
+
 	println!("Config formats");
 	println!("discovery order:");
 	for name in config_names {

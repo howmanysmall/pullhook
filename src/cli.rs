@@ -157,6 +157,7 @@ Examples:
   pullhook formats --names-only
   pullhook formats --files-only
   pullhook formats --init-commands-only
+  pullhook formats --descriptions-only
   pullhook formats --json";
 
 const MANAGERS_AFTER_HELP: &str = "\
@@ -1123,7 +1124,7 @@ pub struct FormatsArgs {
 	#[arg(
 		long = "json",
 		default_value_t = false,
-		conflicts_with_all = ["names_only", "files_only", "init_commands_only"],
+		conflicts_with_all = ["names_only", "files_only", "init_commands_only", "descriptions_only"],
 		help_heading = "Output options"
 	)]
 	pub json: bool,
@@ -1134,12 +1135,16 @@ pub struct FormatsArgs {
 
 /// Line-output mode arguments for `pullhook formats`.
 #[derive(Debug, Clone, Args)]
+#[expect(
+	clippy::struct_excessive_bools,
+	reason = "clap line-output flags are clearer as independent switches"
+)]
 pub struct FormatsLineOutputArgs {
 	/// Print only config format names, one per line.
 	#[arg(
 		long = "names-only",
 		default_value_t = false,
-		conflicts_with_all = ["json", "files_only", "init_commands_only"],
+		conflicts_with_all = ["json", "files_only", "init_commands_only", "descriptions_only"],
 		help_heading = "Output options"
 	)]
 	pub names_only: bool,
@@ -1148,7 +1153,7 @@ pub struct FormatsLineOutputArgs {
 	#[arg(
 		long = "files-only",
 		default_value_t = false,
-		conflicts_with_all = ["json", "names_only", "init_commands_only"],
+		conflicts_with_all = ["json", "names_only", "init_commands_only", "descriptions_only"],
 		help_heading = "Output options"
 	)]
 	pub files_only: bool,
@@ -1157,10 +1162,19 @@ pub struct FormatsLineOutputArgs {
 	#[arg(
 		long = "init-commands-only",
 		default_value_t = false,
-		conflicts_with_all = ["json", "names_only", "files_only"],
+		conflicts_with_all = ["json", "names_only", "files_only", "descriptions_only"],
 		help_heading = "Output options"
 	)]
 	pub init_commands_only: bool,
+
+	/// Print only config format descriptions, one per line.
+	#[arg(
+		long = "descriptions-only",
+		default_value_t = false,
+		conflicts_with_all = ["json", "names_only", "files_only", "init_commands_only"],
+		help_heading = "Output options"
+	)]
+	pub descriptions_only: bool,
 }
 
 /// Arguments for `pullhook managers`.
