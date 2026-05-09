@@ -1373,11 +1373,13 @@ fn result_for_output<T>(result: Result<T>, json_output: bool) -> Result<T> {
 }
 
 fn print_json_error(error: &anyhow::Error) -> Result<()> {
+	let details = error.chain().skip(1).map(ToString::to_string).collect::<Vec<_>>();
 	println!(
 		"{}",
 		serde_json::to_string_pretty(&json!({
 			"status": "error",
 			"error": error.to_string(),
+			"details": details,
 		}))?
 	);
 	Ok(())

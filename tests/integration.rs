@@ -312,6 +312,41 @@ fn legacy_json_reports_diff_base_errors_as_json() {
 }
 
 #[test]
+fn legacy_json_reports_command_parse_errors_as_json() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+
+	let output = run_pullhook(
+		repo_root,
+		&[
+			"--pattern",
+			"packages/*/package-lock.json",
+			"--command",
+			"sh -c 'echo nope",
+			"--json",
+		],
+	);
+
+	assert!(
+		!output.status.success(),
+		"legacy --json should fail for invalid commands"
+	);
+	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse command error json");
+	assert_eq!(value["status"], "error");
+	assert_eq!(value["error"], "failed to prepare command invocations");
+	let details = value["details"].as_array().expect("details array");
+	assert!(details.iter().any(|detail| {
+		detail
+			.as_str()
+			.expect("detail")
+			.contains("invalid command `sh -c 'echo nope`")
+	}));
+	let stderr = stderr_text(&output);
+	assert!(stderr.contains("failed to prepare command invocations"));
+	assert!(stderr.contains("invalid command `sh -c 'echo nope`"));
+}
+
+#[test]
 fn legacy_run_json_rejects_debug_mode() {
 	let temp = setup_repo_with_merge();
 	let repo_root = temp.path();
