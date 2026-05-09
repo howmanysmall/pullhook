@@ -4925,6 +4925,7 @@ fn utility_help_groups_options_by_task() {
 	assert!(shells.status.success(), "shells help should succeed");
 	let shells_stdout = stdout_text(&shells);
 	assert!(shells_stdout.contains("Output options:"));
+	assert!(shells_stdout.contains("Print JSON with filters and searchFields metadata"));
 	assert!(shells_stdout.contains("pullhook shells --search fish"));
 	assert!(shells_stdout.contains("pullhook shells --names-only"));
 	assert!(shells_stdout.contains("pullhook shells --commands-only"));
@@ -4935,6 +4936,7 @@ fn utility_help_groups_options_by_task() {
 	assert!(formats.status.success(), "formats help should succeed");
 	let formats_stdout = stdout_text(&formats);
 	assert!(formats_stdout.contains("Output options:"));
+	assert!(formats_stdout.contains("Print JSON with filters and searchFields metadata"));
 	assert!(formats_stdout.contains("pullhook formats --search yaml"));
 	assert!(formats_stdout.contains("pullhook formats --names-only"));
 	assert!(formats_stdout.contains("pullhook formats --files-only"));
@@ -4946,6 +4948,7 @@ fn utility_help_groups_options_by_task() {
 	assert!(managers.status.success(), "managers help should succeed");
 	let managers_stdout = stdout_text(&managers);
 	assert!(managers_stdout.contains("Output options:"));
+	assert!(managers_stdout.contains("Print JSON with filters and searchFields metadata"));
 	assert!(managers_stdout.contains("pullhook managers --search pnpm"));
 	assert!(managers_stdout.contains("pullhook managers --names-only"));
 	assert!(managers_stdout.contains("pullhook managers --patterns-only"));
@@ -4959,6 +4962,7 @@ fn utility_help_groups_options_by_task() {
 	assert!(categories.status.success(), "categories help should succeed");
 	let categories_stdout = stdout_text(&categories);
 	assert!(categories_stdout.contains("Output options:"));
+	assert!(categories_stdout.contains("Print JSON with filters and searchFields metadata"));
 	assert!(categories_stdout.contains("pullhook categories --search workflow"));
 	assert!(categories_stdout.contains("pullhook categories --names-only"));
 	assert!(categories_stdout.contains("pullhook categories --commands-only"));
@@ -4971,6 +4975,7 @@ fn utility_help_groups_options_by_task() {
 	let examples_stdout = stdout_text(&examples);
 	assert!(examples_stdout.contains("Filter options:"));
 	assert!(examples_stdout.contains("Output options:"));
+	assert!(examples_stdout.contains("Print JSON with filters and searchFields metadata"));
 	assert!(examples_stdout.contains("pullhook examples --command run"));
 	assert!(examples_stdout.contains("pullhook examples --category workflow"));
 	assert!(examples_stdout.contains("pullhook examples --search install"));
@@ -4990,6 +4995,7 @@ fn utility_help_groups_options_by_task() {
 	let codes_stdout = stdout_text(&codes);
 	assert!(codes_stdout.contains("Filter options:"));
 	assert!(codes_stdout.contains("Output options:"));
+	assert!(codes_stdout.contains("Print JSON with filters and searchFields metadata"));
 	assert!(codes_stdout.contains("pullhook codes --surface run"));
 	assert!(codes_stdout.contains("pullhook codes --search config"));
 	assert!(codes_stdout.contains("pullhook codes --kinds-only"));
@@ -5007,6 +5013,7 @@ fn commands_help_describes_search_and_output_modes() {
 	let commands_stdout = stdout_text(&commands);
 	assert!(commands_stdout.contains("Filter options:"));
 	assert!(commands_stdout.contains("Output options:"));
+	assert!(commands_stdout.contains("Print JSON with filters and searchFields metadata"));
 	assert!(commands_stdout.contains("name, category, summary, or examples"));
 	assert!(commands_stdout.contains("pullhook commands --category diagnostic"));
 	assert!(commands_stdout.contains("pullhook commands --category diagnostic --names-only"));

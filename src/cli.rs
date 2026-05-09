@@ -1222,7 +1222,7 @@ pub struct ShellsArgs {
 	#[arg(long = "search", value_name = "TEXT", help_heading = "Filter options")]
 	pub search: Option<String>,
 
-	/// Print machine-readable JSON instead of text output.
+	/// Print JSON with filters and searchFields metadata.
 	#[arg(
 		long = "json",
 		default_value_t = false,
@@ -1267,7 +1267,7 @@ pub struct FormatsArgs {
 	#[arg(long = "search", value_name = "TEXT", help_heading = "Filter options")]
 	pub search: Option<String>,
 
-	/// Print machine-readable JSON instead of text output.
+	/// Print JSON with filters and searchFields metadata.
 	#[arg(
 		long = "json",
 		default_value_t = false,
@@ -1332,7 +1332,7 @@ pub struct ManagersArgs {
 	#[arg(long = "search", value_name = "TEXT", help_heading = "Filter options")]
 	pub search: Option<String>,
 
-	/// Print machine-readable JSON instead of text output.
+	/// Print JSON with filters and searchFields metadata.
 	#[arg(
 		long = "json",
 		default_value_t = false,
@@ -1468,7 +1468,7 @@ pub struct CategoriesArgs {
 	#[arg(long = "search", value_name = "TEXT", help_heading = "Filter options")]
 	pub search: Option<String>,
 
-	/// Print machine-readable JSON instead of text output.
+	/// Print JSON with filters and searchFields metadata.
 	#[arg(
 		long = "json",
 		default_value_t = false,
@@ -1530,7 +1530,7 @@ pub struct CodesArgs {
 	#[arg(long = "search", value_name = "TEXT", help_heading = "Filter options")]
 	pub search: Option<String>,
 
-	/// Print machine-readable JSON instead of text output.
+	/// Print JSON with filters and searchFields metadata.
 	#[arg(
 		long = "json",
 		default_value_t = false,
@@ -1612,7 +1612,7 @@ pub struct CommandCatalogArgs {
 	#[command(flatten)]
 	pub filters: CommandCatalogFilterArgs,
 
-	/// Print machine-readable JSON instead of text output.
+	/// Print JSON with filters and searchFields metadata.
 	#[arg(
 		long = "json",
 		default_value_t = false,
@@ -1707,7 +1707,7 @@ pub struct ExamplesArgs {
 	#[arg(long = "search", value_name = "TEXT", help_heading = "Filter options")]
 	pub search: Option<String>,
 
-	/// Print machine-readable JSON instead of text output.
+	/// Print JSON with filters and searchFields metadata.
 	#[arg(
 		long = "json",
 		default_value_t = false,
