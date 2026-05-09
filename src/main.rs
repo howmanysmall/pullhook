@@ -1537,41 +1537,9 @@ fn print_json_error(error: &anyhow::Error) -> Result<()> {
 		);
 		return Ok(());
 	}
-	if let Some(package_manager_error) = pullhook_error {
-		match package_manager_error {
-			error::PullhookError::PackageManagerDetection { source, .. } => match source.as_ref() {
-				error::PullhookError::PackageManagerNotFound { root } => {
-					println!(
-						"{}",
-						serde_json::to_string_pretty(&package_manager_not_found_json(error, &details, root))?
-					);
-					return Ok(());
-				}
-				error::PullhookError::AmbiguousPackageManagers { found } => {
-					println!(
-						"{}",
-						serde_json::to_string_pretty(&ambiguous_package_managers_json(error, &details, found))?
-					);
-					return Ok(());
-				}
-				_ => {}
-			},
-			error::PullhookError::PackageManagerNotFound { root } => {
-				println!(
-					"{}",
-					serde_json::to_string_pretty(&package_manager_not_found_json(error, &details, root))?
-				);
-				return Ok(());
-			}
-			error::PullhookError::AmbiguousPackageManagers { found } => {
-				println!(
-					"{}",
-					serde_json::to_string_pretty(&ambiguous_package_managers_json(error, &details, found))?
-				);
-				return Ok(());
-			}
-			_ => {}
-		}
+	if let Some(value) = pullhook_error.and_then(|error_kind| package_manager_error_json(error, &details, error_kind)) {
+		println!("{}", serde_json::to_string_pretty(&value)?);
+		return Ok(());
 	}
 	if let Some(error::PullhookError::Pattern { pattern, reason }) = pullhook_error {
 		println!(
@@ -1603,6 +1571,25 @@ fn find_pullhook_error(error: &anyhow::Error) -> Option<&error::PullhookError> {
 	error
 		.chain()
 		.find_map(|cause| cause.downcast_ref::<error::PullhookError>())
+}
+
+fn package_manager_error_json(
+	error: &anyhow::Error,
+	details: &[String],
+	error_kind: &error::PullhookError,
+) -> Option<serde_json::Value> {
+	match error_kind {
+		error::PullhookError::PackageManagerDetection { source, .. } => {
+			package_manager_error_json(error, details, source)
+		}
+		error::PullhookError::PackageManagerNotFound { root } => {
+			Some(package_manager_not_found_json(error, details, root))
+		}
+		error::PullhookError::AmbiguousPackageManagers { found } => {
+			Some(ambiguous_package_managers_json(error, details, found))
+		}
+		_ => None,
+	}
 }
 
 fn package_manager_not_found_json(error: &anyhow::Error, details: &[String], root: &str) -> serde_json::Value {
