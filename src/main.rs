@@ -805,6 +805,7 @@ fn config_command(args: &ConfigArgs) -> Result<()> {
 				"{}",
 				serde_json::to_string_pretty(&json!({
 					"status": "error",
+					"code": "config_path_missing",
 					"path": path.display().to_string(),
 					"format": format.label(),
 					"exists": false,
@@ -832,6 +833,7 @@ fn config_command(args: &ConfigArgs) -> Result<()> {
 			"{}",
 			serde_json::to_string_pretty(&json!({
 				"status": "ok",
+				"code": null,
 				"path": path.display().to_string(),
 				"format": format.label(),
 				"exists": exists,

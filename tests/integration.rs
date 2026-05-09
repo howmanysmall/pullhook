@@ -1736,6 +1736,7 @@ fn config_json_reports_discovered_config_path_without_validating_contents() {
 	);
 	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse config json");
 	assert_eq!(value["status"], "ok");
+	assert_eq!(value["code"], serde_json::Value::Null);
 	assert!(value["path"].as_str().expect("path").ends_with("pullhook.json"));
 	assert_eq!(value["format"], "json");
 	assert_eq!(value["exists"], true);
@@ -1844,6 +1845,7 @@ fn config_require_existing_json_reports_missing_config_path_as_json() {
 	);
 	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse config error json");
 	assert_eq!(value["status"], "error");
+	assert_eq!(value["code"], "config_path_missing");
 	assert_eq!(value["format"], "yaml");
 	assert_eq!(value["exists"], false);
 	assert_eq!(value["explicit"], true);
