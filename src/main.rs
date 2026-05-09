@@ -1522,6 +1522,7 @@ fn result_for_output<T>(result: Result<T>, json_output: bool) -> Result<T> {
 
 fn print_json_error(error: &anyhow::Error) -> Result<()> {
 	let details = json_error_details(error);
+	let pullhook_error = find_pullhook_error(error);
 	if let Some(selector_error) = error.downcast_ref::<UnknownSelectorError>() {
 		println!(
 			"{}",
@@ -1536,14 +1537,50 @@ fn print_json_error(error: &anyhow::Error) -> Result<()> {
 		);
 		return Ok(());
 	}
-	if let Some(error::PullhookError::Pattern { pattern, reason }) = error.downcast_ref::<error::PullhookError>() {
+	if let Some(package_manager_error) = pullhook_error {
+		match package_manager_error {
+			error::PullhookError::PackageManagerDetection { source, .. } => match source.as_ref() {
+				error::PullhookError::PackageManagerNotFound { root } => {
+					println!(
+						"{}",
+						serde_json::to_string_pretty(&package_manager_not_found_json(error, &details, root))?
+					);
+					return Ok(());
+				}
+				error::PullhookError::AmbiguousPackageManagers { found } => {
+					println!(
+						"{}",
+						serde_json::to_string_pretty(&ambiguous_package_managers_json(error, &details, found))?
+					);
+					return Ok(());
+				}
+				_ => {}
+			},
+			error::PullhookError::PackageManagerNotFound { root } => {
+				println!(
+					"{}",
+					serde_json::to_string_pretty(&package_manager_not_found_json(error, &details, root))?
+				);
+				return Ok(());
+			}
+			error::PullhookError::AmbiguousPackageManagers { found } => {
+				println!(
+					"{}",
+					serde_json::to_string_pretty(&ambiguous_package_managers_json(error, &details, found))?
+				);
+				return Ok(());
+			}
+			_ => {}
+		}
+	}
+	if let Some(error::PullhookError::Pattern { pattern, reason }) = pullhook_error {
 		println!(
 			"{}",
 			serde_json::to_string_pretty(&pattern_error_json(error, &details, pattern, reason))?
 		);
 		return Ok(());
 	}
-	if let Some(error::PullhookError::CommandParse { command, reason }) = error.downcast_ref::<error::PullhookError>() {
+	if let Some(error::PullhookError::CommandParse { command, reason }) = pullhook_error {
 		println!(
 			"{}",
 			serde_json::to_string_pretty(&command_parse_error_json(error, &details, command, reason))?
@@ -1560,6 +1597,36 @@ fn print_json_error(error: &anyhow::Error) -> Result<()> {
 		}))?
 	);
 	Ok(())
+}
+
+fn find_pullhook_error(error: &anyhow::Error) -> Option<&error::PullhookError> {
+	error
+		.chain()
+		.find_map(|cause| cause.downcast_ref::<error::PullhookError>())
+}
+
+fn package_manager_not_found_json(error: &anyhow::Error, details: &[String], root: &str) -> serde_json::Value {
+	json!({
+		"status": "error",
+		"error": error.to_string(),
+		"details": details,
+		"packageManagerError": {
+			"kind": "not_found",
+			"root": root,
+		},
+	})
+}
+
+fn ambiguous_package_managers_json(error: &anyhow::Error, details: &[String], found: &[&str]) -> serde_json::Value {
+	json!({
+		"status": "error",
+		"error": error.to_string(),
+		"details": details,
+		"packageManagerError": {
+			"kind": "ambiguous",
+			"found": found,
+		},
+	})
 }
 
 fn pattern_error_json(error: &anyhow::Error, details: &[String], pattern: &str, reason: &str) -> serde_json::Value {
@@ -1641,6 +1708,10 @@ fn json_error_details(error: &anyhow::Error) -> Vec<String> {
 		details.push("rerun from inside a Git working tree".to_owned());
 		details.push("or initialize a repository with `git init` before running pullhook".to_owned());
 	}
+	if message.starts_with("failed to detect package manager") {
+		details.push("add a supported package-manager lockfile at the repo root".to_owned());
+		details.push("or pass explicit `--pattern <glob>` and `--command <cmd>` instead of `--install`".to_owned());
+	}
 	if !details.is_empty() {
 		return details;
 	}
@@ -1649,12 +1720,6 @@ fn json_error_details(error: &anyhow::Error) -> Vec<String> {
 		return vec![
 			format!("run `pullhook init` to create {}", config::config_names()[0]),
 			"use `--config <path>` to point at a custom config file".to_owned(),
-		];
-	}
-	if message.starts_with("failed to detect package manager") {
-		return vec![
-			"add a supported package-manager lockfile at the repo root".to_owned(),
-			"or pass explicit `--pattern <glob>` and `--command <cmd>` instead of `--install`".to_owned(),
 		];
 	}
 	if message.starts_with("missing required argument") {
@@ -3045,8 +3110,11 @@ fn resolve_run_config(cli: &RunArgs, repo_root: &std::path::Path) -> Result<RunC
 }
 
 fn resolve_install_plan(repo_root: &std::path::Path, error_context: &str) -> Result<InstallPlan, error::PullhookError> {
-	let package_manager = detect_package_manager(repo_root)
-		.map_err(|error| error::PullhookError::Message(format!("{error_context}: {error}")))?;
+	let package_manager =
+		detect_package_manager(repo_root).map_err(|error| error::PullhookError::PackageManagerDetection {
+			context: error_context.to_owned(),
+			source: Box::new(error),
+		})?;
 
 	Ok(InstallPlan {
 		package_manager: package_manager.name(),

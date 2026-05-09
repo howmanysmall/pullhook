@@ -108,13 +108,70 @@ fn install_json_reports_package_manager_detection_failure_details() {
 			.expect("error")
 			.contains("failed to detect package manager for --install")
 	);
-	assert_eq!(
-		value["details"],
-		serde_json::json!([
-			"add a supported package-manager lockfile at the repo root",
-			"or pass explicit `--pattern <glob>` and `--command <cmd>` instead of `--install`"
-		])
+	let details = value["details"].as_array().expect("details array");
+	assert!(details.iter().any(|detail| {
+		detail
+			.as_str()
+			.expect("detail")
+			.contains("no supported package manager files found")
+	}));
+	assert!(
+		details
+			.iter()
+			.any(|detail| detail.as_str().expect("detail")
+				== "add a supported package-manager lockfile at the repo root")
 	);
+	assert!(details.iter().any(|detail| {
+		detail.as_str().expect("detail")
+			== "or pass explicit `--pattern <glob>` and `--command <cmd>` instead of `--install`"
+	}));
+	assert_eq!(value["packageManagerError"]["kind"], "not_found");
+	assert!(
+		value["packageManagerError"]["root"]
+			.as_str()
+			.expect("package manager root")
+			.ends_with(
+				repo_root
+					.file_name()
+					.expect("temp dir name")
+					.to_str()
+					.expect("utf8 temp dir name")
+			)
+	);
+	let stderr = stderr_text(&output);
+	assert!(stderr.contains("failed to detect package manager for --install"));
+}
+
+#[test]
+fn install_json_reports_ambiguous_package_managers() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_file(repo_root, Path::new("bun.lock"), "");
+	write_file(repo_root, Path::new("package-lock.json"), "{}\n");
+
+	let output = run_pullhook(repo_root, &["--install", "--dry-run", "--json"]);
+
+	assert!(
+		!output.status.success(),
+		"--install --json should fail when root lockfiles are ambiguous"
+	);
+	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse install error json");
+	assert_eq!(value["status"], "error");
+	assert!(
+		value["error"]
+			.as_str()
+			.expect("error")
+			.contains("failed to detect package manager for --install")
+	);
+	assert_eq!(value["packageManagerError"]["kind"], "ambiguous");
+	assert_eq!(value["packageManagerError"]["found"], serde_json::json!(["bun", "npm"]));
+	let details = value["details"].as_array().expect("details array");
+	assert!(details.iter().any(|detail| {
+		detail
+			.as_str()
+			.expect("detail")
+			.contains("multiple package managers detected")
+	}));
 	let stderr = stderr_text(&output);
 	assert!(stderr.contains("failed to detect package manager for --install"));
 }

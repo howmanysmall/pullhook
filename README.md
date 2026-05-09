@@ -368,6 +368,7 @@ that custom file.
 
 If conflicting lockfiles are present, `pullhook` errors and asks for explicit `--pattern`/`--command`.
 `--install --json` detection errors include recovery details for missing or ambiguous repo-root package-manager files.
+They also include a `packageManagerError` object with either the searched repo root or the ambiguous package-manager names.
 
 `aube` also watches the common JavaScript lockfiles, since changing any of them can require a fresh `aube install`.
 

@@ -41,6 +41,16 @@ pub enum PullhookError {
 	#[error("unable to resolve diff base; use --base <rev> to override")]
 	DiffBaseUnavailable,
 
+	/// Package manager detection failed while resolving install behavior.
+	#[error("{context}: {source}")]
+	PackageManagerDetection {
+		/// Human-friendly command context.
+		context: String,
+		/// Underlying package manager detection error.
+		#[source]
+		source: Box<Self>,
+	},
+
 	/// Glob pattern parsing or compilation error.
 	#[error("invalid pattern `{pattern}`: {reason}")]
 	Pattern {
