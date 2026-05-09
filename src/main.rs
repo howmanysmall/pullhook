@@ -520,6 +520,22 @@ fn config_command(args: &ConfigArgs) -> Result<()> {
 	let format = config::ConfigFormat::from_path(&path)?;
 	let explicit = args.config.is_some();
 	let exists = path.is_file();
+	if args.require_existing && !exists {
+		if args.json {
+			println!(
+				"{}",
+				serde_json::to_string_pretty(&json!({
+					"path": path.display().to_string(),
+					"format": format.label(),
+					"exists": false,
+					"explicit": explicit,
+					"repoRoot": repo_root.display().to_string(),
+					"error": "resolved config file does not exist",
+				}))?
+			);
+		}
+		return Err(anyhow!("resolved config file does not exist: {}", path.display()));
+	}
 
 	if args.path_only {
 		println!("{}", path.display());

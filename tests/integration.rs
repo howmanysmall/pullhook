@@ -605,6 +605,65 @@ fn config_text_reports_explicit_missing_config_path() {
 }
 
 #[test]
+fn config_require_existing_rejects_explicit_missing_config_path() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+
+	let output = run_pullhook(
+		repo_root,
+		&[
+			"config",
+			"--config",
+			"config/pullhook.custom.yaml",
+			"--require-existing",
+			"--path-only",
+		],
+	);
+
+	assert!(
+		!output.status.success(),
+		"config --require-existing should reject missing paths"
+	);
+	let stdout = stdout_text(&output);
+	assert!(
+		stdout.trim().is_empty(),
+		"failed path-only config should not write stdout"
+	);
+	let stderr = stderr_text(&output);
+	assert!(stderr.contains("resolved config file does not exist"));
+	assert!(stderr.contains("config/pullhook.custom.yaml"));
+}
+
+#[test]
+fn config_require_existing_json_reports_missing_config_path_as_json() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+
+	let output = run_pullhook(
+		repo_root,
+		&[
+			"config",
+			"--config",
+			"config/pullhook.custom.yaml",
+			"--require-existing",
+			"--json",
+		],
+	);
+
+	assert!(
+		!output.status.success(),
+		"config --require-existing --json should reject missing paths"
+	);
+	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse config error json");
+	assert_eq!(value["format"], "yaml");
+	assert_eq!(value["exists"], false);
+	assert_eq!(value["explicit"], true);
+	assert_eq!(value["error"], "resolved config file does not exist");
+	let stderr = stderr_text(&output);
+	assert!(stderr.contains("resolved config file does not exist"));
+}
+
+#[test]
 fn init_refuses_to_overwrite_existing_config_without_force() {
 	let temp = setup_repo_with_merge();
 	let repo_root = temp.path();

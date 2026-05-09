@@ -65,6 +65,7 @@ const CONFIG_AFTER_HELP: &str = "\
 Examples:
   pullhook config
   pullhook config --path-only
+  pullhook config --require-existing --path-only
   pullhook config --json
   pullhook config --config config/pullhook.custom.json";
 
@@ -405,6 +406,10 @@ pub struct ConfigArgs {
 	/// Print machine-readable JSON instead of text output.
 	#[arg(long = "json", default_value_t = false)]
 	pub json: bool,
+
+	/// Exit non-zero if the resolved config file does not exist.
+	#[arg(long = "require-existing", default_value_t = false)]
+	pub require_existing: bool,
 
 	/// Enable debug logging.
 	#[arg(short = 'd', long = "debug", default_value_t = false)]

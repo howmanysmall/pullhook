@@ -225,6 +225,7 @@ Run configured rules:
 pullhook validate --config config/pullhook.ci.json
 pullhook config
 pullhook config --path-only
+pullhook config --require-existing --path-only
 pullhook config --json
 pullhook validate
 pullhook validate --json
@@ -259,6 +260,7 @@ Placeholders render in every mode.
 
 `pullhook config` shows the config path and format that pullhook will use without parsing the file.
 Use `pullhook config --path-only` when a script needs the resolved path as one clean line.
+Add `--require-existing` when that script should fail instead of returning a planned-but-missing config path.
 `pullhook schema` prints the config JSON Schema, and `pullhook schema --output <path>` writes it for editor setup.
 `validate --json` emits a compact config summary for scripts and still prints structured JSON when the
 config is invalid. `doctor` checks repo discovery, config health, diff-base availability, and `--install`
