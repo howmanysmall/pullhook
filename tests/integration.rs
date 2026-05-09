@@ -3148,6 +3148,8 @@ fn rules_help_lists_script_friendly_output_modes() {
 	assert!(stdout.contains("pullhook rules --names-only"));
 	assert!(stdout.contains("pullhook rules --commands-only"));
 	assert!(stdout.contains("pullhook rules --patterns-only"));
+	assert!(stdout.contains("pullhook rules --exclude-patterns-only"));
+	assert!(stdout.contains("pullhook rules --rule lint --exclude-patterns-only"));
 	assert!(stdout.contains("pullhook rules --rule lint --json"));
 	assert!(stdout.contains("Input options:"));
 	assert!(stdout.contains("Output options:"));
@@ -3742,6 +3744,7 @@ fn rules_patterns_only_conflicts_with_other_output_modes() {
 		&["rules", "--patterns-only", "--json"],
 		&["rules", "--patterns-only", "--names-only"],
 		&["rules", "--patterns-only", "--commands-only"],
+		&["rules", "--patterns-only", "--exclude-patterns-only"],
 	];
 
 	for args in conflicting_modes {
@@ -3754,6 +3757,29 @@ fn rules_patterns_only_conflicts_with_other_output_modes() {
 		let stderr = stderr_text(&output);
 		assert!(stderr.contains("cannot be used with"));
 		assert!(stderr.contains("--patterns-only"));
+	}
+}
+
+#[test]
+fn rules_exclude_patterns_only_conflicts_with_other_output_modes() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+	let conflicting_modes: &[&[&str]] = &[
+		&["rules", "--exclude-patterns-only", "--json"],
+		&["rules", "--exclude-patterns-only", "--names-only"],
+		&["rules", "--exclude-patterns-only", "--commands-only"],
+		&["rules", "--exclude-patterns-only", "--patterns-only"],
+	];
+
+	for args in conflicting_modes {
+		let output = run_pullhook(temp.path(), args);
+
+		assert!(
+			!output.status.success(),
+			"rules --exclude-patterns-only should conflict for args {args:?}"
+		);
+		let stderr = stderr_text(&output);
+		assert!(stderr.contains("cannot be used with"));
+		assert!(stderr.contains("--exclude-patterns-only"));
 	}
 }
 
@@ -5718,6 +5744,156 @@ fn rules_patterns_only_respects_rule_selector_filter() {
 	assert!(
 		stderr.trim().is_empty(),
 		"rules --rule test --patterns-only should not write stderr"
+	);
+}
+
+#[test]
+fn rules_exclude_patterns_only_prints_configured_exclude_patterns() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_file(
+		repo_root,
+		Path::new("pullhook.json"),
+		r#"{
+  "rules": [
+    {
+      "name": "install dependencies",
+      "install": true
+    },
+    {
+      "name": "format",
+      "changed": "packages/a/package-lock.json",
+      "exclude": "packages/a/generated/**",
+      "run": "cargo fmt --all"
+    },
+    {
+      "name": "checks",
+      "parallel": [
+        {
+          "name": "lint",
+          "changed": "packages/b/package-lock.json",
+          "exclude": "packages/b/generated/**",
+          "run": "cargo clippy --all-targets"
+        },
+        {
+          "name": "test",
+          "changed": ["src/**/*.rs", "tests/**/*.rs"],
+          "exclude": ["src/generated/**", "tests/fixtures/**"],
+          "run": "cargo nextest run"
+        }
+      ]
+    }
+  ]
+}
+"#,
+	);
+
+	let output = run_pullhook(repo_root, &["rules", "--exclude-patterns-only"]);
+
+	assert!(output.status.success(), "rules --exclude-patterns-only should succeed");
+	let stdout = stdout_text(&output);
+	assert_eq!(
+		stdout,
+		"packages/a/generated/**\npackages/b/generated/**\nsrc/generated/**\ntests/fixtures/**\n"
+	);
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"rules --exclude-patterns-only should not write stderr"
+	);
+}
+
+#[test]
+fn rules_exclude_patterns_only_respects_kind_filter() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_file(
+		repo_root,
+		Path::new("pullhook.json"),
+		r#"{
+  "rules": [
+    {
+      "name": "install dependencies",
+      "install": true
+    },
+    {
+      "name": "format",
+      "changed": "packages/a/package-lock.json",
+      "exclude": "packages/a/generated/**",
+      "run": "cargo fmt --all"
+    }
+  ]
+}
+"#,
+	);
+
+	let output = run_pullhook(repo_root, &["rules", "--kind", "install", "--exclude-patterns-only"]);
+
+	assert!(
+		output.status.success(),
+		"rules --kind install --exclude-patterns-only should succeed"
+	);
+	let stdout = stdout_text(&output);
+	assert!(
+		stdout.trim().is_empty(),
+		"install rules without configured exclude patterns should print no patterns"
+	);
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"rules --kind install --exclude-patterns-only should not write stderr"
+	);
+}
+
+#[test]
+fn rules_exclude_patterns_only_respects_rule_selector_filter() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_file(
+		repo_root,
+		Path::new("pullhook.json"),
+		r#"{
+  "rules": [
+    {
+      "name": "format",
+      "changed": "packages/a/package-lock.json",
+      "exclude": "packages/a/generated/**",
+      "run": "cargo fmt --all"
+    },
+    {
+      "name": "checks",
+      "parallel": [
+        {
+          "name": "lint",
+          "changed": "packages/b/package-lock.json",
+          "exclude": "packages/b/generated/**",
+          "run": "cargo clippy --all-targets"
+        },
+        {
+          "name": "test",
+          "changed": ["src/**/*.rs", "tests/**/*.rs"],
+          "exclude": ["src/generated/**", "tests/fixtures/**"],
+          "run": "cargo nextest run"
+        }
+      ]
+    }
+  ]
+}
+"#,
+	);
+
+	let output = run_pullhook(repo_root, &["rules", "--rule", "test", "--exclude-patterns-only"]);
+
+	assert!(
+		output.status.success(),
+		"rules --rule test --exclude-patterns-only should succeed"
+	);
+	let stdout = stdout_text(&output);
+	assert_eq!(stdout, "src/generated/**\ntests/fixtures/**\n");
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"rules --rule test --exclude-patterns-only should not write stderr"
 	);
 }
 

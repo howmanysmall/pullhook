@@ -2191,6 +2191,13 @@ fn rules_command(args: &RulesArgs) -> Result<()> {
 		return Ok(());
 	}
 
+	if args.exclude_patterns_only {
+		for pattern in collect_config_rule_exclude_patterns_for_kind(&config, args.kind) {
+			println!("{pattern}");
+		}
+		return Ok(());
+	}
+
 	renderer.render_message_stage(&format!("config: {}", config.path.display()));
 	renderer.render_message_stage(&format!(
 		"entries: {} | rules: {} | parallel groups: {}",
@@ -4138,6 +4145,21 @@ fn collect_config_rule_patterns_for_kind(config: &Config, kind: RulesKind) -> Ve
 	patterns
 }
 
+fn collect_config_rule_exclude_patterns_for_kind(config: &Config, kind: RulesKind) -> Vec<&str> {
+	let mut patterns = Vec::new();
+	for entry in &config.entries {
+		match entry {
+			Entry::Rule(rule) => collect_config_rule_exclude_patterns_for_rule_kind(rule, kind, &mut patterns),
+			Entry::Group(group) => {
+				for rule in &group.rules {
+					collect_config_rule_exclude_patterns_for_rule_kind(rule, kind, &mut patterns);
+				}
+			}
+		}
+	}
+	patterns
+}
+
 fn collect_config_rule_patterns_for_rule_kind<'a>(
 	rule: &'a config::Rule,
 	kind: RulesKind,
@@ -4145,6 +4167,16 @@ fn collect_config_rule_patterns_for_rule_kind<'a>(
 ) {
 	if rules_kind_matches_rule(kind, rule) {
 		patterns.extend(rule.changed.iter().map(config::Pattern::as_str));
+	}
+}
+
+fn collect_config_rule_exclude_patterns_for_rule_kind<'a>(
+	rule: &'a config::Rule,
+	kind: RulesKind,
+	patterns: &mut Vec<&'a str>,
+) {
+	if rules_kind_matches_rule(kind, rule) {
+		patterns.extend(rule.exclude.iter().map(config::Pattern::as_str));
 	}
 }
 

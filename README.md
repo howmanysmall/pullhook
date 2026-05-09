@@ -137,6 +137,8 @@ pullhook rules --commands-only
 pullhook rules --rule lint --commands-only
 pullhook rules --patterns-only
 pullhook rules --rule lint --patterns-only
+pullhook rules --exclude-patterns-only
+pullhook rules --rule lint --exclude-patterns-only
 pullhook schema --output .vscode/pullhook.schema.json
 pullhook schema --check --output .vscode/pullhook.schema.json
 pullhook explain --changed-file packages/a/package-lock.json
@@ -442,7 +444,8 @@ do not need to scrape the human error message.
 Use `pullhook rules --names-only` when a script or completion helper only needs valid selector names.
 Use `pullhook rules --commands-only` when a script only needs configured `run` command lines without evaluating changed files.
 Use `pullhook rules --patterns-only` when a script needs the configured `changed` globs without evaluating changed files.
-Combine either one with `--rule <name>` to print command lines or globs for one rule or parallel group.
+Use `pullhook rules --exclude-patterns-only` when a script needs configured `exclude` globs without evaluating changed files.
+Combine these line-output modes with `--rule <name>` to print command lines or globs for one rule or parallel group.
 Use `pullhook rules --kind install`, `--kind run`, or `--kind group` to narrow inventory output.
 Use `--rule <name>` with `rules`, `run`, or `explain` to focus on specific rule names or parallel groups in large configs.
 Repeat it to target more than one selector, for example `pullhook run --rule lint --rule typecheck`.
