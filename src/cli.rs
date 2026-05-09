@@ -46,6 +46,7 @@ Examples:
   pullhook explain --changed-files-file .pullhook-changed
   git diff --name-only HEAD~1 | pullhook explain --changed-files-stdin
   pullhook explain --rule lint --all-matches
+  pullhook explain --summary-only
   pullhook explain --json";
 
 const VALIDATE_AFTER_HELP: &str = "\
@@ -313,6 +314,10 @@ pub struct ExplainArgs {
 	/// Limit output to one or more named rules or parallel groups.
 	#[arg(long = "rule", value_name = "name")]
 	pub rules: Vec<String>,
+
+	/// Print only changed-file and planned-command counts.
+	#[arg(long = "summary-only", default_value_t = false, conflicts_with = "json")]
+	pub summary_only: bool,
 
 	/// Print machine-readable JSON instead of text output.
 	#[arg(long = "json", default_value_t = false)]

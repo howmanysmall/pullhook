@@ -324,6 +324,18 @@ fn run_help_lists_json_examples() {
 }
 
 #[test]
+fn explain_help_lists_summary_only_example() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["explain", "--help"]);
+
+	assert!(output.status.success(), "explain help should succeed");
+	let stdout = stdout_text(&output);
+	assert!(stdout.contains("pullhook explain --summary-only"));
+	assert!(stdout.contains("--summary-only"));
+}
+
+#[test]
 fn no_color_conflicts_with_render_mode() {
 	let temp = tempfile::tempdir().expect("create temp dir");
 
@@ -346,6 +358,22 @@ fn run_quiet_conflicts_with_json() {
 	let stderr = stderr_text(&output);
 	assert!(stderr.contains("cannot be used with"));
 	assert!(stderr.contains("--quiet"));
+	assert!(stderr.contains("--json"));
+}
+
+#[test]
+fn explain_summary_only_conflicts_with_json() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["explain", "--summary-only", "--json"]);
+
+	assert!(
+		!output.status.success(),
+		"explain --summary-only should conflict with --json"
+	);
+	let stderr = stderr_text(&output);
+	assert!(stderr.contains("cannot be used with"));
+	assert!(stderr.contains("--summary-only"));
 	assert!(stderr.contains("--json"));
 }
 
@@ -1491,6 +1519,50 @@ fn explain_json_reports_matches_and_skips() {
 	assert_eq!(entries[1]["skipReason"], "no matching changed files");
 	let stderr = stderr_text(&output);
 	assert!(stderr.trim().is_empty(), "explain --json should not write stderr");
+}
+
+#[test]
+fn explain_summary_only_reports_compact_plan_counts() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_file(
+		repo_root,
+		Path::new("pullhook.json"),
+		r#"{
+  "rules": [
+    {
+      "name": "rebuild package a",
+      "changed": "packages/a/package-lock.json",
+      "run": "cargo test -p package-a"
+    },
+    {
+      "name": "skip markdown",
+      "changed": "**/*.md",
+      "run": "cargo test"
+    }
+  ]
+}
+"#,
+	);
+
+	let output = run_pullhook(repo_root, &["explain", "--summary-only"]);
+
+	assert!(output.status.success(), "explain --summary-only should succeed");
+	let stdout = stdout_text(&output);
+	assert!(stdout.contains("changedFilesSource: git"));
+	assert!(stdout.contains("baseMissing: false"));
+	assert!(stdout.contains("changedFiles: 2"));
+	assert!(stdout.contains("matchedFiles: 1"));
+	assert!(stdout.contains("plannedCommands: 1"));
+	assert!(
+		!stdout.contains("[match]"),
+		"summary-only output should not include rule blocks"
+	);
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"explain --summary-only should not write stderr"
+	);
 }
 
 #[test]

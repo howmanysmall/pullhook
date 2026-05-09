@@ -428,6 +428,11 @@ fn explain_config_command(args: &ExplainArgs) -> Result<()> {
 		return Ok(());
 	}
 
+	if args.summary_only {
+		render_config_evaluation_summary(&changed_files, base_missing, changed_files_source, &evaluation);
+		return Ok(());
+	}
+
 	render_config_evaluation(&config, &evaluation, args.all_matches, false);
 	Ok(())
 }
@@ -1080,6 +1085,19 @@ fn render_config_evaluation(config: &Config, evaluation: &[EvaluatedEntry], all_
 			}
 		}
 	}
+}
+
+fn render_config_evaluation_summary(
+	changed_files: &[std::path::PathBuf],
+	base_missing: bool,
+	changed_files_source: ChangedFilesSource,
+	evaluation: &[EvaluatedEntry],
+) {
+	println!("changedFilesSource: {}", changed_files_source.label());
+	println!("baseMissing: {base_missing}");
+	println!("changedFiles: {}", changed_files.len());
+	println!("matchedFiles: {}", count_config_matched_files(evaluation));
+	println!("plannedCommands: {}", count_planned_commands(evaluation));
 }
 
 fn render_evaluated_rule(rule: &EvaluatedRule, all_matches: bool) {
