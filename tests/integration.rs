@@ -2819,7 +2819,7 @@ fn examples_json_lists_common_workflows() {
 		&& entry["command"] == "pullhook completion fish --output ~/.config/fish/completions/pullhook.fish"));
 	assert_eq!(
 		value["categories"],
-		serde_json::json!(["generator", "workflow", "diagnostic", "reference"])
+		serde_json::json!(["workflow", "diagnostic", "generator", "reference"])
 	);
 	assert_eq!(value["summary"]["categories"], 4);
 	assert_eq!(
@@ -3213,7 +3213,7 @@ fn examples_categories_only_prints_clean_example_categories() {
 	let stdout = stdout_text(&output);
 	assert_eq!(
 		stdout.lines().collect::<Vec<_>>(),
-		vec!["generator", "workflow", "diagnostic", "reference"]
+		vec!["workflow", "diagnostic", "generator", "reference"]
 	);
 	let stderr = stderr_text(&output);
 	assert!(

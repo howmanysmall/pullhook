@@ -1439,13 +1439,15 @@ fn collect_example_command_names(examples: &[ExampleInfo]) -> Vec<&'static str> 
 }
 
 fn collect_example_categories(examples: &[ExampleInfo]) -> Vec<&'static str> {
-	let mut categories = Vec::new();
-	for example in examples {
-		if !categories.contains(&example.category) {
-			categories.push(example.category);
-		}
-	}
-	categories
+	CATEGORY_INFOS
+		.iter()
+		.filter_map(|category| {
+			examples
+				.iter()
+				.any(|example| example.category == category.name)
+				.then_some(category.name)
+		})
+		.collect()
 }
 
 fn filtered_example_infos(
