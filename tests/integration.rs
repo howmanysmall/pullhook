@@ -926,7 +926,11 @@ fn examples_json_lists_common_workflows() {
 	assert_eq!(value["status"], "ok");
 	assert_eq!(value["code"], serde_json::Value::Null);
 	let examples = value["examples"].as_array().expect("examples array");
-	assert!(examples.iter().any(|entry| entry["command"] == "pullhook init"));
+	assert!(
+		examples
+			.iter()
+			.any(|entry| entry["commandName"] == "init" && entry["command"] == "pullhook init")
+	);
 	assert!(
 		examples
 			.iter()
@@ -938,6 +942,41 @@ fn examples_json_lists_common_workflows() {
 	);
 	let stderr = stderr_text(&output);
 	assert!(stderr.trim().is_empty(), "examples --json should not write stderr");
+}
+
+#[test]
+fn examples_command_filter_limits_results() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["examples", "--command", "run", "--json"]);
+
+	assert!(output.status.success(), "examples --command run --json should succeed");
+	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse filtered examples json");
+	assert_eq!(value["filters"]["command"], "run");
+	let examples = value["examples"].as_array().expect("examples array");
+	assert!(!examples.is_empty(), "run filter should keep run examples");
+	assert!(
+		examples.iter().all(|entry| entry["commandName"] == "run"),
+		"run filter should exclude non-run examples"
+	);
+	assert!(
+		examples
+			.iter()
+			.any(|entry| entry["command"] == "pullhook run --dry-run")
+	);
+	assert!(
+		!examples.iter().any(|entry| entry["command"] == "pullhook init"),
+		"init is not a run example"
+	);
+	assert_eq!(
+		value["summary"]["examples"].as_u64().expect("example count"),
+		examples.len() as u64
+	);
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"filtered examples --json should not write stderr"
+	);
 }
 
 #[test]
@@ -1774,7 +1813,9 @@ fn utility_help_groups_options_by_task() {
 	let examples = run_pullhook(temp.path(), &["examples", "--help"]);
 	assert!(examples.status.success(), "examples help should succeed");
 	let examples_stdout = stdout_text(&examples);
+	assert!(examples_stdout.contains("Filter options:"));
 	assert!(examples_stdout.contains("Output options:"));
+	assert!(examples_stdout.contains("pullhook examples --command run"));
 	assert!(examples_stdout.contains("pullhook examples --json"));
 
 	let codes = run_pullhook(temp.path(), &["codes", "--help"]);

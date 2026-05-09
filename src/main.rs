@@ -23,7 +23,8 @@ use tracing_subscriber::EnvFilter;
 
 use crate::cli::{
 	Cli, CodeKind, CodesArgs, CommandCatalogArgs, CommandCategory, Commands, CompletionArgs, ConfigArgs, ConfigRunArgs,
-	DoctorArgs, ExamplesArgs, ExplainArgs, InitArgs, RulesArgs, RulesKind, RunArgs, SchemaArgs, ValidateArgs,
+	DoctorArgs, ExampleCommand, ExamplesArgs, ExplainArgs, InitArgs, RulesArgs, RulesKind, RunArgs, SchemaArgs,
+	ValidateArgs,
 };
 use crate::config::{
 	Config, Entry, EvaluatedEntry, EvaluatedGroup, EvaluatedRule, FailTextContext, OnFailure, Pattern,
@@ -184,6 +185,7 @@ struct CommandInfo {
 #[serde(rename_all = "camelCase")]
 struct ExampleInfo {
 	title: &'static str,
+	command_name: &'static str,
 	command: &'static str,
 	summary: &'static str,
 }
@@ -290,51 +292,61 @@ const COMMAND_INFOS: &[CommandInfo] = &[
 const EXAMPLE_INFOS: &[ExampleInfo] = &[
 	ExampleInfo {
 		title: "Create a config",
+		command_name: "init",
 		command: "pullhook init",
 		summary: "Write a starter pullhook.json in the current repository.",
 	},
 	ExampleInfo {
 		title: "Preview configured rules",
+		command_name: "explain",
 		command: "pullhook explain --all-matches",
 		summary: "Inspect changed files, matched rules, and planned commands without running anything.",
 	},
 	ExampleInfo {
 		title: "Run configured rules",
+		command_name: "run",
 		command: "pullhook run",
 		summary: "Evaluate the git diff and execute matching pullhook rules.",
 	},
 	ExampleInfo {
 		title: "Dry-run execution",
+		command_name: "run",
 		command: "pullhook run --dry-run",
 		summary: "Show the commands that would run without executing them.",
 	},
 	ExampleInfo {
 		title: "Script-friendly command list",
+		command_name: "run",
 		command: "pullhook run --commands-only",
 		summary: "Print planned command lines only, one per line.",
 	},
 	ExampleInfo {
 		title: "Validate config in CI",
+		command_name: "validate",
 		command: "pullhook validate --quiet",
 		summary: "Exit non-zero for invalid config while keeping successful output silent.",
 	},
 	ExampleInfo {
 		title: "Inspect repository readiness",
+		command_name: "doctor",
 		command: "pullhook doctor --strict",
 		summary: "Check repository, config, diff-base, and package-manager readiness.",
 	},
 	ExampleInfo {
 		title: "Install after lockfile changes",
+		command_name: "legacy",
 		command: "pullhook --install",
 		summary: "Use legacy one-off mode to detect the package manager and run install.",
 	},
 	ExampleInfo {
 		title: "List command catalog",
+		command_name: "commands",
 		command: "pullhook commands --json",
 		summary: "Return supported commands and categories for automation.",
 	},
 	ExampleInfo {
 		title: "List status codes",
+		command_name: "codes",
 		command: "pullhook codes --codes-only",
 		summary: "Print stable status codes for scripts or completion helpers.",
 	},
@@ -660,15 +672,19 @@ fn main() {
 }
 
 fn examples_command(args: &ExamplesArgs) -> Result<()> {
+	let examples = filtered_example_infos(args.command);
 	if args.json {
 		println!(
 			"{}",
 			serde_json::to_string_pretty(&json!({
 				"status": "ok",
 				"code": serde_json::Value::Null,
-				"examples": EXAMPLE_INFOS,
+				"filters": {
+					"command": args.command.map(ExampleCommand::label),
+				},
+				"examples": examples,
 				"summary": {
-					"examples": EXAMPLE_INFOS.len(),
+					"examples": examples.len(),
 				},
 			}))?
 		);
@@ -676,12 +692,23 @@ fn examples_command(args: &ExamplesArgs) -> Result<()> {
 	}
 
 	println!("Pullhook examples");
+	if let Some(command) = args.command {
+		println!("filter: command={}", command.label());
+	}
 	println!();
-	for example in EXAMPLE_INFOS {
+	for example in examples {
 		println!("{}: {}", example.title, example.command);
 		println!("  {}", example.summary);
 	}
 	Ok(())
+}
+
+fn filtered_example_infos(command: Option<ExampleCommand>) -> Vec<ExampleInfo> {
+	EXAMPLE_INFOS
+		.iter()
+		.copied()
+		.filter(|example| command.is_none_or(|command| example.command_name == command.label()))
+		.collect()
 }
 
 fn command_catalog_command(args: &CommandCatalogArgs) -> Result<()> {

@@ -266,6 +266,7 @@ pullhook doctor --quiet
 pullhook doctor --strict
 pullhook doctor --json
 pullhook examples
+pullhook examples --command run
 pullhook examples --json
 pullhook commands
 pullhook commands --category diagnostic
@@ -351,6 +352,8 @@ Pattern JSON errors include a `patternError` object with the rejected glob and p
 Legacy command-parse JSON errors include a `commandParse` object with the rejected command and parser reason.
 Use `pullhook examples` to inspect common workflows in text form, or `pullhook examples --json` when another
 tool needs example commands without scraping docs.
+Add `--command run`, `--command explain`, `--command validate`, `--command doctor`, `--command init`,
+`--command commands`, `--command codes`, or `--command legacy` to focus the example list.
 Use `pullhook commands` to inspect the command catalog in text form, or `pullhook commands --json` when another
 tool needs supported commands, categories, and repo requirements without scraping help text.
 Add `--category workflow`, `--category diagnostic`, `--category generator`, or `--category reference` to narrow

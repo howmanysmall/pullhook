@@ -145,6 +145,7 @@ Examples:
 const EXAMPLES_AFTER_HELP: &str = "\
 Examples:
   pullhook examples
+  pullhook examples --command run
   pullhook examples --json";
 
 /// Pullhook command line arguments.
@@ -1028,9 +1029,49 @@ pub struct CommandCatalogArgs {
 #[derive(Debug, Clone, Args)]
 #[command(after_help = EXAMPLES_AFTER_HELP)]
 pub struct ExamplesArgs {
+	/// Only list examples for a specific command.
+	#[arg(long = "command", value_enum, help_heading = "Filter options")]
+	pub command: Option<ExampleCommand>,
+
 	/// Print machine-readable JSON instead of text output.
 	#[arg(long = "json", default_value_t = false, help_heading = "Output options")]
 	pub json: bool,
+}
+
+/// Commands that have workflow examples.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum ExampleCommand {
+	/// Legacy top-level one-off mode examples.
+	Legacy,
+	/// Config initialization examples.
+	Init,
+	/// Config explanation examples.
+	Explain,
+	/// Config execution examples.
+	Run,
+	/// Config validation examples.
+	Validate,
+	/// Repository diagnostic examples.
+	Doctor,
+	/// Command catalog examples.
+	Commands,
+	/// Status code catalog examples.
+	Codes,
+}
+
+impl ExampleCommand {
+	pub const fn label(self) -> &'static str {
+		match self {
+			Self::Legacy => "legacy",
+			Self::Init => "init",
+			Self::Explain => "explain",
+			Self::Run => "run",
+			Self::Validate => "validate",
+			Self::Doctor => "doctor",
+			Self::Commands => "commands",
+			Self::Codes => "codes",
+		}
+	}
 }
 
 /// Supported `pullhook commands` categories.
