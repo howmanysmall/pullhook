@@ -374,6 +374,10 @@ fn schema_prints_json_schema() {
 	assert_eq!(value["$id"], "https://pullhook.dev/schema.json");
 	assert_eq!(value["properties"]["rules"]["type"], "array");
 	assert_eq!(value["$defs"]["rule"]["properties"]["run"]["type"], "string");
+	assert_eq!(
+		value["$defs"]["rule"]["oneOf"][0]["not"]["properties"]["install"]["const"],
+		true
+	);
 	let stderr = stderr_text(&output);
 	assert!(stderr.trim().is_empty(), "schema should not write stderr");
 }

@@ -167,7 +167,12 @@ pub const CONFIG_SCHEMA_JSON: &str = r##"{
         {
           "required": ["run", "changed"],
           "not": {
-            "required": ["install"]
+            "required": ["install"],
+            "properties": {
+              "install": {
+                "const": true
+              }
+            }
           }
         },
         {
@@ -1087,6 +1092,34 @@ mod tests {
 		let config = load(&path).expect("load config");
 
 		assert_eq!(config.entries.len(), 1);
+	}
+
+	#[test]
+	fn load_accepts_explicit_false_install_on_run_rule() {
+		let dir = tempdir().expect("tempdir");
+		let path = dir.path().join("pullhook.json");
+		fs::write(
+			&path,
+			r#"{
+  "rules": [
+    {
+      "name": "build",
+      "changed": "src/**/*.rs",
+      "run": "cargo test",
+      "install": false
+    }
+  ]
+}
+"#,
+		)
+		.expect("write config");
+
+		let config = load(&path).expect("load config");
+
+		let Entry::Rule(rule) = &config.entries[0] else {
+			panic!("expected rule entry");
+		};
+		assert!(!rule.install);
 	}
 
 	#[test]
