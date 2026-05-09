@@ -292,9 +292,10 @@ fn run_config_command(args: &ConfigRunArgs) -> Result<()> {
 		&explicit_changed_files,
 		args.debug,
 	)?;
-	let evaluation = filter_config_evaluation(
+	let evaluation = filter_config_evaluation_for_output(
 		evaluate_config(&config, &changed_files, base_missing, &repo_root)?,
 		&args.rules,
+		args.json,
 	)?;
 	let matched_files = count_config_matched_files(&evaluation);
 
@@ -375,9 +376,10 @@ fn explain_config_command(args: &ExplainArgs) -> Result<()> {
 		&explicit_changed_files,
 		args.debug,
 	)?;
-	let evaluation = filter_config_evaluation(
+	let evaluation = filter_config_evaluation_for_output(
 		evaluate_config(&config, &changed_files, base_missing, &repo_root)?,
 		&args.rules,
+		args.json,
 	)?;
 
 	if args.json {
@@ -825,6 +827,28 @@ fn filter_config_evaluation(evaluation: Vec<EvaluatedEntry>, selectors: &[String
 	}
 
 	Ok(filtered)
+}
+
+fn filter_config_evaluation_for_output(
+	evaluation: Vec<EvaluatedEntry>,
+	selectors: &[String],
+	json_output: bool,
+) -> Result<Vec<EvaluatedEntry>> {
+	match filter_config_evaluation(evaluation, selectors) {
+		Ok(evaluation) => Ok(evaluation),
+		Err(error) => {
+			if json_output {
+				println!(
+					"{}",
+					serde_json::to_string_pretty(&json!({
+						"status": "error",
+						"error": error.to_string(),
+					}))?
+				);
+			}
+			Err(error)
+		}
+	}
 }
 
 fn format_unknown_selectors(unknown: &[String], available: &[String]) -> String {

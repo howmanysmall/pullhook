@@ -1421,9 +1421,35 @@ fn run_rejects_unknown_rule_selector() {
 	let output = run_pullhook(repo_root, &["run", "--dry-run", "--rule", "missing rule", "--json"]);
 
 	assert!(!output.status.success(), "run should fail for an unknown rule selector");
+	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse selector error json");
+	assert_eq!(value["status"], "error");
+	let error = value["error"].as_str().expect("error message");
+	assert!(error.contains("unknown rule selector(s): missing rule"));
+	assert!(error.contains("available: write marker"));
 	let stderr = stderr_text(&output);
 	assert!(stderr.contains("unknown rule selector(s): missing rule"));
 	assert!(stderr.contains("available: write marker"));
+}
+
+#[test]
+fn explain_json_rejects_unknown_rule_selector_as_json() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_config_rule(repo_root, "write marker", "packages/a/package-lock.json", "true");
+
+	let output = run_pullhook(repo_root, &["explain", "--rule", "missing rule", "--json"]);
+
+	assert!(
+		!output.status.success(),
+		"explain should fail for an unknown rule selector"
+	);
+	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse selector error json");
+	assert_eq!(value["status"], "error");
+	let error = value["error"].as_str().expect("error message");
+	assert!(error.contains("unknown rule selector(s): missing rule"));
+	assert!(error.contains("available: write marker"));
+	let stderr = stderr_text(&output);
+	assert!(stderr.contains("unknown rule selector(s): missing rule"));
 }
 
 #[test]
