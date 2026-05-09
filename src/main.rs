@@ -2533,9 +2533,11 @@ fn config_evaluation_json(
 		.into_iter()
 		.map(|path| path.display().to_string())
 		.collect::<Vec<_>>();
+	let code = config_evaluation_code(error);
 
 	json!({
 		"status": if error.is_some() { "error" } else { "ok" },
+		"code": code,
 		"error": error,
 		"path": config.path.display().to_string(),
 		"onFailure": on_failure_label(config.on_failure),
@@ -2546,6 +2548,15 @@ fn config_evaluation_json(
 		"summary": config_evaluation_summary_json(changed_files, base_missing, changed_files_source, evaluation),
 		"entries": entries,
 	})
+}
+
+fn config_evaluation_code(error: Option<&str>) -> serde_json::Value {
+	match error {
+		Some("no config rules matched changed files") => json!("no_rules_matched"),
+		Some(error) if error.ends_with(" config rule(s) failed") => json!("config_rule_failed"),
+		Some(_) => json!("config_evaluation_error"),
+		None => serde_json::Value::Null,
+	}
 }
 
 fn config_evaluation_summary_json(

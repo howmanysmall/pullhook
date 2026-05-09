@@ -306,7 +306,7 @@ Missing config JSON errors include a `configDiscoveryError` object with the sear
 `explain --json` emits the evaluated rule plan,
 including changed files, their source (`git`, `explicit`, or `base-missing`), matched files, commands, and
 skip reasons. `explain --json`, `run --dry-run --json`, and `run --json` include top-level `status` and
-`error` fields; `run --json` also adds real execution results, captured stdout/stderr, and a final summary.
+stable `code` and `error` fields; `run --json` also adds real execution results, captured stdout/stderr, and a final summary.
 Diff-base JSON errors include details for invalid `--base <rev>` values and the automatic fallback path,
 plus a `diffBaseError` object with the failing revision or diff-base failure kind.
 Their JSON output also includes a `summary` object with changed-file source, matched-file, matched-rule, and
