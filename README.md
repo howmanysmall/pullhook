@@ -308,7 +308,8 @@ Add `--require-match` to `explain` or `run` when an empty plan should fail the c
 Use `run --quiet` when successful text output would be noise; failures still print the failed task, any `failText`,
 and the final summary.
 
-Legacy top-level mode also supports `--json`, including live execution results and dry-run plans.
+Legacy top-level mode also supports `--json`, including the same top-level `status` and `error` fields,
+live execution results, and dry-run plans.
 
 Use `pullhook rules` to list configured rule and parallel group names before targeting a large config.
 Use `pullhook rules --names-only` when a script or completion helper only needs valid selector names.

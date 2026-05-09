@@ -342,6 +342,7 @@ fn run_legacy_json(cli: &RunArgs, context: LegacyJsonContext, repo_root: &std::p
 				&matched_files,
 				TaskCounters::default(),
 				&[],
+				None,
 			))?
 		);
 		return Ok(());
@@ -355,6 +356,7 @@ fn run_legacy_json(cli: &RunArgs, context: LegacyJsonContext, repo_root: &std::p
 		.iter()
 		.map(|result| task_result_json(result, repo_root))
 		.collect::<Vec<_>>();
+	let error = (failure_count > 0).then(|| format!("{failure_count} task(s) failed"));
 	println!(
 		"{}",
 		serde_json::to_string_pretty(&legacy_run_json(
@@ -364,10 +366,11 @@ fn run_legacy_json(cli: &RunArgs, context: LegacyJsonContext, repo_root: &std::p
 			&matched_files,
 			counts,
 			&executions,
+			error.as_deref(),
 		))?
 	);
-	if failure_count > 0 {
-		return Err(anyhow!("{failure_count} task(s) failed"));
+	if let Some(error) = error {
+		return Err(anyhow!(error));
 	}
 
 	Ok(())
@@ -1781,6 +1784,8 @@ fn legacy_dry_run_json(
 		tasks,
 	} = context;
 	json!({
+		"status": "ok",
+		"error": serde_json::Value::Null,
 		"mode": "dry-run",
 		"pattern": run_config.pattern,
 		"command": run_config.command,
@@ -1804,8 +1809,11 @@ fn legacy_run_json(
 	matched_files: &[std::path::PathBuf],
 	counts: TaskCounters,
 	results: &[serde_json::Value],
+	error: Option<&str>,
 ) -> serde_json::Value {
 	json!({
+		"status": if error.is_some() { "error" } else { "ok" },
+		"error": error,
 		"mode": "run",
 		"pattern": run_config.pattern,
 		"command": run_config.command,
