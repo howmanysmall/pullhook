@@ -89,6 +89,147 @@ name = "install dependencies"
 install = true
 "#;
 
+/// JSON Schema for pullhook config files.
+pub const CONFIG_SCHEMA_JSON: &str = r##"{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pullhook.dev/schema.json",
+  "title": "pullhook config",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["rules"],
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "onFailure": {
+      "type": "string",
+      "enum": ["stop", "continue"],
+      "default": "stop"
+    },
+    "rules": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/entry"
+      }
+    }
+  },
+  "$defs": {
+    "patternList": {
+      "oneOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      ]
+    },
+    "rule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "changed": {
+          "$ref": "#/$defs/patternList"
+        },
+        "exclude": {
+          "$ref": "#/$defs/patternList"
+        },
+        "run": {
+          "type": "string",
+          "minLength": 1
+        },
+        "install": {
+          "type": "boolean",
+          "default": false
+        },
+        "runIfBaseMissing": {
+          "type": "boolean",
+          "default": false
+        },
+        "failText": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "oneOf": [
+        {
+          "required": ["run", "changed"],
+          "not": {
+            "required": ["install"]
+          }
+        },
+        {
+          "required": ["install"],
+          "properties": {
+            "install": {
+              "const": true
+            }
+          },
+          "not": {
+            "anyOf": [
+              {
+                "required": ["run"]
+              },
+              {
+                "required": ["changed"]
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "group": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "parallel"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "jobs": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "parallel": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/rule"
+          }
+        },
+        "failText": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "entry": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/rule"
+        },
+        {
+          "$ref": "#/$defs/group"
+        }
+      ]
+    }
+  }
+}
+"##;
+
 /// Config file format.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConfigFormat {

@@ -67,6 +67,7 @@ Commands:
   validate    Validate the pullhook config file
   doctor      Inspect repository and config readiness
   rules       List configured rule and group names
+  schema      Print or write the pullhook JSON Schema
   init        Create a starter pullhook config file
   completion  Generate shell completion scripts
   help        Print this message or the help of the given subcommand(s)
@@ -119,6 +120,7 @@ Preview commands without executing:
 pullhook --pattern "**/*.rs" --command "cargo test" --dry-run
 pullhook --pattern "**/*.rs" --command "cargo test" --dry-run --json
 pullhook rules
+pullhook schema --output .vscode/pullhook.schema.json
 pullhook explain --changed-file packages/a/package-lock.json
 pullhook run --changed-file packages/a/package-lock.json --dry-run
 git diff --name-only HEAD~1 | pullhook run --changed-files-stdin --dry-run
@@ -226,6 +228,8 @@ pullhook validate
 pullhook validate --json
 pullhook doctor
 pullhook doctor --json
+pullhook schema
+pullhook schema --output .vscode/pullhook.schema.json
 pullhook explain
 pullhook explain --all-matches --json
 pullhook run --json
@@ -251,6 +255,7 @@ Styles respect `--render auto|always|never`; use `--no-color` as a shortcut for 
 Placeholders render in every mode.
 
 `pullhook config` shows the config path and format that pullhook will use without parsing the file.
+`pullhook schema` prints the config JSON Schema, and `pullhook schema --output <path>` writes it for editor setup.
 `validate --json` emits a compact config summary for scripts and still prints structured JSON when the
 config is invalid. `doctor` checks repo discovery, config health, diff-base availability, and `--install`
 detection in one pass, with a short hint for each check. `explain --json` emits the evaluated rule plan,

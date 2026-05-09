@@ -20,7 +20,8 @@ use tracing::debug;
 use tracing_subscriber::EnvFilter;
 
 use crate::cli::{
-	Cli, Commands, ConfigArgs, ConfigRunArgs, DoctorArgs, ExplainArgs, InitArgs, RulesArgs, RunArgs, ValidateArgs,
+	Cli, Commands, ConfigArgs, ConfigRunArgs, DoctorArgs, ExplainArgs, InitArgs, RulesArgs, RunArgs, SchemaArgs,
+	ValidateArgs,
 };
 use crate::config::{
 	Config, Entry, EvaluatedEntry, EvaluatedGroup, EvaluatedRule, FailTextContext, OnFailure, Pattern,
@@ -127,6 +128,10 @@ fn main() {
 		Some(Commands::Rules(args)) => {
 			init_tracing(args.debug);
 			rules_command(args)
+		}
+		Some(Commands::Schema(args)) => {
+			init_tracing(false);
+			schema_command(args)
 		}
 		Some(Commands::Init(args)) => {
 			init_tracing(args.debug);
@@ -570,6 +575,23 @@ fn rules_command(args: &RulesArgs) -> Result<()> {
 		}
 	}
 
+	Ok(())
+}
+
+fn schema_command(args: &SchemaArgs) -> Result<()> {
+	if let Some(path) = args.output.as_deref() {
+		if let Some(parent) = path.parent()
+			&& !parent.as_os_str().is_empty()
+		{
+			std::fs::create_dir_all(parent)
+				.with_context(|| format!("failed to create schema directory `{}`", parent.display()))?;
+		}
+		std::fs::write(path, config::CONFIG_SCHEMA_JSON)
+			.with_context(|| format!("failed to write schema `{}`", path.display()))?;
+		return Ok(());
+	}
+
+	print!("{}", config::CONFIG_SCHEMA_JSON);
 	Ok(())
 }
 

@@ -303,6 +303,7 @@ fn root_help_lists_common_examples() {
 	assert!(stdout.contains("Examples:"));
 	assert!(stdout.contains("pullhook --install --dry-run"));
 	assert!(stdout.contains("pullhook init --format json"));
+	assert!(stdout.contains("schema"));
 	assert!(stdout.contains("Use `pullhook explain --all-matches` to preview config rule matches."));
 }
 
@@ -360,6 +361,38 @@ fn init_help_lists_generation_examples() {
 	assert!(stdout.contains("pullhook init --force"));
 	assert!(stdout.contains("pullhook init --format yaml"));
 	assert!(stdout.contains("pullhook init --output config/pullhook.custom.json"));
+}
+
+#[test]
+fn schema_prints_json_schema() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["schema"]);
+
+	assert!(output.status.success(), "schema command should succeed");
+	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse schema json");
+	assert_eq!(value["$id"], "https://pullhook.dev/schema.json");
+	assert_eq!(value["properties"]["rules"]["type"], "array");
+	assert_eq!(value["$defs"]["rule"]["properties"]["run"]["type"], "string");
+	let stderr = stderr_text(&output);
+	assert!(stderr.trim().is_empty(), "schema should not write stderr");
+}
+
+#[test]
+fn schema_can_write_to_output_file() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+	let output_path = temp.path().join(".vscode/pullhook.schema.json");
+
+	let output = run_pullhook(temp.path(), &["schema", "--output", ".vscode/pullhook.schema.json"]);
+
+	assert!(output.status.success(), "schema --output should succeed");
+	assert!(
+		stdout_text(&output).trim().is_empty(),
+		"schema --output should not write stdout"
+	);
+	let schema = fs::read_to_string(output_path).expect("read schema output");
+	let value: serde_json::Value = serde_json::from_str(&schema).expect("parse written schema");
+	assert_eq!(value["$id"], "https://pullhook.dev/schema.json");
 }
 
 #[test]

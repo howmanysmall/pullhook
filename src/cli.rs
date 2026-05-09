@@ -73,6 +73,11 @@ Examples:
   pullhook rules --json
   pullhook rules --config config/pullhook.custom.json";
 
+const SCHEMA_AFTER_HELP: &str = "\
+Examples:
+  pullhook schema
+  pullhook schema --output .vscode/pullhook.schema.json";
+
 const INIT_AFTER_HELP: &str = "\
 Examples:
   pullhook init
@@ -118,6 +123,8 @@ pub enum Commands {
 	Config(ConfigArgs),
 	/// List configured rule and group names.
 	Rules(RulesArgs),
+	/// Print or write the pullhook JSON Schema.
+	Schema(SchemaArgs),
 	/// Create a starter pullhook config file.
 	Init(InitArgs),
 	/// Generate shell completion scripts.
@@ -461,6 +468,15 @@ pub struct RulesArgs {
 	/// Disable ANSI styling in non-debug output.
 	#[arg(long = "no-color", default_value_t = false, conflicts_with = "render")]
 	pub no_color: bool,
+}
+
+/// Arguments for `pullhook schema`.
+#[derive(Debug, Clone, Args)]
+#[command(after_help = SCHEMA_AFTER_HELP)]
+pub struct SchemaArgs {
+	/// Write the schema to a file instead of stdout.
+	#[arg(long = "output", value_name = "path")]
+	pub output: Option<PathBuf>,
 }
 
 /// Supported starter config formats for `pullhook init`.
