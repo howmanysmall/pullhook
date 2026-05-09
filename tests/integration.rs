@@ -639,6 +639,7 @@ fn shells_json_lists_completion_targets() {
 	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse shells json");
 	assert_eq!(value["status"], "ok");
 	assert_eq!(value["code"], serde_json::Value::Null);
+	assert_eq!(value["filters"]["search"], serde_json::Value::Null);
 	let shells = value["shells"].as_array().expect("shells array");
 	assert!(
 		shells
@@ -659,6 +660,27 @@ fn shells_json_lists_completion_targets() {
 }
 
 #[test]
+fn shells_search_filter_limits_results() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["shells", "--search", "POWER", "--json"]);
+
+	assert!(output.status.success(), "shells --search POWER --json should succeed");
+	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse filtered shells json");
+	assert_eq!(value["status"], "ok");
+	assert_eq!(value["filters"]["search"], "POWER");
+	let shells = value["shells"].as_array().expect("shells array");
+	assert_eq!(shells.len(), 1, "power search should only keep powershell");
+	assert_eq!(shells[0]["name"], "powershell");
+	assert_eq!(value["summary"]["shells"], 1);
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"shells --search POWER --json should not write stderr"
+	);
+}
+
+#[test]
 fn shells_names_only_prints_clean_shell_names() {
 	let temp = tempfile::tempdir().expect("create temp dir");
 
@@ -672,6 +694,25 @@ fn shells_names_only_prints_clean_shell_names() {
 	);
 	let stderr = stderr_text(&output);
 	assert!(stderr.trim().is_empty(), "shells --names-only should not write stderr");
+}
+
+#[test]
+fn shells_search_filter_composes_with_names_only() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["shells", "--search", "shell", "--names-only"]);
+
+	assert!(
+		output.status.success(),
+		"shells --search shell --names-only should succeed"
+	);
+	let stdout = stdout_text(&output);
+	assert_eq!(stdout.lines().collect::<Vec<_>>(), vec!["powershell"]);
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"shells --search shell --names-only should not write stderr"
+	);
 }
 
 #[test]
@@ -3189,6 +3230,7 @@ fn utility_help_groups_options_by_task() {
 	assert!(shells.status.success(), "shells help should succeed");
 	let shells_stdout = stdout_text(&shells);
 	assert!(shells_stdout.contains("Output options:"));
+	assert!(shells_stdout.contains("pullhook shells --search fish"));
 	assert!(shells_stdout.contains("pullhook shells --names-only"));
 	assert!(shells_stdout.contains("pullhook shells --json"));
 

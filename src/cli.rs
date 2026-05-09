@@ -140,6 +140,7 @@ Examples:
 const SHELLS_AFTER_HELP: &str = "\
 Examples:
   pullhook shells
+  pullhook shells --search fish
   pullhook shells --names-only
   pullhook shells --json";
 
@@ -1032,6 +1033,10 @@ pub struct CompletionArgs {
 #[derive(Debug, Clone, Args)]
 #[command(after_help = SHELLS_AFTER_HELP)]
 pub struct ShellsArgs {
+	/// Only list shells whose name, completion command, or description contains this text.
+	#[arg(long = "search", value_name = "TEXT", help_heading = "Filter options")]
+	pub search: Option<String>,
+
 	/// Print machine-readable JSON instead of text output.
 	#[arg(
 		long = "json",

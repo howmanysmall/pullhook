@@ -272,6 +272,7 @@ pullhook doctor --quiet
 pullhook doctor --strict
 pullhook doctor --json
 pullhook shells
+pullhook shells --search fish
 pullhook shells --names-only
 pullhook shells --json
 pullhook formats
@@ -347,6 +348,7 @@ Use `schema --check --output <path>` in CI when a checked-in schema file must st
 `details` fields with the rerun command when generated output is stale.
 Use `pullhook shells` to inspect supported shell completion targets in text form, or `pullhook shells --json`
 when another tool needs shell names and generation commands without scraping help text.
+Add `--search <text>` to match shell names, completion commands, or descriptions case-insensitively.
 Use `pullhook shells --names-only` when a script only needs supported shell names.
 Use `pullhook formats` to inspect supported config formats and discovery filenames.
 Add `--search <text>` to match format names, config filenames, descriptions, or init commands.

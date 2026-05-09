@@ -850,15 +850,19 @@ fn main() {
 }
 
 fn shells_command(args: &ShellsArgs) -> Result<()> {
+	let shells = filtered_shell_infos(args.search.as_deref());
 	if args.json {
 		println!(
 			"{}",
 			serde_json::to_string_pretty(&json!({
 				"status": "ok",
 				"code": serde_json::Value::Null,
-				"shells": SHELL_INFOS,
+				"filters": {
+					"search": args.search.as_deref(),
+				},
+				"shells": shells,
 				"summary": {
-					"shells": SHELL_INFOS.len(),
+					"shells": shells.len(),
 				},
 			}))?
 		);
@@ -866,19 +870,41 @@ fn shells_command(args: &ShellsArgs) -> Result<()> {
 	}
 
 	if args.names_only {
-		for shell in SHELL_INFOS {
+		for shell in shells {
 			println!("{}", shell.name);
 		}
 		return Ok(());
 	}
 
 	println!("Shell completion targets");
+	if let Some(search) = &args.search {
+		println!("filter: search={search}");
+	}
 	println!();
-	for shell in SHELL_INFOS {
+	for shell in shells {
 		println!("{}: {}", shell.name, shell.completion_command);
 		println!("  {}", shell.description);
 	}
 	Ok(())
+}
+
+fn filtered_shell_infos(search: Option<&str>) -> Vec<ShellInfo> {
+	let search = search.map(str::to_ascii_lowercase);
+	SHELL_INFOS
+		.iter()
+		.copied()
+		.filter(|shell| {
+			search
+				.as_deref()
+				.is_none_or(|search| shell_info_matches_search(*shell, search))
+		})
+		.collect()
+}
+
+fn shell_info_matches_search(shell: ShellInfo, search: &str) -> bool {
+	shell.name.contains(search)
+		|| shell.completion_command.contains(search)
+		|| shell.description.to_ascii_lowercase().contains(search)
 }
 
 fn formats_command(args: &FormatsArgs) -> Result<()> {
