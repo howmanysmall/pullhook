@@ -355,6 +355,7 @@ pub struct Rule {
 /// A validated glob pattern and its compiled matcher.
 #[derive(Debug, Clone)]
 pub struct Pattern {
+	raw: String,
 	matcher: matcher::Matcher,
 }
 
@@ -363,7 +364,13 @@ impl Pattern {
 	pub fn new(raw: impl Into<String>) -> Result<Self, PullhookError> {
 		let raw = raw.into();
 		let matcher = matcher::compile(&raw)?;
-		Ok(Self { matcher })
+		Ok(Self { raw, matcher })
+	}
+
+	/// Original user-facing pattern.
+	#[must_use]
+	pub fn as_str(&self) -> &str {
+		&self.raw
 	}
 
 	fn is_match(&self, path: &Path) -> bool {

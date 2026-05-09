@@ -374,7 +374,9 @@ fn rules_help_lists_script_friendly_output_modes() {
 	let stdout = stdout_text(&output);
 	assert!(stdout.contains("pullhook rules --names-only"));
 	assert!(stdout.contains("pullhook rules --commands-only"));
+	assert!(stdout.contains("pullhook rules --patterns-only"));
 	assert!(stdout.contains("--commands-only"));
+	assert!(stdout.contains("--patterns-only"));
 }
 
 #[test]
@@ -846,13 +848,27 @@ fn init_stdout_conflicts_with_force() {
 fn rules_names_only_conflicts_with_json() {
 	let temp = tempfile::tempdir().expect("create temp dir");
 
-	let output = run_pullhook(temp.path(), &["rules", "--names-only", "--json"]);
+	let json_output = run_pullhook(temp.path(), &["rules", "--names-only", "--json"]);
 
-	assert!(!output.status.success(), "--names-only should conflict with --json");
-	let stderr = stderr_text(&output);
-	assert!(stderr.contains("cannot be used with"));
-	assert!(stderr.contains("--names-only"));
-	assert!(stderr.contains("--json"));
+	assert!(
+		!json_output.status.success(),
+		"--names-only should conflict with --json"
+	);
+	let json_stderr = stderr_text(&json_output);
+	assert!(json_stderr.contains("cannot be used with"));
+	assert!(json_stderr.contains("--names-only"));
+	assert!(json_stderr.contains("--json"));
+
+	let patterns_output = run_pullhook(temp.path(), &["rules", "--names-only", "--patterns-only"]);
+
+	assert!(
+		!patterns_output.status.success(),
+		"rules --names-only should conflict with --patterns-only"
+	);
+	let patterns_stderr = stderr_text(&patterns_output);
+	assert!(patterns_stderr.contains("cannot be used with"));
+	assert!(patterns_stderr.contains("--names-only"));
+	assert!(patterns_stderr.contains("--patterns-only"));
 }
 
 #[test]
@@ -880,6 +896,39 @@ fn rules_commands_only_conflicts_with_other_output_modes() {
 	assert!(names_stderr.contains("cannot be used with"));
 	assert!(names_stderr.contains("--commands-only"));
 	assert!(names_stderr.contains("--names-only"));
+
+	let patterns_output = run_pullhook(temp.path(), &["rules", "--commands-only", "--patterns-only"]);
+
+	assert!(
+		!patterns_output.status.success(),
+		"rules --commands-only should conflict with --patterns-only"
+	);
+	let patterns_stderr = stderr_text(&patterns_output);
+	assert!(patterns_stderr.contains("cannot be used with"));
+	assert!(patterns_stderr.contains("--commands-only"));
+	assert!(patterns_stderr.contains("--patterns-only"));
+}
+
+#[test]
+fn rules_patterns_only_conflicts_with_other_output_modes() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+	let conflicting_modes: &[&[&str]] = &[
+		&["rules", "--patterns-only", "--json"],
+		&["rules", "--patterns-only", "--names-only"],
+		&["rules", "--patterns-only", "--commands-only"],
+	];
+
+	for args in conflicting_modes {
+		let output = run_pullhook(temp.path(), args);
+
+		assert!(
+			!output.status.success(),
+			"rules --patterns-only should conflict for args {args:?}"
+		);
+		let stderr = stderr_text(&output);
+		assert!(stderr.contains("cannot be used with"));
+		assert!(stderr.contains("--patterns-only"));
+	}
 }
 
 #[test]
@@ -1641,9 +1690,16 @@ fn rules_json_reports_rule_inventory() {
 	assert_eq!(entries[0]["type"], "rule");
 	assert_eq!(entries[0]["name"], "install dependencies");
 	assert_eq!(entries[0]["kind"], "install");
+	assert_eq!(entries[0]["changed"], serde_json::json!([]));
+	assert_eq!(entries[0]["exclude"], serde_json::json!([]));
 	assert_eq!(entries[1]["type"], "group");
 	assert_eq!(entries[1]["name"], "checks");
 	assert_eq!(entries[1]["rules"][0]["name"], "lint");
+	assert_eq!(
+		entries[1]["rules"][0]["changed"],
+		serde_json::json!(["packages/a/package-lock.json"])
+	);
+	assert_eq!(entries[1]["rules"][0]["exclude"], serde_json::json!([]));
 }
 
 #[test]
@@ -1866,6 +1922,100 @@ fn rules_commands_only_respects_kind_filter() {
 	assert!(
 		stderr.trim().is_empty(),
 		"rules --kind install --commands-only should not write stderr"
+	);
+}
+
+#[test]
+fn rules_patterns_only_prints_configured_changed_patterns() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_file(
+		repo_root,
+		Path::new("pullhook.json"),
+		r#"{
+  "rules": [
+    {
+      "name": "install dependencies",
+      "install": true
+    },
+    {
+      "name": "format",
+      "changed": "packages/a/package-lock.json",
+      "run": "cargo fmt --all"
+    },
+    {
+      "name": "checks",
+      "parallel": [
+        {
+          "name": "lint",
+          "changed": "packages/b/package-lock.json",
+          "run": "cargo clippy --all-targets"
+        },
+        {
+          "name": "test",
+          "changed": ["src/**/*.rs", "tests/**/*.rs"],
+          "run": "cargo nextest run"
+        }
+      ]
+    }
+  ]
+}
+"#,
+	);
+
+	let output = run_pullhook(repo_root, &["rules", "--patterns-only"]);
+
+	assert!(output.status.success(), "rules --patterns-only should succeed");
+	let stdout = stdout_text(&output);
+	assert_eq!(
+		stdout,
+		"packages/a/package-lock.json\npackages/b/package-lock.json\nsrc/**/*.rs\ntests/**/*.rs\n"
+	);
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"rules --patterns-only should not write stderr"
+	);
+}
+
+#[test]
+fn rules_patterns_only_respects_kind_filter() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_file(
+		repo_root,
+		Path::new("pullhook.json"),
+		r#"{
+  "rules": [
+    {
+      "name": "install dependencies",
+      "install": true
+    },
+    {
+      "name": "format",
+      "changed": "packages/a/package-lock.json",
+      "run": "cargo fmt --all"
+    }
+  ]
+}
+"#,
+	);
+
+	let output = run_pullhook(repo_root, &["rules", "--kind", "install", "--patterns-only"]);
+
+	assert!(
+		output.status.success(),
+		"rules --kind install --patterns-only should succeed"
+	);
+	let stdout = stdout_text(&output);
+	assert!(
+		stdout.trim().is_empty(),
+		"install rules without configured changed patterns should print no patterns"
+	);
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"rules --kind install --patterns-only should not write stderr"
 	);
 }
 
