@@ -1658,6 +1658,7 @@ fn init_plan_json(
 	error: Option<&str>,
 ) -> serde_json::Value {
 	json!({
+		"status": if error.is_some() { "error" } else { "ok" },
 		"path": path.display().to_string(),
 		"format": format.label(),
 		"existed": existed,
