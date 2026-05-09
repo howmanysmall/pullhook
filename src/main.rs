@@ -466,6 +466,10 @@ fn validate_config_command(args: &ValidateArgs) -> Result<()> {
 	}
 
 	let (_, _, config) = load_config_from_cwd(args.debug, args.config.as_deref())?;
+	if args.quiet {
+		return Ok(());
+	}
+
 	renderer.render_message_stage(&format!("config valid: {}", config.path.display()));
 	renderer.render_message_stage(&format!(
 		"entries: {} | rules: {} | parallel groups: {}",

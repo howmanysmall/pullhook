@@ -51,6 +51,7 @@ Examples:
 const VALIDATE_AFTER_HELP: &str = "\
 Examples:
   pullhook validate
+  pullhook validate --quiet
   pullhook validate --json
   pullhook validate --config config/pullhook.custom.json";
 
@@ -331,6 +332,10 @@ pub struct ExplainArgs {
 
 /// Arguments for `pullhook validate`.
 #[derive(Debug, Clone, Args)]
+#[expect(
+	clippy::struct_excessive_bools,
+	reason = "CLI flags are naturally represented as independent booleans"
+)]
 #[command(after_help = VALIDATE_AFTER_HELP)]
 pub struct ValidateArgs {
 	/// Load config from an explicit path instead of repo-root discovery.
@@ -340,6 +345,10 @@ pub struct ValidateArgs {
 	/// Print machine-readable JSON instead of text output.
 	#[arg(long = "json", default_value_t = false)]
 	pub json: bool,
+
+	/// Suppress successful text output.
+	#[arg(long = "quiet", default_value_t = false, conflicts_with = "json")]
+	pub quiet: bool,
 
 	/// Enable debug logging.
 	#[arg(short = 'd', long = "debug", default_value_t = false)]

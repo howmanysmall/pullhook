@@ -363,6 +363,19 @@ fn config_path_only_conflicts_with_json() {
 }
 
 #[test]
+fn validate_quiet_conflicts_with_json() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["validate", "--quiet", "--json"]);
+
+	assert!(!output.status.success(), "--quiet should conflict with --json");
+	let stderr = stderr_text(&output);
+	assert!(stderr.contains("cannot be used with"));
+	assert!(stderr.contains("--quiet"));
+	assert!(stderr.contains("--json"));
+}
+
+#[test]
 fn init_stdout_conflicts_with_force() {
 	let temp = tempfile::tempdir().expect("create temp dir");
 
@@ -770,6 +783,21 @@ fn validate_reports_invalid_fail_text() {
 	let stderr = stderr_text(&output);
 	assert!(stderr.contains("unknown style `sparkle`"));
 	assert!(stderr.contains("pullhook.json"));
+}
+
+#[test]
+fn validate_quiet_suppresses_success_output() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_config_rule(repo_root, "write marker", "packages/a/package-lock.json", "true");
+
+	let output = run_pullhook(repo_root, &["validate", "--quiet"]);
+
+	assert!(output.status.success(), "validate --quiet should succeed");
+	let stdout = stdout_text(&output);
+	assert!(stdout.trim().is_empty(), "quiet validate should not write stdout");
+	let stderr = stderr_text(&output);
+	assert!(stderr.trim().is_empty(), "quiet validate should not write stderr");
 }
 
 #[test]
