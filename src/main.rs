@@ -23,7 +23,7 @@ use tracing_subscriber::EnvFilter;
 
 use crate::cli::{
 	Cli, CodeKind, CodesArgs, CommandCatalogArgs, CommandCategory, Commands, CompletionArgs, ConfigArgs, ConfigRunArgs,
-	DoctorArgs, ExplainArgs, InitArgs, RulesArgs, RulesKind, RunArgs, SchemaArgs, ValidateArgs,
+	DoctorArgs, ExamplesArgs, ExplainArgs, InitArgs, RulesArgs, RulesKind, RunArgs, SchemaArgs, ValidateArgs,
 };
 use crate::config::{
 	Config, Entry, EvaluatedEntry, EvaluatedGroup, EvaluatedRule, FailTextContext, OnFailure, Pattern,
@@ -180,6 +180,14 @@ struct CommandInfo {
 	script_friendly: bool,
 }
 
+#[derive(Debug, Clone, Copy, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ExampleInfo {
+	title: &'static str,
+	command: &'static str,
+	summary: &'static str,
+}
+
 const COMMAND_INFOS: &[CommandInfo] = &[
 	CommandInfo {
 		name: "run",
@@ -254,6 +262,14 @@ const COMMAND_INFOS: &[CommandInfo] = &[
 		script_friendly: true,
 	},
 	CommandInfo {
+		name: "examples",
+		category: "reference",
+		summary: "Show common pullhook workflows and commands.",
+		json: true,
+		requires_repo: false,
+		script_friendly: true,
+	},
+	CommandInfo {
 		name: "commands",
 		category: "reference",
 		summary: "List pullhook commands for humans or automation.",
@@ -268,6 +284,59 @@ const COMMAND_INFOS: &[CommandInfo] = &[
 		json: true,
 		requires_repo: false,
 		script_friendly: true,
+	},
+];
+
+const EXAMPLE_INFOS: &[ExampleInfo] = &[
+	ExampleInfo {
+		title: "Create a config",
+		command: "pullhook init",
+		summary: "Write a starter pullhook.json in the current repository.",
+	},
+	ExampleInfo {
+		title: "Preview configured rules",
+		command: "pullhook explain --all-matches",
+		summary: "Inspect changed files, matched rules, and planned commands without running anything.",
+	},
+	ExampleInfo {
+		title: "Run configured rules",
+		command: "pullhook run",
+		summary: "Evaluate the git diff and execute matching pullhook rules.",
+	},
+	ExampleInfo {
+		title: "Dry-run execution",
+		command: "pullhook run --dry-run",
+		summary: "Show the commands that would run without executing them.",
+	},
+	ExampleInfo {
+		title: "Script-friendly command list",
+		command: "pullhook run --commands-only",
+		summary: "Print planned command lines only, one per line.",
+	},
+	ExampleInfo {
+		title: "Validate config in CI",
+		command: "pullhook validate --quiet",
+		summary: "Exit non-zero for invalid config while keeping successful output silent.",
+	},
+	ExampleInfo {
+		title: "Inspect repository readiness",
+		command: "pullhook doctor --strict",
+		summary: "Check repository, config, diff-base, and package-manager readiness.",
+	},
+	ExampleInfo {
+		title: "Install after lockfile changes",
+		command: "pullhook --install",
+		summary: "Use legacy one-off mode to detect the package manager and run install.",
+	},
+	ExampleInfo {
+		title: "List command catalog",
+		command: "pullhook commands --json",
+		summary: "Return supported commands and categories for automation.",
+	},
+	ExampleInfo {
+		title: "List status codes",
+		command: "pullhook codes --codes-only",
+		summary: "Print stable status codes for scripts or completion helpers.",
 	},
 ];
 
@@ -543,6 +612,7 @@ fn main() {
 
 	let result = match cli.command.as_ref() {
 		Some(Commands::Completion(args)) => completion_command(args),
+		Some(Commands::Examples(args)) => examples_command(args),
 		Some(Commands::CommandCatalog(args)) => command_catalog_command(args),
 		Some(Commands::Codes(args)) => codes_command(args),
 		Some(Commands::Run(args)) => {
@@ -587,6 +657,31 @@ fn main() {
 		eprintln!("error: {error:#}");
 		std::process::exit(1);
 	}
+}
+
+fn examples_command(args: &ExamplesArgs) -> Result<()> {
+	if args.json {
+		println!(
+			"{}",
+			serde_json::to_string_pretty(&json!({
+				"status": "ok",
+				"code": serde_json::Value::Null,
+				"examples": EXAMPLE_INFOS,
+				"summary": {
+					"examples": EXAMPLE_INFOS.len(),
+				},
+			}))?
+		);
+		return Ok(());
+	}
+
+	println!("Pullhook examples");
+	println!();
+	for example in EXAMPLE_INFOS {
+		println!("{}: {}", example.title, example.command);
+		println!("  {}", example.summary);
+	}
+	Ok(())
 }
 
 fn command_catalog_command(args: &CommandCatalogArgs) -> Result<()> {

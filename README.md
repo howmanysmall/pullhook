@@ -71,6 +71,7 @@ Commands:
   schema      Print or write the pullhook JSON Schema
   init        Create a starter pullhook config file
   completion  Generate shell completion scripts
+  examples    Show common pullhook workflows and commands
   commands    List pullhook commands for humans or automation
   codes       List stable JSON status codes for automation
   help        Print this message or the help of the given subcommand(s)
@@ -264,6 +265,8 @@ pullhook doctor
 pullhook doctor --quiet
 pullhook doctor --strict
 pullhook doctor --json
+pullhook examples
+pullhook examples --json
 pullhook commands
 pullhook commands --category diagnostic
 pullhook commands --category reference --names-only
@@ -346,6 +349,8 @@ plus a `repositoryError` object with the searched path.
 Missing-mode legacy JSON errors explain the config-mode path and the explicit legacy `--pattern`/`--command` fallback.
 Pattern JSON errors include a `patternError` object with the rejected glob and parser reason.
 Legacy command-parse JSON errors include a `commandParse` object with the rejected command and parser reason.
+Use `pullhook examples` to inspect common workflows in text form, or `pullhook examples --json` when another
+tool needs example commands without scraping docs.
 Use `pullhook commands` to inspect the command catalog in text form, or `pullhook commands --json` when another
 tool needs supported commands, categories, and repo requirements without scraping help text.
 Add `--category workflow`, `--category diagnostic`, `--category generator`, or `--category reference` to narrow
