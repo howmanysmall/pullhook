@@ -438,6 +438,13 @@ const EXAMPLE_INFOS: &[ExampleInfo] = &[
 		summary: "Print the number of configured rule selectors matching the current filters.",
 	},
 	ExampleInfo {
+		title: "Search configured rules",
+		category: "diagnostic",
+		command_name: "rules",
+		command: "pullhook rules --search lint --names-only",
+		summary: "Find configured rule selectors by name, kind, command, patterns, or fail text.",
+	},
+	ExampleInfo {
 		title: "Write JSON Schema",
 		category: "generator",
 		command_name: "schema",

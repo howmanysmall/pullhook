@@ -2494,7 +2494,7 @@ fn categories_json_lists_command_coverage() {
 		categories.len() as u64
 	);
 	assert_eq!(value["summary"]["commands"], 16);
-	assert_eq!(value["summary"]["examples"], 27);
+	assert_eq!(value["summary"]["examples"], 28);
 	let stderr = stderr_text(&output);
 	assert!(stderr.trim().is_empty(), "categories --json should not write stderr");
 }
@@ -2517,7 +2517,7 @@ fn categories_search_filter_limits_results() {
 	assert_eq!(categories[0]["name"], "diagnostic");
 	assert_eq!(value["summary"]["categories"], 1);
 	assert_eq!(value["summary"]["commands"], 4);
-	assert_eq!(value["summary"]["examples"], 5);
+	assert_eq!(value["summary"]["examples"], 6);
 	let stderr = stderr_text(&output);
 	assert!(
 		stderr.trim().is_empty(),
@@ -2898,6 +2898,9 @@ fn examples_json_lists_common_workflows() {
 			.iter()
 			.any(|entry| entry["commandName"] == "rules" && entry["command"] == "pullhook rules --count-only")
 	);
+	assert!(examples.iter().any(
+		|entry| entry["commandName"] == "rules" && entry["command"] == "pullhook rules --search lint --names-only"
+	));
 	assert!(examples.iter().any(|entry| entry["commandName"] == "commands"
 		&& entry["command"] == "pullhook commands --search config --count-only"));
 	assert!(examples.iter().any(|entry| entry["commandName"] == "completion"
@@ -3570,9 +3573,9 @@ fn commands_json_lists_cli_catalog() {
 		value["summary"]["commands"].as_u64().expect("command count"),
 		commands.len() as u64
 	);
-	assert_eq!(value["summary"]["commandExamples"], 26);
+	assert_eq!(value["summary"]["commandExamples"], 27);
 	assert_eq!(value["summary"]["topLevelExamples"], 1);
-	assert_eq!(value["summary"]["examples"], 27);
+	assert_eq!(value["summary"]["examples"], 28);
 	let stderr = stderr_text(&output);
 	assert!(stderr.trim().is_empty(), "commands --json should not write stderr");
 }
