@@ -2166,6 +2166,7 @@ fn validate_json_reports_config_summary() {
 	assert!(output.status.success(), "validate --json should succeed");
 	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse validate json");
 	assert_eq!(value["status"], "ok");
+	assert_eq!(value["code"], serde_json::Value::Null);
 	assert_eq!(value["valid"], true);
 	assert_eq!(value["entries"], 2);
 	assert_eq!(value["rules"], 2);

@@ -297,7 +297,7 @@ Use `schema --check --output <path>` in CI when a checked-in schema file must st
 `schema --check --json` and `completion <shell> --check --json` include top-level `status`, stable `code`, `error`, and
 `details` fields with the rerun command when generated output is stale.
 `validate --json` emits a compact config summary for scripts and still prints structured JSON when the
-config is invalid, including `status`, `error`, `details`, and `validationErrors` fields. Config parse failures also include a `parseError` object with the config path and parser reason. Use `validate --quiet` when CI only needs the exit code. `doctor` checks repo discovery, config health, diff-base availability, and `--install`
+config is invalid, including `status`, stable `code`, `error`, `details`, and `validationErrors` fields. Config parse failures also include a `parseError` object with the config path and parser reason. Use `validate --quiet` when CI only needs the exit code. `doctor` checks repo discovery, config health, diff-base availability, and `--install`
 detection in one pass, with a short hint for each check. Use `doctor --strict` when CI should fail on warnings.
 Use `doctor --quiet` to suppress all-ok text output without hiding warnings or errors.
 `doctor --json` includes `status`, stable top-level and per-check `code` values, `strict`, `error`, and summary booleans so automation can read the result without scraping stderr.

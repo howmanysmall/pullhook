@@ -2291,6 +2291,7 @@ fn doctor_report_json(
 fn config_summary_json(config: &Config) -> serde_json::Value {
 	json!({
 		"status": "ok",
+		"code": null,
 		"valid": true,
 		"path": config.path.display().to_string(),
 		"onFailure": on_failure_label(config.on_failure),
