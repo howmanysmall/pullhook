@@ -284,6 +284,7 @@ pullhook managers --search pnpm
 pullhook managers --patterns-only
 pullhook managers --json
 pullhook categories
+pullhook categories --search workflow
 pullhook categories --names-only
 pullhook categories --json
 pullhook examples
@@ -403,6 +404,7 @@ Add `--search <text>` to match example titles, commands, categories, or summarie
 Use `pullhook examples --commands-only` when a script or completion helper only needs example command lines.
 Use `pullhook examples --titles-only` when a script or completion helper only needs example titles.
 Use `pullhook categories` to inspect command categories with command and example counts.
+Add `--search <text>` to match category names or descriptions case-insensitively.
 Use `pullhook commands` to inspect the command catalog in text form, or `pullhook commands --json` when another
 tool needs supported commands, categories, and repo requirements without scraping help text.
 Add `--category workflow`, `--category diagnostic`, `--category generator`, or `--category reference` to narrow

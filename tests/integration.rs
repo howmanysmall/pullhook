@@ -1770,6 +1770,7 @@ fn categories_json_lists_command_coverage() {
 	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse categories json");
 	assert_eq!(value["status"], "ok");
 	assert_eq!(value["code"], serde_json::Value::Null);
+	assert_eq!(value["filters"]["search"], serde_json::Value::Null);
 	let categories = value["categories"].as_array().expect("categories array");
 	assert!(
 		categories
@@ -1782,6 +1783,30 @@ fn categories_json_lists_command_coverage() {
 	);
 	let stderr = stderr_text(&output);
 	assert!(stderr.trim().is_empty(), "categories --json should not write stderr");
+}
+
+#[test]
+fn categories_search_filter_limits_results() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["categories", "--search", "DIAGNOSTIC", "--json"]);
+
+	assert!(
+		output.status.success(),
+		"categories --search DIAGNOSTIC --json should succeed"
+	);
+	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse filtered categories json");
+	assert_eq!(value["status"], "ok");
+	assert_eq!(value["filters"]["search"], "DIAGNOSTIC");
+	let categories = value["categories"].as_array().expect("categories array");
+	assert_eq!(categories.len(), 1, "diagnostic search should only keep diagnostic");
+	assert_eq!(categories[0]["name"], "diagnostic");
+	assert_eq!(value["summary"]["categories"], 1);
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"categories --search DIAGNOSTIC --json should not write stderr"
+	);
 }
 
 #[test]
@@ -1800,6 +1825,25 @@ fn categories_names_only_prints_clean_category_names() {
 	assert!(
 		stderr.trim().is_empty(),
 		"categories --names-only should not write stderr"
+	);
+}
+
+#[test]
+fn categories_search_filter_composes_with_names_only() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["categories", "--search", "generate", "--names-only"]);
+
+	assert!(
+		output.status.success(),
+		"categories --search generate --names-only should succeed"
+	);
+	let stdout = stdout_text(&output);
+	assert_eq!(stdout.lines().collect::<Vec<_>>(), vec!["generator"]);
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"categories --search generate --names-only should not write stderr"
 	);
 }
 
@@ -3256,6 +3300,7 @@ fn utility_help_groups_options_by_task() {
 	assert!(categories.status.success(), "categories help should succeed");
 	let categories_stdout = stdout_text(&categories);
 	assert!(categories_stdout.contains("Output options:"));
+	assert!(categories_stdout.contains("pullhook categories --search workflow"));
 	assert!(categories_stdout.contains("pullhook categories --names-only"));
 	assert!(categories_stdout.contains("pullhook categories --json"));
 

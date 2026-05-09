@@ -1102,8 +1102,9 @@ fn list_or_none(values: &[&str]) -> String {
 }
 
 fn categories_command(args: &CategoriesArgs) -> Result<()> {
+	let categories = filtered_category_infos(args.search.as_deref());
 	if args.json {
-		let categories = CATEGORY_INFOS
+		let categories = categories
 			.iter()
 			.map(|category| category_info_json(*category))
 			.collect::<Vec<_>>();
@@ -1112,6 +1113,9 @@ fn categories_command(args: &CategoriesArgs) -> Result<()> {
 			serde_json::to_string_pretty(&json!({
 				"status": "ok",
 				"code": serde_json::Value::Null,
+				"filters": {
+					"search": args.search.as_deref(),
+				},
 				"categories": categories,
 				"summary": {
 					"categories": categories.len(),
@@ -1122,15 +1126,18 @@ fn categories_command(args: &CategoriesArgs) -> Result<()> {
 	}
 
 	if args.names_only {
-		for category in CATEGORY_INFOS {
+		for category in categories {
 			println!("{}", category.name);
 		}
 		return Ok(());
 	}
 
 	println!("Command categories");
+	if let Some(search) = &args.search {
+		println!("filter: search={search}");
+	}
 	println!();
-	for category in CATEGORY_INFOS {
+	for category in categories {
 		let command_count = command_count_for_category(category.name);
 		let example_count = example_count_for_category(category.name);
 		println!(
@@ -1140,6 +1147,23 @@ fn categories_command(args: &CategoriesArgs) -> Result<()> {
 		println!("  {}", category.description);
 	}
 	Ok(())
+}
+
+fn filtered_category_infos(search: Option<&str>) -> Vec<CategoryInfo> {
+	let search = search.map(str::to_ascii_lowercase);
+	CATEGORY_INFOS
+		.iter()
+		.copied()
+		.filter(|category| {
+			search
+				.as_deref()
+				.is_none_or(|search| category_info_matches_search(*category, search))
+		})
+		.collect()
+}
+
+fn category_info_matches_search(category: CategoryInfo, search: &str) -> bool {
+	category.name.contains(search) || category.description.to_ascii_lowercase().contains(search)
 }
 
 fn category_info_json(category: CategoryInfo) -> serde_json::Value {

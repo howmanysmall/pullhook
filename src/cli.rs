@@ -163,6 +163,7 @@ Examples:
 const CATEGORIES_AFTER_HELP: &str = "\
 Examples:
   pullhook categories
+  pullhook categories --search workflow
   pullhook categories --names-only
   pullhook categories --json";
 
@@ -1132,6 +1133,10 @@ pub struct ManagersArgs {
 #[derive(Debug, Clone, Args)]
 #[command(after_help = CATEGORIES_AFTER_HELP)]
 pub struct CategoriesArgs {
+	/// Only list categories whose name or description contains this text.
+	#[arg(long = "search", value_name = "TEXT", help_heading = "Filter options")]
+	pub search: Option<String>,
+
 	/// Print machine-readable JSON instead of text output.
 	#[arg(
 		long = "json",
