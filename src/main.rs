@@ -1634,6 +1634,13 @@ fn json_error_details(error: &anyhow::Error) -> Vec<String> {
 			"or pass explicit `--pattern <glob>` and `--command <cmd>` instead of `--install`".to_owned(),
 		];
 	}
+	if message.starts_with("missing required argument") {
+		return vec![
+			"use `pullhook run` to execute configured rules from pullhook.json".to_owned(),
+			"or pass `--pattern <glob>` with `--command <cmd>` for legacy top-level mode".to_owned(),
+			"use `--install` only when the repo root has a supported package-manager file".to_owned(),
+		];
+	}
 	if message.contains("configs are not supported")
 		|| message.starts_with("unsupported config extension")
 		|| message == "config path has no extension"

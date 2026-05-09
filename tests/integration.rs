@@ -271,6 +271,14 @@ fn legacy_json_reports_missing_mode_as_json() {
 	assert_eq!(value["status"], "error");
 	let error = value["error"].as_str().expect("error");
 	assert!(error.contains("missing required argument"));
+	assert_eq!(
+		value["details"],
+		serde_json::json!([
+			"use `pullhook run` to execute configured rules from pullhook.json",
+			"or pass `--pattern <glob>` with `--command <cmd>` for legacy top-level mode",
+			"use `--install` only when the repo root has a supported package-manager file"
+		])
+	);
 	let stderr = stderr_text(&output);
 	assert!(stderr.contains("missing required argument"));
 }
