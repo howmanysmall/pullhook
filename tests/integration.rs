@@ -4377,7 +4377,12 @@ fn init_stdout_conflicts_with_force() {
 #[test]
 fn init_stdout_conflicts_with_plan_output_modes() {
 	let temp = tempfile::tempdir().expect("create temp dir");
-	let conflicting_modes: &[&[&str]] = &[&["init", "--stdout", "--dry-run"], &["init", "--stdout", "--json"]];
+	let conflicting_modes: &[&[&str]] = &[
+		&["init", "--stdout", "--dry-run"],
+		&["init", "--stdout", "--json"],
+		&["init", "--stdout", "--dry-run", "--path-only"],
+		&["init", "--stdout", "--dry-run", "--format-only"],
+	];
 
 	for args in conflicting_modes {
 		let output = run_pullhook(temp.path(), args);
@@ -4386,6 +4391,37 @@ fn init_stdout_conflicts_with_plan_output_modes() {
 		let stderr = stderr_text(&output);
 		assert!(stderr.contains("cannot be used with"));
 		assert!(stderr.contains("--stdout"));
+	}
+}
+
+#[test]
+fn init_plan_line_outputs_require_dry_run_and_conflict() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+	let cases: &[(&[&str], &[&str])] = &[
+		(&["init", "--path-only"], &["--path-only", "--dry-run"]),
+		(&["init", "--format-only"], &["--format-only", "--dry-run"]),
+		(
+			&["init", "--dry-run", "--path-only", "--json"],
+			&["--path-only", "--json"],
+		),
+		(
+			&["init", "--dry-run", "--format-only", "--json"],
+			&["--format-only", "--json"],
+		),
+		(
+			&["init", "--dry-run", "--path-only", "--format-only"],
+			&["--path-only", "--format-only"],
+		),
+	];
+
+	for (args, flags) in cases {
+		let output = run_pullhook(temp.path(), args);
+
+		assert!(!output.status.success(), "{args:?} should fail");
+		let stderr = stderr_text(&output);
+		for flag in *flags {
+			assert!(stderr.contains(flag), "{args:?} stderr should mention {flag}");
+		}
 	}
 }
 
@@ -4538,6 +4574,8 @@ fn init_help_lists_generation_examples() {
 	assert!(stdout.contains("pullhook init --force"));
 	assert!(stdout.contains("pullhook init --format yaml"));
 	assert!(stdout.contains("pullhook init --output config/pullhook.custom.json"));
+	assert!(stdout.contains("pullhook init --dry-run --path-only"));
+	assert!(stdout.contains("pullhook init --dry-run --format-only"));
 	assert!(stdout.contains("pullhook init --dry-run --json"));
 	assert!(stdout.contains("Generation options:"));
 	assert!(stdout.contains("Output options:"));
@@ -4882,6 +4920,57 @@ fn init_dry_run_previews_default_config_without_writing_file() {
 	assert!(!predicate::path::is_file().eval(&repo_root.join("pullhook.json")));
 	let stderr = stderr_text(&output);
 	assert!(stderr.trim().is_empty(), "init --dry-run should not write stderr");
+}
+
+#[test]
+fn init_dry_run_path_only_prints_clean_path_without_writing_file() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+
+	let output = run_pullhook(repo_root, &["init", "--dry-run", "--path-only"]);
+
+	assert!(output.status.success(), "init --dry-run --path-only should succeed");
+	let stdout = stdout_text(&output);
+	let expected_path = fs::canonicalize(repo_root)
+		.expect("canonical repo root")
+		.join("pullhook.json");
+	assert_eq!(
+		stdout.lines().collect::<Vec<_>>(),
+		vec![expected_path.display().to_string()]
+	);
+	assert!(!predicate::path::is_file().eval(&repo_root.join("pullhook.json")));
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"init --dry-run --path-only should not write stderr"
+	);
+}
+
+#[test]
+fn init_dry_run_format_only_prints_clean_format_without_writing_file() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+
+	let output = run_pullhook(
+		repo_root,
+		&[
+			"init",
+			"--output",
+			"config/pullhook.custom.yaml",
+			"--dry-run",
+			"--format-only",
+		],
+	);
+
+	assert!(output.status.success(), "init --dry-run --format-only should succeed");
+	let stdout = stdout_text(&output);
+	assert_eq!(stdout.lines().collect::<Vec<_>>(), vec!["yaml"]);
+	assert!(!predicate::path::is_file().eval(&repo_root.join("config/pullhook.custom.yaml")));
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"init --dry-run --format-only should not write stderr"
+	);
 }
 
 #[test]

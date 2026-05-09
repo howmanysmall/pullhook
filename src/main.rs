@@ -2600,7 +2600,11 @@ fn init_config_command(args: &InitArgs) -> Result<()> {
 	}
 
 	if args.dry_run {
-		if args.json {
+		if args.path_only {
+			println!("{}", path.display());
+		} else if args.format_only {
+			println!("{}", format.label());
+		} else if args.json {
 			println!(
 				"{}",
 				serde_json::to_string_pretty(&init_plan_json(&path, format, exists, args.force, true, None))?

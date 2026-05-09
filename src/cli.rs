@@ -133,6 +133,8 @@ Examples:
   pullhook init
   pullhook init --format yaml
   pullhook init --output config/pullhook.custom.json
+  pullhook init --dry-run --path-only
+  pullhook init --dry-run --format-only
   pullhook init --dry-run --json
   pullhook init --stdout
   pullhook init --force";
@@ -917,8 +919,33 @@ pub struct InitArgs {
 	pub dry_run: bool,
 
 	/// Print machine-readable JSON instead of text output.
-	#[arg(long = "json", default_value_t = false, help_heading = "Output options")]
+	#[arg(
+		long = "json",
+		default_value_t = false,
+		conflicts_with_all = ["path_only", "format_only"],
+		help_heading = "Output options"
+	)]
 	pub json: bool,
+
+	/// Print only the path that init would write.
+	#[arg(
+		long = "path-only",
+		default_value_t = false,
+		requires = "dry_run",
+		conflicts_with_all = ["json", "stdout", "format_only"],
+		help_heading = "Output options"
+	)]
+	pub path_only: bool,
+
+	/// Print only the config format that init would write.
+	#[arg(
+		long = "format-only",
+		default_value_t = false,
+		requires = "dry_run",
+		conflicts_with_all = ["json", "stdout", "path_only"],
+		help_heading = "Output options"
+	)]
+	pub format_only: bool,
 
 	/// Overwrite an existing pullhook config file in place.
 	#[arg(
