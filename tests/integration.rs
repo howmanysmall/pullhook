@@ -875,6 +875,11 @@ fn run_help_lists_json_examples() {
 	assert!(stdout.contains("pullhook run --require-match --dry-run"));
 	assert!(stdout.contains("git diff --name-only HEAD~1 | pullhook run --changed-files-file - --dry-run"));
 	assert!(stdout.contains("pullhook run --config config/pullhook.custom.json --all-matches"));
+	assert!(stdout.contains("Input options:"));
+	assert!(stdout.contains("Execution options:"));
+	assert!(stdout.contains("Output options:"));
+	assert!(stdout.contains("Rule selection:"));
+	assert!(stdout.contains("Display options:"));
 	assert!(stdout.contains("--no-color"));
 	assert!(stdout.contains("--quiet"));
 	assert!(stdout.contains("--summary-only"));

@@ -254,39 +254,59 @@ pub struct RunArgs {
 #[command(after_help = CONFIG_RUN_AFTER_HELP)]
 pub struct ConfigRunArgs {
 	/// Load config from an explicit path instead of repo-root discovery.
-	#[arg(long = "config", value_name = "path")]
+	#[arg(long = "config", value_name = "path", help_heading = "Input options")]
 	pub config: Option<PathBuf>,
 
 	/// Override the git base revision.
-	#[arg(long = "base", value_name = "rev")]
+	#[arg(long = "base", value_name = "rev", help_heading = "Input options")]
 	pub base: Option<String>,
 
 	/// Evaluate as if this file changed; repeat for multiple files.
-	#[arg(long = "changed-file", value_name = "path", conflicts_with = "base")]
+	#[arg(
+		long = "changed-file",
+		value_name = "path",
+		conflicts_with = "base",
+		help_heading = "Input options"
+	)]
 	pub changed_files: Vec<PathBuf>,
 
 	/// Read changed file paths from a newline-delimited file (`-` for stdin).
-	#[arg(long = "changed-files-file", value_name = "path", conflicts_with = "base")]
+	#[arg(
+		long = "changed-files-file",
+		value_name = "path",
+		conflicts_with = "base",
+		help_heading = "Input options"
+	)]
 	pub changed_files_file: Option<PathBuf>,
 
 	/// Read changed file paths from stdin, one path per line.
-	#[arg(long = "changed-files-stdin", default_value_t = false, conflicts_with = "base")]
+	#[arg(
+		long = "changed-files-stdin",
+		default_value_t = false,
+		conflicts_with = "base",
+		help_heading = "Input options"
+	)]
 	pub changed_files_stdin: bool,
 
 	/// Max concurrent jobs for top-level work.
-	#[arg(long = "jobs", value_name = "n")]
+	#[arg(long = "jobs", value_name = "n", help_heading = "Execution options")]
 	pub jobs: Option<NonZeroUsize>,
 
 	/// Print planned commands and exit.
-	#[arg(long = "dry-run", default_value_t = false)]
+	#[arg(long = "dry-run", default_value_t = false, help_heading = "Execution options")]
 	pub dry_run: bool,
 
 	/// Print machine-readable JSON instead of text output.
-	#[arg(long = "json", default_value_t = false)]
+	#[arg(long = "json", default_value_t = false, help_heading = "Output options")]
 	pub json: bool,
 
 	/// Suppress successful text output while still reporting failures.
-	#[arg(long = "quiet", default_value_t = false, conflicts_with_all = ["json", "dry_run"])]
+	#[arg(
+		long = "quiet",
+		default_value_t = false,
+		conflicts_with_all = ["json", "dry_run"],
+		help_heading = "Output options"
+	)]
 	pub quiet: bool,
 
 	/// Print only changed-file and planned-command counts and exit without executing.
@@ -300,7 +320,8 @@ pub struct ConfigRunArgs {
 			"changed_files_only",
 			"matched_files_only",
 			"matched_rules_only"
-		]
+		],
+		help_heading = "Output options"
 	)]
 	pub summary_only: bool,
 
@@ -308,7 +329,8 @@ pub struct ConfigRunArgs {
 	#[arg(
 		long = "commands-only",
 		default_value_t = false,
-		conflicts_with_all = ["json", "quiet", "changed_files_only", "matched_files_only", "matched_rules_only"]
+		conflicts_with_all = ["json", "quiet", "changed_files_only", "matched_files_only", "matched_rules_only"],
+		help_heading = "Output options"
 	)]
 	pub commands_only: bool,
 
@@ -316,7 +338,8 @@ pub struct ConfigRunArgs {
 	#[arg(
 		long = "changed-files-only",
 		default_value_t = false,
-		conflicts_with_all = ["json", "quiet", "summary_only", "commands_only", "matched_files_only", "matched_rules_only"]
+		conflicts_with_all = ["json", "quiet", "summary_only", "commands_only", "matched_files_only", "matched_rules_only"],
+		help_heading = "Output options"
 	)]
 	pub changed_files_only: bool,
 
@@ -324,7 +347,8 @@ pub struct ConfigRunArgs {
 	#[arg(
 		long = "matched-files-only",
 		default_value_t = false,
-		conflicts_with_all = ["json", "quiet", "summary_only", "commands_only", "changed_files_only", "matched_rules_only"]
+		conflicts_with_all = ["json", "quiet", "summary_only", "commands_only", "changed_files_only", "matched_rules_only"],
+		help_heading = "Output options"
 	)]
 	pub matched_files_only: bool,
 
@@ -332,32 +356,49 @@ pub struct ConfigRunArgs {
 	#[arg(
 		long = "matched-rules-only",
 		default_value_t = false,
-		conflicts_with_all = ["json", "quiet", "summary_only", "commands_only", "changed_files_only", "matched_files_only"]
+		conflicts_with_all = ["json", "quiet", "summary_only", "commands_only", "changed_files_only", "matched_files_only"],
+		help_heading = "Output options"
 	)]
 	pub matched_rules_only: bool,
 
 	/// Show skipped rules as well as matched rules.
-	#[arg(long = "all-matches", default_value_t = false)]
+	#[arg(long = "all-matches", default_value_t = false, help_heading = "Rule selection")]
 	pub all_matches: bool,
 
 	/// Exit non-zero when no rules match changed files.
-	#[arg(long = "require-match", default_value_t = false)]
+	#[arg(long = "require-match", default_value_t = false, help_heading = "Rule selection")]
 	pub require_match: bool,
 
 	/// Limit execution to one or more named rules or parallel groups.
-	#[arg(long = "rule", value_name = "name")]
+	#[arg(long = "rule", value_name = "name", help_heading = "Rule selection")]
 	pub rules: Vec<String>,
 
 	/// Enable debug logging.
-	#[arg(short = 'd', long = "debug", default_value_t = false)]
+	#[arg(
+		short = 'd',
+		long = "debug",
+		default_value_t = false,
+		help_heading = "Display options"
+	)]
 	pub debug: bool,
 
 	/// Control non-debug ANSI styling (`auto`, `always`, `never`).
-	#[arg(long = "render", value_name = "mode", value_enum, default_value_t = RenderMode::Auto)]
+	#[arg(
+		long = "render",
+		value_name = "mode",
+		value_enum,
+		default_value_t = RenderMode::Auto,
+		help_heading = "Display options"
+	)]
 	pub render: RenderMode,
 
 	/// Disable ANSI styling in non-debug output.
-	#[arg(long = "no-color", default_value_t = false, conflicts_with = "render")]
+	#[arg(
+		long = "no-color",
+		default_value_t = false,
+		conflicts_with = "render",
+		help_heading = "Display options"
+	)]
 	pub no_color: bool,
 }
 
