@@ -367,6 +367,13 @@ fn legacy_run_json_rejects_debug_mode() {
 	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse debug conflict json");
 	assert_eq!(value["status"], "error");
 	assert_eq!(value["error"], "--json cannot be used with --debug");
+	assert_eq!(
+		value["details"],
+		serde_json::json!([
+			"rerun without `--debug` when a script needs JSON",
+			"rerun without `--json` when you need debug traces"
+		])
+	);
 	let stderr = stderr_text(&output);
 	assert!(stderr.contains("--json cannot be used with --debug"));
 }

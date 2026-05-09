@@ -1542,7 +1542,18 @@ fn unknown_selector_suggestions(error: &UnknownSelectorError) -> Vec<serde_json:
 }
 
 fn json_error_details(error: &anyhow::Error) -> Vec<String> {
-	error.chain().skip(1).map(ToString::to_string).collect()
+	let details = error.chain().skip(1).map(ToString::to_string).collect::<Vec<_>>();
+	if !details.is_empty() {
+		return details;
+	}
+
+	match error.to_string().as_str() {
+		"--json cannot be used with --debug" => vec![
+			"rerun without `--debug` when a script needs JSON".to_owned(),
+			"rerun without `--json` when you need debug traces".to_owned(),
+		],
+		_ => Vec::new(),
+	}
 }
 
 fn config_load_error_details(error: &error::PullhookError) -> Vec<String> {
