@@ -98,7 +98,8 @@ Examples:
 const COMPLETION_AFTER_HELP: &str = "\
 Examples:
   pullhook completion bash > ~/.local/share/bash-completion/completions/pullhook
-  pullhook completion zsh > ~/.zfunc/_pullhook";
+  pullhook completion zsh > ~/.zfunc/_pullhook
+  pullhook completion fish --output ~/.config/fish/completions/pullhook.fish";
 
 /// Pullhook command line arguments.
 #[derive(Debug, Clone, Parser)]
@@ -137,11 +138,7 @@ pub enum Commands {
 	/// Create a starter pullhook config file.
 	Init(InitArgs),
 	/// Generate shell completion scripts.
-	#[command(after_help = COMPLETION_AFTER_HELP)]
-	Completion {
-		/// Shell to generate completions for.
-		shell: Shell,
-	},
+	Completion(CompletionArgs),
 }
 
 /// Arguments for the default pullhook execution flow.
@@ -551,6 +548,18 @@ pub struct SchemaArgs {
 	pub output: Option<PathBuf>,
 }
 
+/// Arguments for `pullhook completion`.
+#[derive(Debug, Clone, Args)]
+#[command(after_help = COMPLETION_AFTER_HELP)]
+pub struct CompletionArgs {
+	/// Shell to generate completions for.
+	pub shell: Shell,
+
+	/// Write completions to a file instead of stdout.
+	#[arg(long = "output", value_name = "path")]
+	pub output: Option<PathBuf>,
+}
+
 /// Supported starter config formats for `pullhook init`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub enum InitFormat {
@@ -576,9 +585,9 @@ impl From<InitFormat> for ConfigFormat {
 }
 
 impl Cli {
-	/// Write shell completions to stdout.
-	pub fn print_completion(shell: Shell) {
-		generate(shell, &mut Self::command(), "pullhook", &mut std::io::stdout());
+	/// Write shell completions to the provided writer.
+	pub fn write_completion<W: std::io::Write>(shell: Shell, writer: &mut W) {
+		generate(shell, &mut Self::command(), "pullhook", writer);
 	}
 }
 
@@ -621,7 +630,7 @@ mod tests {
 	fn completion_subcommand_skips_run_requirements() {
 		let cli = Cli::try_parse_from(["pullhook", "completion", "bash"]).expect("completion parses");
 
-		assert!(matches!(cli.command, Some(Commands::Completion { shell: Shell::Bash })));
+		assert!(matches!(cli.command, Some(Commands::Completion(args)) if args.shell == Shell::Bash));
 		assert!(cli.run.pattern.is_none());
 	}
 

@@ -10,7 +10,7 @@ mod pm;
 mod runner;
 
 use std::collections::BTreeSet;
-use std::io::Read as _;
+use std::io::{Read as _, Write as _};
 
 use anyhow::{Context, Result, anyhow};
 use clap::Parser;
@@ -20,8 +20,8 @@ use tracing::debug;
 use tracing_subscriber::EnvFilter;
 
 use crate::cli::{
-	Cli, Commands, ConfigArgs, ConfigRunArgs, DoctorArgs, ExplainArgs, InitArgs, RulesArgs, RulesKind, RunArgs,
-	SchemaArgs, ValidateArgs,
+	Cli, Commands, CompletionArgs, ConfigArgs, ConfigRunArgs, DoctorArgs, ExplainArgs, InitArgs, RulesArgs, RulesKind,
+	RunArgs, SchemaArgs, ValidateArgs,
 };
 use crate::config::{
 	Config, Entry, EvaluatedEntry, EvaluatedGroup, EvaluatedRule, FailTextContext, OnFailure, Pattern,
@@ -101,10 +101,7 @@ fn main() {
 	let cli = Cli::parse();
 
 	let result = match cli.command.as_ref() {
-		Some(Commands::Completion { shell }) => {
-			print_completion(*shell);
-			return;
-		}
+		Some(Commands::Completion(args)) => completion_command(args),
 		Some(Commands::Run(args)) => {
 			init_tracing(args.debug);
 			run_config_command(args)
@@ -149,8 +146,25 @@ fn main() {
 	}
 }
 
-fn print_completion(shell: clap_complete::Shell) {
-	Cli::print_completion(shell);
+fn completion_command(args: &CompletionArgs) -> Result<()> {
+	match &args.output {
+		Some(path) => {
+			if let Some(parent) = path.parent()
+				&& !parent.as_os_str().is_empty()
+			{
+				std::fs::create_dir_all(parent)
+					.with_context(|| format!("failed to create completion output directory `{}`", parent.display()))?;
+			}
+			let mut file = std::fs::File::create(path)
+				.with_context(|| format!("failed to create completion output file `{}`", path.display()))?;
+			Cli::write_completion(args.shell, &mut file);
+			file.flush()
+				.with_context(|| format!("failed to flush completion output file `{}`", path.display()))?;
+		}
+		None => Cli::write_completion(args.shell, &mut std::io::stdout()),
+	}
+
+	Ok(())
 }
 
 fn run_legacy(cli: &RunArgs) -> Result<()> {

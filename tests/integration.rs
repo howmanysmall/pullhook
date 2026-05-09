@@ -293,6 +293,35 @@ fn completion_command_succeeds_outside_git_repo() {
 }
 
 #[test]
+fn completion_command_writes_output_file() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+	let output_path = Path::new("completions/fish/pullhook.fish");
+
+	let output = run_pullhook(
+		temp.path(),
+		&[
+			"completion",
+			"fish",
+			"--output",
+			output_path.to_str().expect("utf-8 path"),
+		],
+	);
+
+	assert!(
+		output.status.success(),
+		"completion --output should succeed outside a git repo"
+	);
+	let stdout = stdout_text(&output);
+	assert!(stdout.trim().is_empty(), "completion --output should not write stdout");
+	let stderr = stderr_text(&output);
+	assert!(stderr.trim().is_empty(), "completion --output should not write stderr");
+	let completion = fs::read_to_string(temp.path().join(output_path)).expect("read completion file");
+	assert!(completion.contains("complete -c pullhook"));
+	assert!(completion.contains("-l commands-only"));
+	assert!(completion.contains("-a \"completion\""));
+}
+
+#[test]
 fn root_help_lists_common_examples() {
 	let temp = tempfile::tempdir().expect("create temp dir");
 
