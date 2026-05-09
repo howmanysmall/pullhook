@@ -492,8 +492,9 @@ Use `pullhook codes --surfaces-only` when a script needs the distinct code surfa
 Use `pullhook codes --descriptions-only` when a script or command palette only needs code descriptions.
 
 Use `pullhook rules` to list configured rule and parallel group names before targeting a large config.
-`rules --json` includes top-level `status`, stable `code`, and `error` fields like the other JSON commands, plus
-script-friendly `selectors`, `commands`, `patterns`, `excludePatterns`, and `failText` arrays with summary counts.
+`rules --json` includes top-level `status`, stable `code`, `error`, `filters`, and `searchFields` fields like the
+catalog JSON commands, plus script-friendly `selectors`, `commands`, `patterns`, `excludePatterns`, and `failText`
+arrays with summary counts.
 Unknown selector JSON errors include `unknownSelectors`, `availableSelectors`, and `suggestions`, so scripts
 do not need to scrape the human error message.
 Use `pullhook rules --count-only` when a script only needs the number of matching rule or group selectors.

@@ -743,7 +743,7 @@ pub struct DoctorArgs {
 	#[arg(long = "config", value_name = "path", help_heading = "Input options")]
 	pub config: Option<PathBuf>,
 
-	/// Print machine-readable JSON instead of text output.
+	/// Print JSON with filters and searchFields metadata.
 	#[arg(
 		long = "json",
 		default_value_t = false,
@@ -1034,7 +1034,7 @@ pub struct RulesArgs {
 	#[arg(long = "config", value_name = "path", help_heading = "Input options")]
 	pub config: Option<PathBuf>,
 
-	/// Print machine-readable JSON instead of text output.
+	/// Print JSON with filters and searchFields metadata.
 	#[arg(
 		long = "json",
 		default_value_t = false,

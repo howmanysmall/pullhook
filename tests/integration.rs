@@ -4188,6 +4188,7 @@ fn rules_help_lists_script_friendly_output_modes() {
 	assert!(stdout.contains("pullhook rules --rule lint --json"));
 	assert!(stdout.contains("Input options:"));
 	assert!(stdout.contains("Output options:"));
+	assert!(stdout.contains("Print JSON with filters and searchFields metadata"));
 	assert!(stdout.contains("Selection options:"));
 	assert!(stdout.contains("Display options:"));
 	assert!(stdout.contains("--search <text>"));
