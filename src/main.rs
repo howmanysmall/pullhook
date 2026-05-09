@@ -1079,9 +1079,16 @@ fn examples_command(args: &ExamplesArgs) -> Result<()> {
 		return Ok(());
 	}
 
-	if args.commands_only {
+	if args.output.commands_only {
 		for example in examples {
 			println!("{}", example.command);
+		}
+		return Ok(());
+	}
+
+	if args.output.titles_only {
+		for example in examples {
+			println!("{}", example.title);
 		}
 		return Ok(());
 	}

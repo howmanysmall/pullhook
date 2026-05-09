@@ -192,6 +192,7 @@ Examples:
   pullhook examples --search install
   pullhook examples --command run --commands-only
   pullhook examples --category reference --commands-only
+  pullhook examples --category reference --titles-only
   pullhook examples --json";
 
 /// Pullhook command line arguments.
@@ -1271,19 +1272,35 @@ pub struct ExamplesArgs {
 	#[arg(
 		long = "json",
 		default_value_t = false,
-		conflicts_with = "commands_only",
+		conflicts_with_all = ["commands_only", "titles_only"],
 		help_heading = "Output options"
 	)]
 	pub json: bool,
 
+	#[command(flatten)]
+	pub output: ExamplesLineOutputArgs,
+}
+
+/// Line-output mode arguments for `pullhook examples`.
+#[derive(Debug, Clone, Args)]
+pub struct ExamplesLineOutputArgs {
 	/// Print only example commands, one per line.
 	#[arg(
 		long = "commands-only",
 		default_value_t = false,
-		conflicts_with = "json",
+		conflicts_with_all = ["json", "titles_only"],
 		help_heading = "Output options"
 	)]
 	pub commands_only: bool,
+
+	/// Print only example titles, one per line.
+	#[arg(
+		long = "titles-only",
+		default_value_t = false,
+		conflicts_with_all = ["json", "commands_only"],
+		help_heading = "Output options"
+	)]
+	pub titles_only: bool,
 }
 
 /// Commands that have workflow examples.

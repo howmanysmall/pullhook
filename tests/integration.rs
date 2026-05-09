@@ -1931,6 +1931,35 @@ fn examples_category_commands_only_prints_clean_commands() {
 }
 
 #[test]
+fn examples_titles_only_prints_clean_titles() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["examples", "--category", "reference", "--titles-only"]);
+
+	assert!(
+		output.status.success(),
+		"examples --category reference --titles-only should succeed"
+	);
+	let stdout = stdout_text(&output);
+	assert_eq!(
+		stdout.lines().collect::<Vec<_>>(),
+		vec![
+			"List command catalog",
+			"List completion shells",
+			"List config formats",
+			"List package managers",
+			"List command categories",
+			"List status codes"
+		]
+	);
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"examples --category reference --titles-only should not write stderr"
+	);
+}
+
+#[test]
 fn examples_commands_only_conflicts_with_json() {
 	let temp = tempfile::tempdir().expect("create temp dir");
 
@@ -1944,6 +1973,27 @@ fn examples_commands_only_conflicts_with_json() {
 	assert!(stderr.contains("cannot be used with"));
 	assert!(stderr.contains("--commands-only"));
 	assert!(stderr.contains("--json"));
+}
+
+#[test]
+fn examples_titles_only_conflicts_with_other_output_modes() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+	let conflicting_modes: &[&[&str]] = &[
+		&["examples", "--titles-only", "--json"],
+		&["examples", "--titles-only", "--commands-only"],
+	];
+
+	for args in conflicting_modes {
+		let output = run_pullhook(temp.path(), args);
+
+		assert!(
+			!output.status.success(),
+			"examples --titles-only should conflict for args {args:?}"
+		);
+		let stderr = stderr_text(&output);
+		assert!(stderr.contains("cannot be used with"));
+		assert!(stderr.contains("--titles-only"));
+	}
 }
 
 #[test]
@@ -3036,6 +3086,7 @@ fn utility_help_groups_options_by_task() {
 	assert!(examples_stdout.contains("pullhook examples --search install"));
 	assert!(examples_stdout.contains("pullhook examples --command run --commands-only"));
 	assert!(examples_stdout.contains("pullhook examples --category reference --commands-only"));
+	assert!(examples_stdout.contains("pullhook examples --category reference --titles-only"));
 	assert!(examples_stdout.contains("pullhook examples --json"));
 
 	let codes = run_pullhook(temp.path(), &["codes", "--help"]);
