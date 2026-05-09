@@ -20,6 +20,8 @@ const CONFIG_NAMES: &[&str] = &[
 	".pullhook.toml",
 ];
 
+const UNSUPPORTED_CONFIG_NAMES: &[&str] = &["pullhook.json5", "pullhook.yml", ".pullhook.json5", ".pullhook.yml"];
+
 const STYLES: &[&str] = &[
 	"black",
 	"red",
@@ -259,8 +261,10 @@ impl EvaluatedGroup {
 }
 
 #[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
 struct RawConfig {
+	#[serde(default, rename = "$schema")]
+	_schema: Option<String>,
 	#[serde(default)]
 	on_failure: OnFailure,
 	#[serde(default)]
@@ -268,7 +272,7 @@ struct RawConfig {
 }
 
 #[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
 struct RawEntry {
 	name: Option<String>,
 	changed: Option<PatternList>,
@@ -314,7 +318,7 @@ pub fn discover(repo_root: &Path) -> Result<Option<PathBuf>, PullhookError> {
 		.collect();
 
 	match found.as_slice() {
-		[] => Ok(None),
+		[] => discover_unsupported_config(repo_root),
 		[path] => Ok(Some(path.clone())),
 		_ => Err(PullhookError::Message(format!(
 			"multiple pullhook config files found: {}",
@@ -325,6 +329,14 @@ pub fn discover(repo_root: &Path) -> Result<Option<PathBuf>, PullhookError> {
 				.join(", ")
 		))),
 	}
+}
+
+fn discover_unsupported_config(repo_root: &Path) -> Result<Option<PathBuf>, PullhookError> {
+	UNSUPPORTED_CONFIG_NAMES
+		.iter()
+		.map(|name| repo_root.join(name))
+		.find(|path| path.is_file())
+		.map_or(Ok(None), |path| ConfigFormat::from_path(&path).map(|_| None))
 }
 
 /// Load and validate a config file.
@@ -781,6 +793,93 @@ mod tests {
 		let error = ConfigFormat::from_path(Path::new("pullhook.yml")).expect_err("yml fails");
 
 		assert!(error.to_string().contains("*.yml"));
+	}
+
+	#[test]
+	fn discover_rejects_unsupported_config_names() {
+		let dir = tempdir().expect("tempdir");
+		fs::write(dir.path().join("pullhook.yml"), "rules: []").expect("write unsupported config");
+
+		let error = discover(dir.path()).expect_err("unsupported config fails");
+
+		assert!(error.to_string().contains("*.yml"));
+	}
+
+	#[test]
+	fn load_accepts_schema_metadata() {
+		let dir = tempdir().expect("tempdir");
+		let path = dir.path().join("pullhook.json");
+		fs::write(
+			&path,
+			r#"{
+  "$schema": "https://pullhook.dev/schema.json",
+  "rules": [
+    {
+      "name": "build",
+      "changed": "src/**/*.rs",
+      "run": "cargo test"
+    }
+  ]
+}
+"#,
+		)
+		.expect("write config");
+
+		let config = load(&path).expect("load config");
+
+		assert_eq!(config.entries.len(), 1);
+	}
+
+	#[test]
+	fn load_rejects_unknown_top_level_fields() {
+		let dir = tempdir().expect("tempdir");
+		let path = dir.path().join("pullhook.json");
+		fs::write(
+			&path,
+			r#"{
+  "rules": [
+    {
+      "name": "build",
+      "changed": "src/**/*.rs",
+      "run": "cargo test"
+    }
+  ],
+  "onSucces": "ship it"
+}
+"#,
+		)
+		.expect("write config");
+
+		let error = load(&path).expect_err("unknown top-level field fails");
+
+		assert!(error.to_string().contains("unknown field"));
+		assert!(error.to_string().contains("onSucces"));
+	}
+
+	#[test]
+	fn load_rejects_unknown_rule_fields() {
+		let dir = tempdir().expect("tempdir");
+		let path = dir.path().join("pullhook.json");
+		fs::write(
+			&path,
+			r#"{
+  "rules": [
+    {
+      "name": "build",
+      "changed": "src/**/*.rs",
+      "run": "cargo test",
+      "excldue": "target/**"
+    }
+  ]
+}
+"#,
+		)
+		.expect("write config");
+
+		let error = load(&path).expect_err("unknown rule field fails");
+
+		assert!(error.to_string().contains("unknown field"));
+		assert!(error.to_string().contains("excldue"));
 	}
 
 	#[test]

@@ -4,7 +4,7 @@
 		"jobs": [
 			{
 				"name": "commitlint",
-				"run": "aube run commitlint -- --edit {1}",
+				"run": "env -u ABBR_TIPS_PROMPT aube run commitlint -- --edit {1}",
 				"skip": ["merge", "rebase"],
 			},
 		],

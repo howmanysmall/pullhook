@@ -167,17 +167,17 @@ fn run_config_command(args: &ConfigRunArgs) -> Result<()> {
 		return Ok(());
 	}
 
-	let failed = execute_config_entries(&renderer, config.on_failure, &evaluation, &repo_root, args)?;
-	let planned_commands = count_planned_commands(&evaluation);
+	let counts = execute_config_entries(&renderer, config.on_failure, &evaluation, &repo_root, args)?;
+	let failure_count = counts.failed + counts.interrupted;
 	renderer.render_summary_stage(Summary {
 		matched_files: changed_files.len(),
-		task_dirs: planned_commands,
-		passed: planned_commands.saturating_sub(failed),
-		failed,
-		interrupted: 0,
+		task_dirs: counts.task_dirs,
+		passed: counts.passed,
+		failed: counts.failed,
+		interrupted: counts.interrupted,
 	});
-	if failed > 0 {
-		return Err(anyhow!("{failed} config rule(s) failed"));
+	if failure_count > 0 {
+		return Err(anyhow!("{failure_count} config rule(s) failed"));
 	}
 
 	Ok(())
@@ -309,7 +309,10 @@ fn render_config_evaluation(config: &Config, evaluation: &[EvaluatedEntry], all_
 			EvaluatedEntry::Group(group) => {
 				if group.should_run() || all_matches {
 					println!("group: {}", group.group.name);
-					println!("jobs: {}", group.group.jobs.unwrap_or(1));
+					match group.group.jobs {
+						Some(jobs) => println!("jobs: {jobs}"),
+						None => println!("jobs: default"),
+					}
 				}
 				for rule in &group.rules {
 					render_evaluated_rule(rule, all_matches);
@@ -351,8 +354,8 @@ fn execute_config_entries(
 	evaluation: &[EvaluatedEntry],
 	repo_root: &std::path::Path,
 	args: &ConfigRunArgs,
-) -> Result<usize> {
-	let mut failed = 0usize;
+) -> Result<TaskCounters> {
+	let mut counts = TaskCounters::default();
 
 	for entry in evaluation {
 		match entry {
@@ -360,24 +363,23 @@ fn execute_config_entries(
 				if !rule.should_run() {
 					continue;
 				}
-				let rule_failed = execute_config_rule(renderer, rule, repo_root, args.debug, args.render);
-				failed += usize::from(rule_failed);
+				let state = execute_config_rule(renderer, rule, repo_root, args.debug, args.render);
+				counts.add_state(state);
 			}
 			EvaluatedEntry::Group(group) => {
 				if !group.should_run() {
 					continue;
 				}
-				let group_failed = execute_config_group(renderer, group, repo_root, args)?;
-				failed += group_failed;
+				counts.add(execute_config_group(renderer, group, repo_root, args)?);
 			}
 		}
 
-		if failed > 0 && on_failure == OnFailure::Stop {
+		if counts.has_non_success() && on_failure == OnFailure::Stop {
 			break;
 		}
 	}
 
-	Ok(failed)
+	Ok(counts)
 }
 
 fn execute_config_rule(
@@ -386,9 +388,10 @@ fn execute_config_rule(
 	repo_root: &std::path::Path,
 	debug_enabled: bool,
 	render_mode: RenderMode,
-) -> bool {
+) -> runner::ResultState {
 	let result = run_config_rule_task(rule, repo_root, debug_enabled);
-	render_config_rule_result(renderer, rule, &result, repo_root, debug_enabled, render_mode)
+	render_config_rule_result(renderer, rule, &result, repo_root, debug_enabled, render_mode);
+	result.state
 }
 
 fn execute_config_group(
@@ -396,7 +399,7 @@ fn execute_config_group(
 	group: &EvaluatedGroup,
 	repo_root: &std::path::Path,
 	args: &ConfigRunArgs,
-) -> Result<usize> {
+) -> Result<TaskCounters> {
 	let runnable: Vec<_> = group.rules.iter().filter(|rule| rule.should_run()).collect();
 	let jobs = group.group.jobs.unwrap_or_else(|| args.effective_jobs()).max(1);
 	let results = if runnable.len() <= 1 || jobs <= 1 {
@@ -417,18 +420,17 @@ fn execute_config_group(
 		})
 	};
 
-	let mut failed = 0usize;
+	let mut counts = TaskCounters::default();
 	for (rule, result) in &results {
-		if render_config_rule_result(renderer, rule, result, repo_root, args.debug, args.render) {
-			failed += 1;
-		}
+		render_config_rule_result(renderer, rule, result, repo_root, args.debug, args.render);
+		counts.add_state(result.state);
 	}
 
-	if failed > 0 {
+	if counts.has_non_success() {
 		render_group_fail_text(group, args.render);
 	}
 
-	Ok(failed)
+	Ok(counts)
 }
 
 fn run_config_rule_task(rule: &EvaluatedRule, repo_root: &std::path::Path, debug_enabled: bool) -> runner::TaskResult {
@@ -452,14 +454,13 @@ fn render_config_rule_result(
 	repo_root: &std::path::Path,
 	debug_enabled: bool,
 	render_mode: RenderMode,
-) -> bool {
+) {
 	render_task_results(renderer, std::slice::from_ref(result), repo_root);
 	report_debug_errors(debug_enabled, std::slice::from_ref(result));
 	let failed = result.state != runner::ResultState::Success;
 	if failed {
 		render_rule_fail_text(rule, result, repo_root, render_mode);
 	}
-	failed
 }
 
 fn render_rule_fail_text(
@@ -613,7 +614,7 @@ fn render_summary(renderer: &Renderer, matched_files: usize, counts: TaskCounter
 	});
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Default)]
 struct TaskCounters {
 	task_dirs: usize,
 	passed: usize,
@@ -621,25 +622,36 @@ struct TaskCounters {
 	interrupted: usize,
 }
 
-fn summarize_results(results: &[runner::TaskResult]) -> TaskCounters {
-	let mut passed = 0usize;
-	let mut failed = 0usize;
-	let mut interrupted = 0usize;
+impl TaskCounters {
+	const fn add(&mut self, other: Self) {
+		self.task_dirs += other.task_dirs;
+		self.passed += other.passed;
+		self.failed += other.failed;
+		self.interrupted += other.interrupted;
+	}
 
-	for result in results {
-		match result.state {
-			runner::ResultState::Success => passed += 1,
-			runner::ResultState::Failed | runner::ResultState::SpawnError => failed += 1,
-			runner::ResultState::Interrupted => interrupted += 1,
+	const fn add_state(&mut self, state: runner::ResultState) {
+		self.task_dirs += 1;
+		match state {
+			runner::ResultState::Success => self.passed += 1,
+			runner::ResultState::Failed | runner::ResultState::SpawnError => self.failed += 1,
+			runner::ResultState::Interrupted => self.interrupted += 1,
 		}
 	}
 
-	TaskCounters {
-		task_dirs: results.len(),
-		passed,
-		failed,
-		interrupted,
+	const fn has_non_success(self) -> bool {
+		self.failed > 0 || self.interrupted > 0
 	}
+}
+
+fn summarize_results(results: &[runner::TaskResult]) -> TaskCounters {
+	let mut counts = TaskCounters::default();
+
+	for result in results {
+		counts.add_state(result.state);
+	}
+
+	counts
 }
 
 fn print_dry_run(

@@ -2,7 +2,7 @@
 
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::Command as ProcessCommand;
+use std::process::{Command as ProcessCommand, Output};
 
 use tempfile::TempDir;
 
@@ -27,6 +27,8 @@ fn debug_mode_streams_outputs_and_keeps_renderer_output() {
 	let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
 	let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
 
+	assert_plain_output(&stdout, &stderr);
+
 	assert_eq!(
 		count_exact_lines(&stdout, "debug-stream-stdout"),
 		2,
@@ -36,6 +38,16 @@ fn debug_mode_streams_outputs_and_keeps_renderer_output() {
 		count_exact_lines(&stderr, "debug-stream-stderr"),
 		2,
 		"stderr should be streamed once per matched task",
+	);
+	assert_eq!(
+		count_exact_lines(&stdout, "debug-stream-stderr"),
+		0,
+		"stderr stream content should not be routed into stdout",
+	);
+	assert_eq!(
+		count_exact_lines(&stderr, "debug-stream-stdout"),
+		0,
+		"stdout stream content should not be routed into stderr",
 	);
 	assert_eq!(
 		count_occurrences(&stdout, "loaded changed files"),
@@ -78,6 +90,8 @@ fn debug_mode_failure_reports_once_with_renderer_failure_copy() {
 	let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
 	let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
 
+	assert_plain_output(&stdout, &stderr);
+
 	assert_eq!(
 		count_exact_lines(&stderr, "debug-failure-stderr"),
 		1,
@@ -113,6 +127,18 @@ fn debug_mode_failure_reports_once_with_renderer_failure_copy() {
 	assert_includes_renderer_contract_text(&stdout);
 }
 
+fn assert_plain_output(stdout: &str, stderr: &str) {
+	assert_no_ansi(stdout, "stdout");
+	assert_no_ansi(stderr, "stderr");
+}
+
+fn assert_no_ansi(text: &str, stream_name: &str) {
+	assert!(
+		!text.contains("\u{1b}["),
+		"{stream_name} should not contain ANSI escapes when plain rendering is forced:\n{text}",
+	);
+}
+
 fn assert_includes_renderer_contract_text(stdout: &str) {
 	for marker in ["Prepare", "Discovery", "Summary", "directory:", "command:"] {
 		assert!(
@@ -135,7 +161,7 @@ fn count_exact_lines(haystack: &str, needle: &str) -> usize {
 	haystack.lines().filter(|line| *line == needle).count()
 }
 
-fn run_pullhook(repo_root: &Path, args: &[&str]) -> std::process::Output {
+fn run_pullhook(repo_root: &Path, args: &[&str]) -> Output {
 	ProcessCommand::new(assert_cmd::cargo::cargo_bin!("pullhook"))
 		.current_dir(repo_root)
 		.env("RUST_LOG", "debug")

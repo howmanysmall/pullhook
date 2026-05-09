@@ -19,6 +19,8 @@ fn non_debug_no_match_contract_lines_and_streams() {
 	let stdout = stdout_text(&output);
 	let stderr = stderr_text(&output);
 
+	assert_plain_output(&stdout, &stderr);
+
 	assert_in_order(
 		&stdout,
 		&[
@@ -30,6 +32,18 @@ fn non_debug_no_match_contract_lines_and_streams() {
 			"Result",
 			"[warn] no matching files found",
 		],
+	);
+	assert!(
+		!stdout.contains("Tasks"),
+		"no-match run should not print task blocks:\n{stdout}"
+	);
+	assert!(
+		!stdout.contains("Dry Run"),
+		"no-match run should not print dry-run blocks:\n{stdout}"
+	);
+	assert!(
+		!stdout.contains("directory: "),
+		"no-match run should not print task directories:\n{stdout}"
 	);
 	assert!(stderr.is_empty(), "no-match stderr should be empty:\n{stderr}");
 }
@@ -48,6 +62,8 @@ fn non_debug_single_match_routes_stdout_and_stderr_separately() {
 	let stdout = stdout_text(&output);
 	let stderr = stderr_text(&output);
 	let command_line = format!("command: {command}");
+
+	assert_plain_output(&stdout, &stderr);
 
 	assert_in_order(
 		&stdout,
@@ -101,6 +117,8 @@ fn non_debug_multi_match_preserves_task_order() {
 	let stderr = stderr_text(&output);
 	let command_line = format!("command: {command}");
 
+	assert_plain_output(&stdout, &stderr);
+
 	assert_in_order(
 		&stdout,
 		&[
@@ -132,9 +150,9 @@ fn non_debug_multi_match_preserves_task_order() {
 	let b_idx = stdout.find("directory: packages/b").expect("packages/b block missing");
 	assert!(a_idx < b_idx, "task blocks should be ordered a -> b:\n{stdout}");
 	assert_eq!(
-		count_occurrences(&stderr, "multi-stderr"),
-		2,
-		"expected two stderr lines (one per task):\n{stderr}"
+		non_empty_lines(&stderr),
+		vec!["multi-stderr", "multi-stderr"],
+		"successful multi-match stderr should only contain command stderr"
 	);
 }
 
@@ -158,6 +176,8 @@ fn non_debug_once_collapses_to_single_root_task() {
 	let stdout = stdout_text(&output);
 	let stderr = stderr_text(&output);
 	let command_line = format!("command: {command}");
+
+	assert_plain_output(&stdout, &stderr);
 
 	assert_in_order(
 		&stdout,
@@ -218,6 +238,8 @@ fn non_debug_dry_run_prints_planned_blocks_only() {
 	let stderr = stderr_text(&output);
 	let command_line = format!("command: {command}");
 
+	assert_plain_output(&stdout, &stderr);
+
 	assert_in_order(
 		&stdout,
 		&[
@@ -272,6 +294,8 @@ fn non_debug_failure_reports_task_failure_on_stderr() {
 	let stderr = stderr_text(&output);
 	let command_line = format!("command: {command}");
 
+	assert_plain_output(&stdout, &stderr);
+
 	assert_in_order(
 		&stdout,
 		&[
@@ -305,6 +329,11 @@ fn non_debug_failure_reports_task_failure_on_stderr() {
 			"error: 1 task(s) failed",
 		],
 	);
+	assert_eq!(
+		count_occurrences(&stderr, "[error] task failed"),
+		1,
+		"failure detail header should only be emitted once:\n{stderr}"
+	);
 	assert!(
 		count_exact_lines(&stdout, "fail-stderr") == 0,
 		"command stderr must not be routed to stdout:\n{stdout}"
@@ -325,6 +354,8 @@ fn non_debug_interrupted_reports_interrupted_state() {
 	let stdout = stdout_text(&output);
 	let stderr = stderr_text(&output);
 	let command_line = format!("command: {command}");
+
+	assert_plain_output(&stdout, &stderr);
 
 	assert_in_order(
 		&stdout,
@@ -374,6 +405,8 @@ fn non_debug_spawn_error_reports_spawn_error_state() {
 	let stderr = stderr_text(&output);
 	let command_line = format!("command: {command}");
 
+	assert_plain_output(&stdout, &stderr);
+
 	assert_in_order(
 		&stdout,
 		&[
@@ -420,6 +453,8 @@ fn non_debug_non_utf8_output_is_lossy_decoded_without_panic() {
 
 	let stdout = stdout_text(&output);
 	let stderr = stderr_text(&output);
+
+	assert_plain_output(&stdout, &stderr);
 
 	assert_in_order(
 		&stdout,
@@ -474,6 +509,8 @@ fn non_debug_empty_output_non_zero_still_reports_deterministic_failure_lines() {
 	let stderr = stderr_text(&output);
 	let command_line = format!("command: {command}");
 
+	assert_plain_output(&stdout, &stderr);
+
 	assert_in_order(
 		&stdout,
 		&[
@@ -522,6 +559,18 @@ fn stdout_text(output: &Output) -> String {
 
 fn stderr_text(output: &Output) -> String {
 	String::from_utf8_lossy(&output.stderr).to_string()
+}
+
+fn assert_plain_output(stdout: &str, stderr: &str) {
+	assert_no_ansi(stdout, "stdout");
+	assert_no_ansi(stderr, "stderr");
+}
+
+fn assert_no_ansi(text: &str, stream_name: &str) {
+	assert!(
+		!text.contains("\u{1b}["),
+		"{stream_name} should not contain ANSI escapes when --render never is used:\n{text}",
+	);
 }
 
 fn non_empty_lines(text: &str) -> Vec<&str> {

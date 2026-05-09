@@ -2,7 +2,7 @@
 
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::Command as ProcessCommand;
+use std::process::{Command as ProcessCommand, Output};
 
 use predicates::prelude::*;
 use tempfile::TempDir;
@@ -12,18 +12,17 @@ fn runs_command_per_matched_directory() {
 	let temp = setup_repo_with_merge();
 	let repo_root = temp.path();
 
-	let status = ProcessCommand::new(assert_cmd::cargo::cargo_bin!("pullhook"))
-		.current_dir(repo_root)
-		.args([
+	let output = run_pullhook(
+		repo_root,
+		&[
 			"--pattern",
 			"packages/*/package-lock.json",
 			"--command",
 			"sh -c 'echo ran > .pullhook-marker'",
-		])
-		.status()
-		.expect("command runs");
+		],
+	);
 
-	assert!(status.success(), "pullhook should succeed");
+	assert!(output.status.success(), "pullhook should succeed");
 	assert!(predicate::path::is_file().eval(&repo_root.join("packages/a/.pullhook-marker")));
 	assert!(predicate::path::is_file().eval(&repo_root.join("packages/b/.pullhook-marker")));
 }
@@ -33,19 +32,18 @@ fn runs_command_once_in_repo_root() {
 	let temp = setup_repo_with_merge();
 	let repo_root = temp.path();
 
-	let status = ProcessCommand::new(assert_cmd::cargo::cargo_bin!("pullhook"))
-		.current_dir(repo_root)
-		.args([
+	let output = run_pullhook(
+		repo_root,
+		&[
 			"--pattern",
 			"packages/*/package-lock.json",
 			"--command",
 			"sh -c 'echo ran > .pullhook-root-marker'",
 			"--once",
-		])
-		.status()
-		.expect("command runs");
+		],
+	);
 
-	assert!(status.success(), "pullhook should succeed");
+	assert!(output.status.success(), "pullhook should succeed");
 	assert!(predicate::path::is_file().eval(&repo_root.join(".pullhook-root-marker")));
 	assert!(!predicate::path::is_file().eval(&repo_root.join("packages/a/.pullhook-root-marker")));
 	assert!(!predicate::path::is_file().eval(&repo_root.join("packages/b/.pullhook-root-marker")));
@@ -56,18 +54,17 @@ fn skips_execution_when_no_files_match() {
 	let temp = setup_repo_with_merge();
 	let repo_root = temp.path();
 
-	let status = ProcessCommand::new(assert_cmd::cargo::cargo_bin!("pullhook"))
-		.current_dir(repo_root)
-		.args([
+	let output = run_pullhook(
+		repo_root,
+		&[
 			"--pattern",
 			"**/*.md",
 			"--command",
 			"sh -c 'echo ran > .pullhook-no-match-marker'",
-		])
-		.status()
-		.expect("command runs");
+		],
+	);
 
-	assert!(status.success(), "no matches should still succeed");
+	assert!(output.status.success(), "no matches should still succeed");
 	assert!(!predicate::path::is_file().eval(&repo_root.join(".pullhook-no-match-marker")));
 }
 
@@ -76,17 +73,16 @@ fn install_ignores_nested_manifest_changes_that_do_not_match_install_pattern() {
 	let temp = setup_repo_with_nested_manifest_change();
 	let repo_root = temp.path();
 
-	let output = ProcessCommand::new(assert_cmd::cargo::cargo_bin!("pullhook"))
-		.current_dir(repo_root)
-		.env("PULLHOOK_RENDER_MODE", "never")
-		.args(["--install", "--dry-run"])
-		.output()
-		.expect("command runs");
+	let output = run_pullhook_with_env(
+		repo_root,
+		&["--install", "--dry-run"],
+		&[("PULLHOOK_RENDER_MODE", "never")],
+	);
 
 	assert!(output.status.success(), "--install --dry-run should succeed");
 
-	let stdout = String::from_utf8_lossy(&output.stdout);
-	assert!(stdout.contains("pattern: +(package.json|package-lock.json)"));
+	let stdout = stdout_text(&output);
+	assert!(stdout.contains("pattern: +(package.json|package-lock.json|npm-shrinkwrap.json)"));
 	assert!(stdout.contains("matched: 0"));
 	assert!(!stdout.contains("directory: ."));
 	assert!(!stdout.contains("command: npm install"));
@@ -97,19 +93,13 @@ fn install_matches_repo_root_manifest_changes() {
 	let temp = setup_repo_with_root_manifest_change();
 	let repo_root = temp.path();
 
-	let output = ProcessCommand::new(assert_cmd::cargo::cargo_bin!("pullhook"))
-		.current_dir(repo_root)
-		.env("PULLHOOK_RENDER_MODE", "never")
-		.args(["--install", "--dry-run"])
-		.output()
-		.expect("command runs");
+	let output = run_pullhook_with_env(
+		repo_root,
+		&["--install", "--dry-run"],
+		&[("PULLHOOK_RENDER_MODE", "never")],
+	);
 
-	assert!(output.status.success(), "--install --dry-run should succeed");
-
-	let stdout = String::from_utf8_lossy(&output.stdout);
-	assert!(stdout.contains("matched: 1"));
-	assert!(stdout.contains("directory: ."));
-	assert!(stdout.contains("command: npm install"));
+	assert_install_dry_run_matches_repo_root(&output);
 }
 
 #[test]
@@ -117,19 +107,13 @@ fn install_runs_from_subdirectory_with_repo_root_discovery() {
 	let temp = setup_repo_with_root_manifest_change();
 	let repo_root = temp.path();
 
-	let output = ProcessCommand::new(assert_cmd::cargo::cargo_bin!("pullhook"))
-		.current_dir(repo_root.join("packages/a"))
-		.env("PULLHOOK_RENDER_MODE", "never")
-		.args(["--install", "--dry-run"])
-		.output()
-		.expect("command runs");
+	let output = run_pullhook_with_env(
+		&repo_root.join("packages/a"),
+		&["--install", "--dry-run"],
+		&[("PULLHOOK_RENDER_MODE", "never")],
+	);
 
-	assert!(output.status.success(), "--install from subdirectory should succeed");
-
-	let stdout = String::from_utf8_lossy(&output.stdout);
-	assert!(stdout.contains("matched: 1"));
-	assert!(stdout.contains("directory: ."));
-	assert!(stdout.contains("command: npm install"));
+	assert_install_dry_run_matches_repo_root(&output);
 }
 
 #[test]
@@ -137,54 +121,46 @@ fn install_accepts_explicit_base() {
 	let temp = setup_repo_with_root_manifest_change();
 	let repo_root = temp.path();
 
-	let output = ProcessCommand::new(assert_cmd::cargo::cargo_bin!("pullhook"))
-		.current_dir(repo_root)
-		.env("PULLHOOK_RENDER_MODE", "never")
-		.args(["--install", "--base", "HEAD~1", "--dry-run"])
-		.output()
-		.expect("command runs");
+	let output = run_pullhook_with_env(
+		repo_root,
+		&["--install", "--base", "HEAD~1", "--dry-run"],
+		&[("PULLHOOK_RENDER_MODE", "never")],
+	);
 
-	assert!(output.status.success(), "--install with explicit base should succeed");
-
-	let stdout = String::from_utf8_lossy(&output.stdout);
-	assert!(stdout.contains("matched: 1"));
-	assert!(stdout.contains("directory: ."));
-	assert!(stdout.contains("command: npm install"));
+	assert_install_dry_run_matches_repo_root(&output);
 }
 
 #[test]
 fn completion_command_succeeds_outside_git_repo() {
 	let temp = tempfile::tempdir().expect("create temp dir");
 
-	let output = ProcessCommand::new(assert_cmd::cargo::cargo_bin!("pullhook"))
-		.current_dir(temp.path())
-		.args(["completion", "bash"])
-		.output()
-		.expect("command runs");
+	let output = run_pullhook(temp.path(), &["completion", "bash"]);
 
 	assert!(
 		output.status.success(),
 		"completion command should succeed outside a git repo"
 	);
 
-	let stdout = String::from_utf8_lossy(&output.stdout);
+	let stdout = stdout_text(&output);
 	assert!(stdout.contains("_pullhook()"));
 	assert!(stdout.contains("complete -F _pullhook -o bashdefault -o default pullhook"));
 
-	let stderr = String::from_utf8_lossy(&output.stderr);
+	let stderr = stderr_text(&output);
 	assert!(stderr.trim().is_empty(), "completion command should not write stderr");
 }
 
 #[test]
 fn completion_command_rejects_run_arguments() {
-	let output = ProcessCommand::new(assert_cmd::cargo::cargo_bin!("pullhook"))
-		.args(["--install", "completion", "bash"])
-		.output()
-		.expect("command runs");
+	let output = run_pullhook(Path::new("."), &["--install", "completion", "bash"]);
 
 	assert!(!output.status.success(), "mixed run and completion args should fail");
 
-	let stderr = String::from_utf8_lossy(&output.stderr);
+	let stdout = stdout_text(&output);
+	let stderr = stderr_text(&output);
+	assert!(
+		stdout.trim().is_empty(),
+		"argument parsing failure should not write stdout"
+	);
 	assert!(stderr.contains("cannot be used with"));
 	assert!(stderr.contains("completion"));
 }
@@ -194,12 +170,11 @@ fn init_creates_starter_config() {
 	let temp = setup_repo_with_merge();
 	let repo_root = temp.path();
 
-	let output = ProcessCommand::new(assert_cmd::cargo::cargo_bin!("pullhook"))
-		.current_dir(repo_root)
-		.env("PULLHOOK_RENDER_MODE", "never")
-		.args(["init", "--render", "never"])
-		.output()
-		.expect("command runs");
+	let output = run_pullhook_with_env(
+		repo_root,
+		&["init", "--render", "never"],
+		&[("PULLHOOK_RENDER_MODE", "never")],
+	);
 
 	assert!(output.status.success(), "init should succeed");
 	assert!(predicate::path::is_file().eval(&repo_root.join("pullhook.json")));
@@ -228,14 +203,10 @@ fn validate_reports_invalid_fail_text() {
 "#,
 	);
 
-	let output = ProcessCommand::new(assert_cmd::cargo::cargo_bin!("pullhook"))
-		.current_dir(repo_root)
-		.args(["validate", "--render", "never"])
-		.output()
-		.expect("command runs");
+	let output = run_pullhook(repo_root, &["validate", "--render", "never"]);
 
 	assert!(!output.status.success(), "invalid config should fail");
-	let stderr = String::from_utf8_lossy(&output.stderr);
+	let stderr = stderr_text(&output);
 	assert!(stderr.contains("unknown style `sparkle`"));
 	assert!(stderr.contains("pullhook.json"));
 }
@@ -251,14 +222,10 @@ fn config_dry_run_plans_matching_rule_without_execution() {
 		"sh -c 'echo ran > .pullhook-config-marker'",
 	);
 
-	let output = ProcessCommand::new(assert_cmd::cargo::cargo_bin!("pullhook"))
-		.current_dir(repo_root)
-		.args(["run", "--dry-run", "--render", "never"])
-		.output()
-		.expect("command runs");
+	let output = run_pullhook(repo_root, &["run", "--dry-run", "--render", "never"]);
 
 	assert!(output.status.success(), "dry run should succeed");
-	let stdout = String::from_utf8_lossy(&output.stdout);
+	let stdout = stdout_text(&output);
 	assert!(stdout.contains("[match] write marker"));
 	assert!(stdout.contains("command: sh -c 'echo ran > .pullhook-config-marker'"));
 	assert!(!predicate::path::is_file().eval(&repo_root.join(".pullhook-config-marker")));
@@ -275,11 +242,7 @@ fn config_run_executes_rule_once_from_repo_root() {
 		"sh -c 'echo ran > .pullhook-config-marker'",
 	);
 
-	let output = ProcessCommand::new(assert_cmd::cargo::cargo_bin!("pullhook"))
-		.current_dir(repo_root)
-		.args(["run", "--render", "never"])
-		.output()
-		.expect("command runs");
+	let output = run_pullhook(repo_root, &["run", "--render", "never"]);
 
 	assert!(output.status.success(), "config run should succeed");
 	assert!(predicate::path::is_file().eval(&repo_root.join(".pullhook-config-marker")));
@@ -312,16 +275,37 @@ fn config_on_failure_continue_runs_later_rules() {
 "#,
 	);
 
-	let output = ProcessCommand::new(assert_cmd::cargo::cargo_bin!("pullhook"))
-		.current_dir(repo_root)
-		.args(["run", "--render", "never"])
-		.output()
-		.expect("command runs");
+	let output = run_pullhook(repo_root, &["run", "--render", "never"]);
 
 	assert!(!output.status.success(), "failed rule should exit non-zero");
 	assert!(predicate::path::is_file().eval(&repo_root.join(".pullhook-continue-marker")));
-	let stderr = String::from_utf8_lossy(&output.stderr);
+	let stderr = stderr_text(&output);
 	assert!(stderr.contains("fail first failed"));
+}
+
+#[test]
+fn config_run_reports_interrupted_rules_separately_from_failures() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_config_rule(
+		repo_root,
+		"interrupt",
+		"packages/*/package-lock.json",
+		"sh -c 'kill -TERM $$'",
+	);
+
+	let output = run_pullhook(repo_root, &["run", "--render", "never"]);
+
+	assert!(!output.status.success(), "interrupted rule should exit non-zero");
+
+	let stdout = stdout_text(&output);
+	assert!(stdout.contains("failed: 0"));
+	assert!(stdout.contains("interrupted: 1"));
+	assert!(stdout.contains("[warn] 1 task(s) interrupted"));
+
+	let stderr = stderr_text(&output);
+	assert!(stderr.contains("[warn] task interrupted"));
+	assert!(stderr.contains("error: 1 config rule(s) failed"));
 }
 
 #[test]
@@ -342,14 +326,10 @@ fn config_install_rule_reuses_package_manager_detection() {
 "#,
 	);
 
-	let output = ProcessCommand::new(assert_cmd::cargo::cargo_bin!("pullhook"))
-		.current_dir(repo_root)
-		.args(["run", "--dry-run", "--render", "never"])
-		.output()
-		.expect("command runs");
+	let output = run_pullhook(repo_root, &["run", "--dry-run", "--render", "never"]);
 
 	assert!(output.status.success(), "install dry run should succeed");
-	let stdout = String::from_utf8_lossy(&output.stdout);
+	let stdout = stdout_text(&output);
 	assert!(stdout.contains("[match] install dependencies"));
 	assert!(stdout.contains("command: npm install"));
 }
@@ -384,11 +364,7 @@ fn config_parallel_group_runs_matched_rules_from_repo_root() {
 "#,
 	);
 
-	let output = ProcessCommand::new(assert_cmd::cargo::cargo_bin!("pullhook"))
-		.current_dir(repo_root)
-		.args(["run", "--render", "never"])
-		.output()
-		.expect("command runs");
+	let output = run_pullhook(repo_root, &["run", "--render", "never"]);
 
 	assert!(output.status.success(), "parallel group should succeed");
 	assert!(predicate::path::is_file().eval(&repo_root.join(".pullhook-parallel-first")));
@@ -426,15 +402,43 @@ fn validate_rejects_nested_parallel_groups() {
 "#,
 	);
 
-	let output = ProcessCommand::new(assert_cmd::cargo::cargo_bin!("pullhook"))
-		.current_dir(repo_root)
-		.args(["validate", "--render", "never"])
-		.output()
-		.expect("command runs");
+	let output = run_pullhook(repo_root, &["validate", "--render", "never"]);
 
 	assert!(!output.status.success(), "nested parallel group should fail");
-	let stderr = String::from_utf8_lossy(&output.stderr);
+	let stderr = stderr_text(&output);
 	assert!(stderr.contains("nested parallel groups are not supported"));
+}
+
+fn run_pullhook(repo_root: &Path, args: &[&str]) -> Output {
+	run_pullhook_with_env(repo_root, args, &[])
+}
+
+fn run_pullhook_with_env(repo_root: &Path, args: &[&str], envs: &[(&str, &str)]) -> Output {
+	let mut command = ProcessCommand::new(assert_cmd::cargo::cargo_bin!("pullhook"));
+	command.current_dir(repo_root).args(args);
+
+	for &(key, value) in envs {
+		command.env(key, value);
+	}
+
+	command.output().expect("command runs")
+}
+
+fn stdout_text(output: &Output) -> String {
+	String::from_utf8_lossy(&output.stdout).into_owned()
+}
+
+fn stderr_text(output: &Output) -> String {
+	String::from_utf8_lossy(&output.stderr).into_owned()
+}
+
+fn assert_install_dry_run_matches_repo_root(output: &Output) {
+	assert!(output.status.success(), "install dry run should succeed");
+
+	let stdout = stdout_text(output);
+	assert!(stdout.contains("matched: 1"));
+	assert!(stdout.contains("directory: ."));
+	assert!(stdout.contains("command: npm install"));
 }
 
 fn setup_repo_with_merge() -> TempDir {
