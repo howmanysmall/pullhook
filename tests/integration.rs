@@ -512,6 +512,25 @@ fn config_json_reports_discovered_config_path_without_validating_contents() {
 }
 
 #[test]
+fn config_path_only_reports_discovered_config_path() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_file(repo_root, Path::new("pullhook.json"), "{not valid json}\n");
+
+	let output = run_pullhook(repo_root, &["config", "--path-only"]);
+
+	assert!(
+		output.status.success(),
+		"config --path-only should not require a valid config body"
+	);
+	let stdout = stdout_text(&output);
+	assert!(stdout.trim_end().ends_with("pullhook.json"));
+	assert_eq!(stdout.lines().count(), 1);
+	let stderr = stderr_text(&output);
+	assert!(stderr.trim().is_empty(), "config --path-only should not write stderr");
+}
+
+#[test]
 fn config_text_reports_explicit_missing_config_path() {
 	let temp = setup_repo_with_merge();
 	let repo_root = temp.path();

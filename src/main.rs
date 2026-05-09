@@ -509,6 +509,9 @@ fn doctor_command(args: &DoctorArgs) -> Result<()> {
 
 fn config_command(args: &ConfigArgs) -> Result<()> {
 	ensure_json_without_debug(args.json, args.debug)?;
+	if args.path_only && args.debug {
+		return Err(anyhow!("--path-only cannot be used with --debug"));
+	}
 
 	let cwd = std::env::current_dir().context("failed to read current working directory")?;
 	let repo = GitRepo::discover(&cwd, args.debug).context("failed to resolve repository root")?;
@@ -517,6 +520,11 @@ fn config_command(args: &ConfigArgs) -> Result<()> {
 	let format = config::ConfigFormat::from_path(&path)?;
 	let explicit = args.config.is_some();
 	let exists = path.is_file();
+
+	if args.path_only {
+		println!("{}", path.display());
+		return Ok(());
+	}
 
 	if args.json {
 		println!(
