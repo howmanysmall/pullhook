@@ -1543,6 +1543,10 @@ fn print_json_error(error: &anyhow::Error) -> Result<()> {
 		println!("{}", serde_json::to_string_pretty(&value)?);
 		return Ok(());
 	}
+	if let Some(value) = pullhook_error.and_then(|error_kind| diff_base_error_json(error, &details, error_kind)) {
+		println!("{}", serde_json::to_string_pretty(&value)?);
+		return Ok(());
+	}
 	if let Some(error::PullhookError::GitOpen { path, .. }) = pullhook_error {
 		println!(
 			"{}",
@@ -1635,6 +1639,38 @@ fn repository_error_json(error: &anyhow::Error, details: &[String], path: &str) 
 			"path": path,
 		},
 	})
+}
+
+fn diff_base_error_json(
+	error: &anyhow::Error,
+	details: &[String],
+	error_kind: &error::PullhookError,
+) -> Option<serde_json::Value> {
+	let diff_base_error = match error_kind {
+		error::PullhookError::BaseRevisionNotFound { revision } => json!({
+			"kind": "revision_not_found",
+			"revision": revision,
+		}),
+		error::PullhookError::GitRevision { revision, .. } => json!({
+			"kind": "revision_error",
+			"revision": revision,
+		}),
+		error::PullhookError::GitDiff { base, .. } => json!({
+			"kind": "diff_error",
+			"base": base,
+		}),
+		error::PullhookError::DiffBaseUnavailable => json!({
+			"kind": "unavailable",
+		}),
+		_ => return None,
+	};
+
+	Some(json!({
+		"status": "error",
+		"error": error.to_string(),
+		"details": details,
+		"diffBaseError": diff_base_error,
+	}))
 }
 
 fn pattern_error_json(error: &anyhow::Error, details: &[String], pattern: &str, reason: &str) -> serde_json::Value {

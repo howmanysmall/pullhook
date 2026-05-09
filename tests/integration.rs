@@ -424,6 +424,8 @@ fn legacy_json_reports_diff_base_errors_as_json() {
 	assert_eq!(value["status"], "error");
 	let error = value["error"].as_str().expect("error");
 	assert!(error.contains("failed to resolve diff base or read changed files"));
+	assert_eq!(value["diffBaseError"]["kind"], "revision_not_found");
+	assert_eq!(value["diffBaseError"]["revision"], "missing-base-ref");
 	let details = value["details"].as_array().expect("details array");
 	assert!(details.iter().any(|detail| {
 		detail
@@ -2311,6 +2313,8 @@ fn run_json_reports_diff_base_errors_as_json() {
 	assert_eq!(value["status"], "error");
 	let error = value["error"].as_str().expect("error");
 	assert!(error.contains("failed to resolve diff base or read changed files"));
+	assert_eq!(value["diffBaseError"]["kind"], "revision_not_found");
+	assert_eq!(value["diffBaseError"]["revision"], "missing-base-ref");
 	let details = value["details"].as_array().expect("details array");
 	assert!(details.iter().any(|detail| {
 		detail
@@ -2344,6 +2348,8 @@ fn explain_json_reports_diff_base_errors_as_json() {
 	assert_eq!(value["status"], "error");
 	let error = value["error"].as_str().expect("error");
 	assert!(error.contains("failed to resolve diff base or read changed files"));
+	assert_eq!(value["diffBaseError"]["kind"], "revision_not_found");
+	assert_eq!(value["diffBaseError"]["revision"], "missing-base-ref");
 	let stderr = stderr_text(&output);
 	assert!(stderr.contains("failed to resolve diff base or read changed files"));
 }

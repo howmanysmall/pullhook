@@ -105,8 +105,9 @@ fn resolve_base<'repo>(
 	debug_enabled: bool,
 ) -> Result<ResolvedBase<'repo>, PullhookError> {
 	if let Some(base) = explicit {
-		let tree = try_resolve_tree(repo, base)?
-			.ok_or_else(|| PullhookError::Message(format!("base revision `{base}` could not be resolved")))?;
+		let tree = try_resolve_tree(repo, base)?.ok_or_else(|| PullhookError::BaseRevisionNotFound {
+			revision: base.to_owned(),
+		})?;
 
 		if debug_enabled {
 			debug!(%base, "using explicit base revision");
@@ -141,9 +142,9 @@ fn try_resolve_tree<'repo>(
 	let Ok(spec) = repo.rev_parse(revision) else {
 		return Ok(None);
 	};
-	let id = spec
-		.single()
-		.ok_or_else(|| PullhookError::Message(format!("base revision `{revision}` could not be resolved")))?;
+	let id = spec.single().ok_or_else(|| PullhookError::BaseRevisionNotFound {
+		revision: revision.to_owned(),
+	})?;
 	let object = id.object().map_err(|source| PullhookError::GitRevision {
 		revision: revision.to_owned(),
 		source: Box::new(source),
@@ -269,8 +270,8 @@ mod tests {
 
 		assert!(matches!(
 			error,
-			PullhookError::Message(message)
-			if message == "base revision `definitely-not-a-ref` could not be resolved"
+			PullhookError::BaseRevisionNotFound { revision }
+			if revision == "definitely-not-a-ref"
 		));
 	}
 

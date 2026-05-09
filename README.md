@@ -305,7 +305,8 @@ Use `doctor --quiet` to suppress all-ok text output without hiding warnings or e
 including changed files, their source (`git`, `explicit`, or `base-missing`), matched files, commands, and
 skip reasons. `explain --json`, `run --dry-run --json`, and `run --json` include top-level `status` and
 `error` fields; `run --json` also adds real execution results, captured stdout/stderr, and a final summary.
-Diff-base JSON errors include details for invalid `--base <rev>` values and the automatic fallback path.
+Diff-base JSON errors include details for invalid `--base <rev>` values and the automatic fallback path,
+plus a `diffBaseError` object with the failing revision or diff-base failure kind.
 Their JSON output also includes a `summary` object with changed-file source, matched-file, matched-rule, and
 planned-command counts so scripts do not need to walk every entry.
 Use `explain --summary-only` when you only need changed-file, matched-file, and planned-command counts.

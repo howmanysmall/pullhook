@@ -27,6 +27,13 @@ pub enum PullhookError {
 		source: Box<dyn StdError + Send + Sync>,
 	},
 
+	/// Explicit base revision was not found.
+	#[error("base revision `{revision}` could not be resolved")]
+	BaseRevisionNotFound {
+		/// Revision specification that failed.
+		revision: String,
+	},
+
 	/// Git diff computation failed.
 	#[error("failed to diff `{base}` against `HEAD`: {source}")]
 	GitDiff {
