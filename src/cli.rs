@@ -50,6 +50,7 @@ Examples:
   pullhook explain --rule lint --all-matches
   pullhook explain --summary-only
   pullhook explain --commands-only
+  pullhook explain --matched-files-only
   pullhook explain --json";
 
 const VALIDATE_AFTER_HELP: &str = "\
@@ -331,6 +332,14 @@ pub struct ExplainArgs {
 	/// Print only planned commands, one per line.
 	#[arg(long = "commands-only", default_value_t = false, conflicts_with_all = ["json", "summary_only"])]
 	pub commands_only: bool,
+
+	/// Print only matched changed files, one per line.
+	#[arg(
+		long = "matched-files-only",
+		default_value_t = false,
+		conflicts_with_all = ["json", "summary_only", "commands_only"]
+	)]
+	pub matched_files_only: bool,
 
 	/// Print machine-readable JSON instead of text output.
 	#[arg(long = "json", default_value_t = false)]

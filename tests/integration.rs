@@ -379,8 +379,10 @@ fn explain_help_lists_summary_only_example() {
 	let stdout = stdout_text(&output);
 	assert!(stdout.contains("pullhook explain --summary-only"));
 	assert!(stdout.contains("pullhook explain --commands-only"));
+	assert!(stdout.contains("pullhook explain --matched-files-only"));
 	assert!(stdout.contains("--summary-only"));
 	assert!(stdout.contains("--commands-only"));
+	assert!(stdout.contains("--matched-files-only"));
 }
 
 #[test]
@@ -515,6 +517,29 @@ fn explain_commands_only_conflicts_with_other_output_modes() {
 	assert!(summary_stderr.contains("cannot be used with"));
 	assert!(summary_stderr.contains("--commands-only"));
 	assert!(summary_stderr.contains("--summary-only"));
+}
+
+#[test]
+fn explain_matched_files_only_conflicts_with_other_output_modes() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+	let conflicting_modes: &[&[&str]] = &[
+		&["explain", "--matched-files-only", "--json"],
+		&["explain", "--matched-files-only", "--summary-only"],
+		&["explain", "--matched-files-only", "--commands-only"],
+	];
+
+	for args in conflicting_modes {
+		let output = run_pullhook(temp.path(), args);
+
+		assert!(
+			!output.status.success(),
+			"`pullhook {}` should reject mixed output modes",
+			args.join(" ")
+		);
+		let stderr = stderr_text(&output);
+		assert!(stderr.contains("cannot be used with"));
+		assert!(stderr.contains("--matched-files-only"));
+	}
 }
 
 #[test]
@@ -1859,6 +1884,47 @@ fn explain_commands_only_reports_planned_commands() {
 	assert!(
 		stderr.trim().is_empty(),
 		"explain --commands-only should not write stderr"
+	);
+}
+
+#[test]
+fn explain_matched_files_only_reports_unique_matched_files() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_file(
+		repo_root,
+		Path::new("pullhook.json"),
+		r#"{
+  "rules": [
+    {
+      "name": "package a",
+      "changed": "packages/a/package-lock.json",
+      "run": "cargo test -p package-a"
+    },
+    {
+      "name": "all packages",
+      "changed": "packages/*/package-lock.json",
+      "run": "cargo test --workspace"
+    },
+    {
+      "name": "skip markdown",
+      "changed": "**/*.md",
+      "run": "cargo test"
+    }
+  ]
+}
+"#,
+	);
+
+	let output = run_pullhook(repo_root, &["explain", "--matched-files-only"]);
+
+	assert!(output.status.success(), "explain --matched-files-only should succeed");
+	let stdout = stdout_text(&output);
+	assert_eq!(stdout, "packages/a/package-lock.json\npackages/b/package-lock.json\n");
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"explain --matched-files-only should not write stderr"
 	);
 }
 

@@ -462,6 +462,11 @@ fn explain_config_command(args: &ExplainArgs) -> Result<()> {
 		return Ok(());
 	}
 
+	if args.matched_files_only {
+		render_config_evaluation_matched_files(&evaluation);
+		return Ok(());
+	}
+
 	render_config_evaluation(&config, &evaluation, args.all_matches, false);
 	Ok(())
 }
@@ -1139,6 +1144,12 @@ fn render_config_evaluation_summary(
 fn render_config_evaluation_commands(evaluation: &[EvaluatedEntry]) {
 	for command in collect_planned_commands(evaluation) {
 		println!("{command}");
+	}
+}
+
+fn render_config_evaluation_matched_files(evaluation: &[EvaluatedEntry]) {
+	for path in collect_matched_files(evaluation) {
+		println!("{}", path.display());
 	}
 }
 
