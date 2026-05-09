@@ -845,6 +845,21 @@ fn init_stdout_conflicts_with_force() {
 }
 
 #[test]
+fn init_stdout_conflicts_with_plan_output_modes() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+	let conflicting_modes: &[&[&str]] = &[&["init", "--stdout", "--dry-run"], &["init", "--stdout", "--json"]];
+
+	for args in conflicting_modes {
+		let output = run_pullhook(temp.path(), args);
+
+		assert!(!output.status.success(), "init --stdout should conflict for {args:?}");
+		let stderr = stderr_text(&output);
+		assert!(stderr.contains("cannot be used with"));
+		assert!(stderr.contains("--stdout"));
+	}
+}
+
+#[test]
 fn rules_names_only_conflicts_with_json() {
 	let temp = tempfile::tempdir().expect("create temp dir");
 
@@ -943,6 +958,9 @@ fn init_help_lists_generation_examples() {
 	assert!(stdout.contains("pullhook init --force"));
 	assert!(stdout.contains("pullhook init --format yaml"));
 	assert!(stdout.contains("pullhook init --output config/pullhook.custom.json"));
+	assert!(stdout.contains("pullhook init --dry-run --json"));
+	assert!(stdout.contains("--dry-run"));
+	assert!(stdout.contains("--json"));
 }
 
 #[test]
@@ -1047,6 +1065,66 @@ fn init_can_write_starter_config_to_explicit_output_path() {
 	assert!(config.contains("\"rules\""));
 	assert!(config.contains("\"install\""));
 	assert!(!predicate::path::is_file().eval(&repo_root.join("pullhook.json")));
+}
+
+#[test]
+fn init_dry_run_previews_default_config_without_writing_file() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+
+	let output = run_pullhook(repo_root, &["init", "--dry-run", "--render", "never"]);
+
+	assert!(output.status.success(), "init --dry-run should succeed");
+	let stdout = stdout_text(&output);
+	assert!(stdout.contains("would create"));
+	assert!(stdout.contains("pullhook.json"));
+	assert!(stdout.contains("format: json"));
+	assert!(!predicate::path::is_file().eval(&repo_root.join("pullhook.json")));
+	let stderr = stderr_text(&output);
+	assert!(stderr.trim().is_empty(), "init --dry-run should not write stderr");
+}
+
+#[test]
+fn init_dry_run_json_reports_plan_without_writing_file() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+
+	let output = run_pullhook(repo_root, &["init", "--format", "yaml", "--dry-run", "--json"]);
+
+	assert!(output.status.success(), "init --dry-run --json should succeed");
+	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse init json");
+	assert!(value["path"].as_str().expect("path").ends_with("pullhook.yaml"));
+	assert_eq!(value["format"], "yaml");
+	assert_eq!(value["existed"], false);
+	assert_eq!(value["force"], false);
+	assert_eq!(value["dryRun"], true);
+	assert_eq!(value["action"], "create");
+	assert_eq!(value["written"], false);
+	assert_eq!(value["error"], serde_json::Value::Null);
+	assert!(!predicate::path::is_file().eval(&repo_root.join("pullhook.yaml")));
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"init --dry-run --json should not write stderr"
+	);
+}
+
+#[test]
+fn init_json_reports_created_config() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+
+	let output = run_pullhook(repo_root, &["init", "--json"]);
+
+	assert!(output.status.success(), "init --json should succeed");
+	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse init json");
+	assert!(value["path"].as_str().expect("path").ends_with("pullhook.json"));
+	assert_eq!(value["format"], "json");
+	assert_eq!(value["action"], "create");
+	assert_eq!(value["written"], true);
+	assert!(predicate::path::is_file().eval(&repo_root.join("pullhook.json")));
+	let stderr = stderr_text(&output);
+	assert!(stderr.trim().is_empty(), "init --json should not write stderr");
 }
 
 #[test]
@@ -1216,8 +1294,35 @@ fn init_refuses_to_overwrite_existing_config_without_force() {
 
 	assert!(!output.status.success(), "init should reject overwriting config");
 	let stderr = stderr_text(&output);
-	assert!(stderr.contains("pullhook config already exists"));
+	assert!(stderr.contains("refusing to overwrite existing file"));
 	assert!(stderr.contains("--force"));
+}
+
+#[test]
+fn init_json_reports_existing_config_error() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_file(repo_root, Path::new("pullhook.json"), "{\"rules\":[]}\n");
+
+	let output = run_pullhook(repo_root, &["init", "--json"]);
+
+	assert!(!output.status.success(), "init --json should reject overwriting config");
+	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse init json");
+	assert!(value["path"].as_str().expect("path").ends_with("pullhook.json"));
+	assert_eq!(value["format"], "json");
+	assert_eq!(value["existed"], true);
+	assert_eq!(value["force"], false);
+	assert_eq!(value["dryRun"], false);
+	assert_eq!(value["action"], "overwrite");
+	assert_eq!(value["written"], false);
+	assert!(
+		value["error"]
+			.as_str()
+			.expect("error")
+			.contains("refusing to overwrite")
+	);
+	let stderr = stderr_text(&output);
+	assert!(stderr.contains("refusing to overwrite existing file"));
 }
 
 #[test]
@@ -1268,6 +1373,28 @@ fn init_force_overwrites_existing_config_in_place() {
 	let config = fs::read_to_string(repo_root.join("pullhook.json")).expect("read config");
 	assert!(config.contains("\"install\": true"));
 	assert!(config.contains("\"onFailure\": \"stop\""));
+}
+
+#[test]
+fn init_force_json_reports_overwritten_config() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_file(repo_root, Path::new("pullhook.json"), "{\"rules\":[]}\n");
+
+	let output = run_pullhook(repo_root, &["init", "--force", "--json"]);
+
+	assert!(output.status.success(), "init --force --json should succeed");
+	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse init json");
+	assert!(value["path"].as_str().expect("path").ends_with("pullhook.json"));
+	assert_eq!(value["format"], "json");
+	assert_eq!(value["existed"], true);
+	assert_eq!(value["force"], true);
+	assert_eq!(value["action"], "overwrite");
+	assert_eq!(value["written"], true);
+	let config = fs::read_to_string(repo_root.join("pullhook.json")).expect("read config");
+	assert!(config.contains("\"install\": true"));
+	let stderr = stderr_text(&output);
+	assert!(stderr.trim().is_empty(), "init --force --json should not write stderr");
 }
 
 #[test]

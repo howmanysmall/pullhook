@@ -745,6 +745,8 @@ const fn effective_render_mode(render: RenderMode, no_color: bool) -> RenderMode
 }
 
 fn init_config_command(args: &InitArgs) -> Result<()> {
+	ensure_json_without_debug(args.json, args.debug)?;
+
 	let requested_format = args.format.map_or(config::ConfigFormat::Json, Into::into);
 	if args.stdout {
 		print!("{}", requested_format.starter_config());
@@ -761,12 +763,44 @@ fn init_config_command(args: &InitArgs) -> Result<()> {
 	} else {
 		resolve_default_init_output(repo_root, args.format, requested_format, args.force)?
 	};
+	let exists = path.exists();
 
-	if path.exists() && !args.force {
-		return Err(anyhow!(
+	if exists && !args.force {
+		let error = format!(
 			"refusing to overwrite existing file `{}`; rerun with `pullhook init --force`",
 			path.display()
-		));
+		);
+		if args.json {
+			println!(
+				"{}",
+				serde_json::to_string_pretty(&init_plan_json(
+					&path,
+					format,
+					exists,
+					args.force,
+					args.dry_run,
+					Some(&error)
+				))?
+			);
+		}
+		return Err(anyhow!(error));
+	}
+
+	if args.dry_run {
+		if args.json {
+			println!(
+				"{}",
+				serde_json::to_string_pretty(&init_plan_json(&path, format, exists, args.force, true, None))?
+			);
+		} else {
+			renderer.render_message_stage(&format!(
+				"would {} {}",
+				if exists { "overwrite" } else { "create" },
+				path.display()
+			));
+			renderer.render_message_stage(&format!("format: {}", format.label()));
+		}
+		return Ok(());
 	}
 
 	if let Some(parent) = path.parent()
@@ -778,7 +812,18 @@ fn init_config_command(args: &InitArgs) -> Result<()> {
 
 	std::fs::write(&path, format.starter_config())
 		.with_context(|| format!("failed to write config `{}`", path.display()))?;
-	renderer.render_message_stage(&format!("created {}", path.display()));
+	if args.json {
+		println!(
+			"{}",
+			serde_json::to_string_pretty(&init_plan_json(&path, format, exists, args.force, false, None))?
+		);
+	} else {
+		renderer.render_message_stage(&format!(
+			"{} {}",
+			if exists { "overwrote" } else { "created" },
+			path.display()
+		));
+	}
 	Ok(())
 }
 
@@ -789,29 +834,20 @@ fn resolve_default_init_output(
 	force: bool,
 ) -> Result<(std::path::PathBuf, config::ConfigFormat)> {
 	let existing_path = config::discover(repo_root)?;
-	let output = match existing_path {
-		Some(path) if !force => {
+	let output = if let Some(path) = existing_path {
+		let existing_format = config::ConfigFormat::from_path(&path)?;
+		let format = format_arg.map_or(existing_format, Into::into);
+		if force && format != existing_format {
 			return Err(anyhow!(
-				"pullhook config already exists: {} (rerun with `pullhook init --force` to overwrite it)",
-				path.display()
+				"existing config `{}` is {}; rerun without `--format` to overwrite it in place or remove it first",
+				path.display(),
+				existing_format.default_name()
 			));
 		}
-		Some(path) => {
-			let existing_format = config::ConfigFormat::from_path(&path)?;
-			let format = format_arg.map_or(existing_format, Into::into);
-			if format != existing_format {
-				return Err(anyhow!(
-					"existing config `{}` is {}; rerun without `--format` to overwrite it in place or remove it first",
-					path.display(),
-					existing_format.default_name()
-				));
-			}
-			(path, format)
-		}
-		None => {
-			let path = repo_root.join(requested_format.default_name());
-			(path, requested_format)
-		}
+		(path, format)
+	} else {
+		let path = repo_root.join(requested_format.default_name());
+		(path, requested_format)
 	};
 	Ok(output)
 }
@@ -1432,6 +1468,26 @@ fn config_validation_error_json(path: Option<&std::path::Path>, error: &str) -> 
 	json!({
 		"valid": false,
 		"path": path.map(|path| path.display().to_string()),
+		"error": error,
+	})
+}
+
+fn init_plan_json(
+	path: &std::path::Path,
+	format: config::ConfigFormat,
+	existed: bool,
+	force: bool,
+	dry_run: bool,
+	error: Option<&str>,
+) -> serde_json::Value {
+	json!({
+		"path": path.display().to_string(),
+		"format": format.label(),
+		"existed": existed,
+		"force": force,
+		"dryRun": dry_run,
+		"action": if existed { "overwrite" } else { "create" },
+		"written": !dry_run && error.is_none(),
 		"error": error,
 	})
 }
