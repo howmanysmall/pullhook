@@ -498,7 +498,7 @@ fn run_config_command_json(
 	);
 	println!(
 		"{}",
-		serde_json::to_string_pretty(&config_run_json(base, evaluation, counts, executions))?
+		serde_json::to_string_pretty(&config_run_json(base, counts, executions))?
 	);
 	if let Some(error) = failure_error {
 		return Err(anyhow!(error));
@@ -1952,7 +1952,24 @@ fn config_evaluation_json(
 		"changedFilesSource": changed_files_source.label(),
 		"changedFiles": changed_files.iter().map(|path| path.display().to_string()).collect::<Vec<_>>(),
 		"matchedFiles": matched_files,
+		"summary": config_evaluation_summary_json(changed_files, base_missing, changed_files_source, evaluation),
 		"entries": entries,
+	})
+}
+
+fn config_evaluation_summary_json(
+	changed_files: &[std::path::PathBuf],
+	base_missing: bool,
+	changed_files_source: ChangedFilesSource,
+	evaluation: &[EvaluatedEntry],
+) -> serde_json::Value {
+	json!({
+		"changedFilesSource": changed_files_source.label(),
+		"baseMissing": base_missing,
+		"changedFiles": changed_files.len(),
+		"matchedFiles": count_config_matched_files(evaluation),
+		"matchedRules": collect_matched_rules(evaluation).len(),
+		"plannedCommands": count_planned_commands(evaluation),
 	})
 }
 
@@ -1966,22 +1983,17 @@ fn config_dry_run_json(mut value: serde_json::Value, planned_commands: usize) ->
 
 fn config_run_json(
 	mut value: serde_json::Value,
-	evaluation: &[EvaluatedEntry],
 	counts: TaskCounters,
 	executions: Vec<serde_json::Value>,
 ) -> serde_json::Value {
 	if let Some(object) = value.as_object_mut() {
 		object.insert("mode".to_owned(), json!("run"));
-		object.insert(
-			"summary".to_owned(),
-			json!({
-				"matchedFiles": count_config_matched_files(evaluation),
-				"taskDirs": counts.task_dirs,
-				"passed": counts.passed,
-				"failed": counts.failed,
-				"interrupted": counts.interrupted,
-			}),
-		);
+		if let Some(summary) = object.get_mut("summary").and_then(serde_json::Value::as_object_mut) {
+			summary.insert("taskDirs".to_owned(), json!(counts.task_dirs));
+			summary.insert("passed".to_owned(), json!(counts.passed));
+			summary.insert("failed".to_owned(), json!(counts.failed));
+			summary.insert("interrupted".to_owned(), json!(counts.interrupted));
+		}
 		object.insert("executions".to_owned(), serde_json::Value::Array(executions));
 	}
 	value

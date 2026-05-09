@@ -3064,6 +3064,12 @@ fn explain_json_reports_matches_and_skips() {
 	assert_eq!(value["error"], serde_json::Value::Null);
 	assert_eq!(value["baseMissing"], false);
 	assert_eq!(value["onFailure"], "stop");
+	assert_eq!(value["summary"]["changedFilesSource"], "git");
+	assert_eq!(value["summary"]["baseMissing"], false);
+	assert_eq!(value["summary"]["changedFiles"], 2);
+	assert_eq!(value["summary"]["matchedFiles"], 1);
+	assert_eq!(value["summary"]["matchedRules"], 1);
+	assert_eq!(value["summary"]["plannedCommands"], 1);
 	assert_eq!(
 		value["matchedFiles"],
 		serde_json::json!(["packages/a/package-lock.json"])
@@ -3508,6 +3514,12 @@ fn run_dry_run_json_reports_planned_commands() {
 	assert_eq!(value["mode"], "dry-run");
 	assert_eq!(value["changedFilesSource"], "git");
 	assert_eq!(value["plannedCommands"], 1);
+	assert_eq!(value["summary"]["changedFilesSource"], "git");
+	assert_eq!(value["summary"]["baseMissing"], false);
+	assert_eq!(value["summary"]["changedFiles"], 2);
+	assert_eq!(value["summary"]["matchedFiles"], 1);
+	assert_eq!(value["summary"]["matchedRules"], 1);
+	assert_eq!(value["summary"]["plannedCommands"], 1);
 	assert_eq!(
 		value["matchedFiles"],
 		serde_json::json!(["packages/a/package-lock.json"])
@@ -4114,6 +4126,13 @@ fn run_json_reports_execution_results() {
 	assert_eq!(value["status"], "ok");
 	assert_eq!(value["error"], serde_json::Value::Null);
 	assert_eq!(value["mode"], "run");
+	assert_eq!(value["summary"]["changedFilesSource"], "git");
+	assert_eq!(value["summary"]["baseMissing"], false);
+	assert_eq!(value["summary"]["changedFiles"], 2);
+	assert_eq!(value["summary"]["matchedFiles"], 1);
+	assert_eq!(value["summary"]["matchedRules"], 1);
+	assert_eq!(value["summary"]["plannedCommands"], 1);
+	assert_eq!(value["summary"]["taskDirs"], 1);
 	assert_eq!(value["summary"]["passed"], 1);
 	assert_eq!(value["summary"]["failed"], 0);
 	let executions = value["executions"].as_array().expect("executions array");
@@ -4158,6 +4177,11 @@ fn run_json_reports_failure_results() {
 	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse failed run json");
 	assert_eq!(value["status"], "error");
 	assert_eq!(value["error"], "1 config rule(s) failed");
+	assert_eq!(value["summary"]["changedFiles"], 2);
+	assert_eq!(value["summary"]["matchedFiles"], 2);
+	assert_eq!(value["summary"]["matchedRules"], 2);
+	assert_eq!(value["summary"]["plannedCommands"], 2);
+	assert_eq!(value["summary"]["taskDirs"], 2);
 	assert_eq!(value["summary"]["passed"], 1);
 	assert_eq!(value["summary"]["failed"], 1);
 	let executions = value["executions"].as_array().expect("executions array");
