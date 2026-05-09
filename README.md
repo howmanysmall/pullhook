@@ -312,6 +312,7 @@ Legacy top-level mode also supports `--json`, including the same top-level `stat
 live execution results, and dry-run plans.
 
 Use `pullhook rules` to list configured rule and parallel group names before targeting a large config.
+`rules --json` includes top-level `status` and `error` fields like the other JSON commands.
 Use `pullhook rules --names-only` when a script or completion helper only needs valid selector names.
 Use `pullhook rules --commands-only` when a script only needs configured `run` command lines without evaluating changed files.
 Use `pullhook rules --patterns-only` when a script needs the configured `changed` globs without evaluating changed files.

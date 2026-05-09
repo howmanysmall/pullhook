@@ -1702,6 +1702,8 @@ fn completion_shell_label(shell: clap_complete::Shell) -> String {
 
 fn config_rules_json(config: &Config, kind: RulesKind) -> serde_json::Value {
 	json!({
+		"status": "ok",
+		"error": serde_json::Value::Null,
 		"path": config.path.display().to_string(),
 		"onFailure": on_failure_label(config.on_failure),
 		"kind": rules_kind_label(kind),
