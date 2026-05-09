@@ -238,6 +238,7 @@ fn legacy_dry_run_json_reports_plan() {
 	assert!(output.status.success(), "legacy dry-run json should succeed");
 	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse legacy dry-run json");
 	assert_eq!(value["status"], "ok");
+	assert_eq!(value["code"], serde_json::Value::Null);
 	assert_eq!(value["error"], serde_json::Value::Null);
 	assert_eq!(value["mode"], "dry-run");
 	assert_eq!(value["pattern"], "packages/*/package-lock.json");
@@ -271,6 +272,7 @@ fn legacy_run_json_reports_execution_results() {
 	assert!(output.status.success(), "legacy run json should succeed");
 	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse legacy run json");
 	assert_eq!(value["status"], "ok");
+	assert_eq!(value["code"], serde_json::Value::Null);
 	assert_eq!(value["error"], serde_json::Value::Null);
 	assert_eq!(value["mode"], "run");
 	assert_eq!(value["summary"]["passed"], 1);
@@ -308,6 +310,7 @@ fn legacy_run_json_reports_failures() {
 	);
 	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse failed legacy run json");
 	assert_eq!(value["status"], "error");
+	assert_eq!(value["code"], "command_failed");
 	assert_eq!(value["error"], "1 task(s) failed");
 	assert_eq!(value["summary"]["passed"], 0);
 	assert_eq!(value["summary"]["failed"], 1);

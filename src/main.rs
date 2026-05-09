@@ -2599,6 +2599,7 @@ fn legacy_dry_run_json(
 	} = context;
 	json!({
 		"status": "ok",
+		"code": serde_json::Value::Null,
 		"error": serde_json::Value::Null,
 		"mode": "dry-run",
 		"pattern": run_config.pattern,
@@ -2627,6 +2628,7 @@ fn legacy_run_json(
 ) -> serde_json::Value {
 	json!({
 		"status": if error.is_some() { "error" } else { "ok" },
+		"code": if error.is_some() { json!("command_failed") } else { serde_json::Value::Null },
 		"error": error,
 		"mode": "run",
 		"pattern": run_config.pattern,
