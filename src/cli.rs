@@ -182,6 +182,7 @@ Examples:
   pullhook categories
   pullhook categories --search workflow
   pullhook categories --names-only
+  pullhook categories --commands-only
   pullhook categories --descriptions-only
   pullhook categories --json";
 
@@ -1380,6 +1381,10 @@ pub struct ManagersLineOutputArgs {
 
 /// Arguments for `pullhook categories`.
 #[derive(Debug, Clone, Args)]
+#[expect(
+	clippy::struct_excessive_bools,
+	reason = "CLI line-output flags are clearer as independent booleans"
+)]
 #[command(after_help = CATEGORIES_AFTER_HELP)]
 pub struct CategoriesArgs {
 	/// Only list categories whose name or description contains this text.
@@ -1390,7 +1395,7 @@ pub struct CategoriesArgs {
 	#[arg(
 		long = "json",
 		default_value_t = false,
-		conflicts_with_all = ["names_only", "descriptions_only"],
+		conflicts_with_all = ["names_only", "commands_only", "descriptions_only"],
 		help_heading = "Output options"
 	)]
 	pub json: bool,
@@ -1399,16 +1404,25 @@ pub struct CategoriesArgs {
 	#[arg(
 		long = "names-only",
 		default_value_t = false,
-		conflicts_with_all = ["json", "descriptions_only"],
+		conflicts_with_all = ["json", "commands_only", "descriptions_only"],
 		help_heading = "Output options"
 	)]
 	pub names_only: bool,
+
+	/// Print only command names for matching categories, one per line.
+	#[arg(
+		long = "commands-only",
+		default_value_t = false,
+		conflicts_with_all = ["json", "names_only", "descriptions_only"],
+		help_heading = "Output options"
+	)]
+	pub commands_only: bool,
 
 	/// Print only category descriptions, one per line.
 	#[arg(
 		long = "descriptions-only",
 		default_value_t = false,
-		conflicts_with_all = ["json", "names_only"],
+		conflicts_with_all = ["json", "names_only", "commands_only"],
 		help_heading = "Output options"
 	)]
 	pub descriptions_only: bool,

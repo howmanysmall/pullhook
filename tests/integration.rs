@@ -2435,6 +2435,67 @@ fn categories_names_only_prints_clean_category_names() {
 }
 
 #[test]
+fn categories_commands_only_prints_clean_command_names() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["categories", "--commands-only"]);
+
+	assert!(output.status.success(), "categories --commands-only should succeed");
+	let stdout = stdout_text(&output);
+	assert_eq!(
+		stdout.lines().collect::<Vec<_>>(),
+		vec![
+			"run",
+			"explain",
+			"validate",
+			"doctor",
+			"config",
+			"rules",
+			"init",
+			"schema",
+			"completion",
+			"shells",
+			"formats",
+			"managers",
+			"categories",
+			"examples",
+			"commands",
+			"codes"
+		]
+	);
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"categories --commands-only should not write stderr"
+	);
+}
+
+#[test]
+fn categories_search_filter_composes_with_commands_only() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(
+		temp.path(),
+		&["categories", "--search", "repository", "--commands-only"],
+	);
+
+	assert!(
+		output.status.success(),
+		"categories --search repository --commands-only should succeed"
+	);
+	let stdout = stdout_text(&output);
+	assert_eq!(
+		stdout.lines().collect::<Vec<_>>(),
+		vec!["validate", "doctor", "config", "rules"]
+	);
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"filtered categories --commands-only should not write stderr"
+	);
+}
+
+#[test]
 fn categories_search_filter_composes_with_names_only() {
 	let temp = tempfile::tempdir().expect("create temp dir");
 
@@ -2507,6 +2568,7 @@ fn categories_line_outputs_conflict_with_json() {
 	let temp = tempfile::tempdir().expect("create temp dir");
 	let conflicting_modes: &[&[&str]] = &[
 		&["categories", "--names-only", "--json"],
+		&["categories", "--commands-only", "--json"],
 		&["categories", "--descriptions-only", "--json"],
 	];
 
@@ -2527,16 +2589,22 @@ fn categories_line_outputs_conflict_with_json() {
 fn categories_line_outputs_conflict_with_each_other() {
 	let temp = tempfile::tempdir().expect("create temp dir");
 
-	let output = run_pullhook(temp.path(), &["categories", "--names-only", "--descriptions-only"]);
+	let conflicting_modes: &[&[&str]] = &[
+		&["categories", "--names-only", "--commands-only"],
+		&["categories", "--names-only", "--descriptions-only"],
+		&["categories", "--commands-only", "--descriptions-only"],
+	];
 
-	assert!(
-		!output.status.success(),
-		"categories line-output modes should conflict with each other"
-	);
-	let stderr = stderr_text(&output);
-	assert!(stderr.contains("cannot be used with"));
-	assert!(stderr.contains("--names-only"));
-	assert!(stderr.contains("--descriptions-only"));
+	for args in conflicting_modes {
+		let output = run_pullhook(temp.path(), args);
+
+		assert!(
+			!output.status.success(),
+			"categories line-output modes should conflict with each other for args {args:?}"
+		);
+		let stderr = stderr_text(&output);
+		assert!(stderr.contains("cannot be used with"));
+	}
 }
 
 #[test]
@@ -4485,6 +4553,7 @@ fn utility_help_groups_options_by_task() {
 	assert!(categories_stdout.contains("Output options:"));
 	assert!(categories_stdout.contains("pullhook categories --search workflow"));
 	assert!(categories_stdout.contains("pullhook categories --names-only"));
+	assert!(categories_stdout.contains("pullhook categories --commands-only"));
 	assert!(categories_stdout.contains("pullhook categories --descriptions-only"));
 	assert!(categories_stdout.contains("pullhook categories --json"));
 

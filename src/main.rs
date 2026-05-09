@@ -1215,6 +1215,13 @@ fn categories_command(args: &CategoriesArgs) -> Result<()> {
 		return Ok(());
 	}
 
+	if args.commands_only {
+		for command in collect_category_commands(&categories) {
+			println!("{command}");
+		}
+		return Ok(());
+	}
+
 	if args.descriptions_only {
 		for category in categories {
 			println!("{}", category.description);
@@ -1263,6 +1270,18 @@ fn category_info_json(category: CategoryInfo) -> serde_json::Value {
 		"commands": command_count_for_category(category.name),
 		"examples": example_count_for_category(category.name),
 	})
+}
+
+fn collect_category_commands(categories: &[CategoryInfo]) -> Vec<&'static str> {
+	let mut commands = Vec::new();
+	for category in categories {
+		for command in COMMAND_INFOS.iter().filter(|info| info.category == category.name) {
+			if !commands.contains(&command.name) {
+				commands.push(command.name);
+			}
+		}
+	}
+	commands
 }
 
 fn command_count_for_category(category: &str) -> usize {
