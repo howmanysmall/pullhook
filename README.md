@@ -278,6 +278,7 @@ pullhook formats
 pullhook formats --files-only
 pullhook formats --json
 pullhook managers
+pullhook managers --search pnpm
 pullhook managers --patterns-only
 pullhook managers --json
 pullhook categories
@@ -349,6 +350,7 @@ Use `pullhook shells --names-only` when a script only needs supported shell name
 Use `pullhook formats` to inspect supported config formats and discovery filenames.
 Use `pullhook formats --files-only` when a script only needs the config filenames pullhook discovers.
 Use `pullhook managers` to inspect package-manager detection files and install commands.
+Add `--search <text>` to match package-manager names, install commands, detection patterns, or watched files.
 Use `pullhook managers --patterns-only` when a script only needs install detection patterns.
 `validate --json` emits a compact config summary for scripts and still prints structured JSON when the
 config is invalid, including `status`, stable `code`, `error`, `details`, and `validationErrors` fields. Config parse failures also include a `parseError` object with the config path and parser reason. Use `validate --quiet` when CI only needs the exit code. `doctor` checks repo discovery, config health, diff-base availability, and `--install`
@@ -449,6 +451,7 @@ that custom file.
 - `vlt`: `vlt-lock.json`
 
 Use `pullhook managers --json` to get the same package-manager install contract in a stable, machine-readable shape.
+Use `pullhook managers --search <text>` with `--json`, `--names-only`, or `--patterns-only` to narrow the catalog.
 If conflicting lockfiles are present, `pullhook` errors and asks for explicit `--pattern`/`--command`.
 `--install --json` detection errors include recovery details for missing or ambiguous repo-root package-manager files.
 They also include a `packageManagerError` object with either the searched repo root or the ambiguous package-manager names.

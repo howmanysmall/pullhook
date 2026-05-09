@@ -838,6 +838,7 @@ fn managers_json_lists_install_detection_contract() {
 	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse managers json");
 	assert_eq!(value["status"], "ok");
 	assert_eq!(value["code"], serde_json::Value::Null);
+	assert_eq!(value["filters"]["search"], serde_json::Value::Null);
 	let managers = value["managers"].as_array().expect("managers array");
 	assert!(managers.iter().any(|entry| entry["name"] == "npm"
 		&& entry["installCommand"] == "npm install"
@@ -857,6 +858,35 @@ fn managers_json_lists_install_detection_contract() {
 }
 
 #[test]
+fn managers_search_filter_limits_results() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["managers", "--search", "PNPM", "--json"]);
+
+	assert!(output.status.success(), "managers --search PNPM --json should succeed");
+	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse filtered managers json");
+	assert_eq!(value["status"], "ok");
+	assert_eq!(value["filters"]["search"], "PNPM");
+	let managers = value["managers"].as_array().expect("managers array");
+	assert!(!managers.is_empty(), "pnpm search should keep matching managers");
+	assert!(managers.iter().any(|entry| entry["name"] == "pnpm"));
+	assert!(managers.iter().any(|entry| entry["name"] == "aube"));
+	assert!(
+		!managers.iter().any(|entry| entry["name"] == "deno"),
+		"deno should not match pnpm search"
+	);
+	assert_eq!(
+		value["summary"]["managers"].as_u64().expect("manager count"),
+		managers.len() as u64
+	);
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"managers --search PNPM --json should not write stderr"
+	);
+}
+
+#[test]
 fn managers_names_only_prints_clean_manager_names() {
 	let temp = tempfile::tempdir().expect("create temp dir");
 
@@ -872,6 +902,25 @@ fn managers_names_only_prints_clean_manager_names() {
 	assert!(
 		stderr.trim().is_empty(),
 		"managers --names-only should not write stderr"
+	);
+}
+
+#[test]
+fn managers_search_filter_composes_with_names_only() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["managers", "--search", "deno", "--names-only"]);
+
+	assert!(
+		output.status.success(),
+		"managers --search deno --names-only should succeed"
+	);
+	let stdout = stdout_text(&output);
+	assert_eq!(stdout.lines().collect::<Vec<_>>(), vec!["deno"]);
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"managers --search deno --names-only should not write stderr"
 	);
 }
 
@@ -899,6 +948,28 @@ fn managers_patterns_only_prints_clean_install_patterns() {
 	assert!(
 		stderr.trim().is_empty(),
 		"managers --patterns-only should not write stderr"
+	);
+}
+
+#[test]
+fn managers_search_filter_composes_with_patterns_only() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["managers", "--search", "vlt", "--patterns-only"]);
+
+	assert!(
+		output.status.success(),
+		"managers --search vlt --patterns-only should succeed"
+	);
+	let stdout = stdout_text(&output);
+	assert_eq!(
+		stdout.lines().collect::<Vec<_>>(),
+		vec!["+(package.json|vlt-lock.json)"]
+	);
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"managers --search vlt --patterns-only should not write stderr"
 	);
 }
 
@@ -3065,6 +3136,7 @@ fn utility_help_groups_options_by_task() {
 	assert!(managers.status.success(), "managers help should succeed");
 	let managers_stdout = stdout_text(&managers);
 	assert!(managers_stdout.contains("Output options:"));
+	assert!(managers_stdout.contains("pullhook managers --search pnpm"));
 	assert!(managers_stdout.contains("pullhook managers --names-only"));
 	assert!(managers_stdout.contains("pullhook managers --patterns-only"));
 	assert!(managers_stdout.contains("pullhook managers --json"));

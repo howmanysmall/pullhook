@@ -153,6 +153,7 @@ Examples:
 const MANAGERS_AFTER_HELP: &str = "\
 Examples:
   pullhook managers
+  pullhook managers --search pnpm
   pullhook managers --names-only
   pullhook managers --patterns-only
   pullhook managers --json";
@@ -1085,6 +1086,10 @@ pub struct FormatsArgs {
 #[derive(Debug, Clone, Args)]
 #[command(after_help = MANAGERS_AFTER_HELP)]
 pub struct ManagersArgs {
+	/// Only list package managers whose name, command, pattern, or watched files contain this text.
+	#[arg(long = "search", value_name = "TEXT", help_heading = "Filter options")]
+	pub search: Option<String>,
+
 	/// Print machine-readable JSON instead of text output.
 	#[arg(
 		long = "json",

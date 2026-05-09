@@ -931,8 +931,9 @@ fn formats_command(args: &FormatsArgs) -> Result<()> {
 }
 
 fn managers_command(args: &ManagersArgs) -> Result<()> {
+	let managers = filtered_package_managers(args.search.as_deref());
 	if args.json {
-		let managers = package_managers()
+		let managers = managers
 			.iter()
 			.map(|package_manager| manager_info_json(*package_manager))
 			.collect::<Vec<_>>();
@@ -941,6 +942,9 @@ fn managers_command(args: &ManagersArgs) -> Result<()> {
 			serde_json::to_string_pretty(&json!({
 				"status": "ok",
 				"code": serde_json::Value::Null,
+				"filters": {
+					"search": args.search.as_deref(),
+				},
 				"managers": managers,
 				"summary": {
 					"managers": managers.len(),
@@ -951,14 +955,14 @@ fn managers_command(args: &ManagersArgs) -> Result<()> {
 	}
 
 	if args.names_only {
-		for package_manager in package_managers() {
+		for package_manager in managers {
 			println!("{}", package_manager.name());
 		}
 		return Ok(());
 	}
 
 	if args.patterns_only {
-		for package_manager in package_managers() {
+		for package_manager in managers {
 			println!("{}", package_manager.install_pattern());
 		}
 		return Ok(());
@@ -966,8 +970,11 @@ fn managers_command(args: &ManagersArgs) -> Result<()> {
 
 	println!("Package managers");
 	println!("lock files win over config files; multiple lock-file managers are ambiguous");
+	if let Some(search) = &args.search {
+		println!("filter: search={search}");
+	}
 	println!();
-	for package_manager in package_managers() {
+	for package_manager in managers {
 		println!("{}: {}", package_manager.name(), package_manager.install_command());
 		println!("  pattern: {}", package_manager.install_pattern());
 		println!("  lock files: {}", list_or_none(package_manager.lock_files()));
@@ -975,6 +982,37 @@ fn managers_command(args: &ManagersArgs) -> Result<()> {
 		println!("  watched files: {}", package_manager.watched_files().join(", "));
 	}
 	Ok(())
+}
+
+fn filtered_package_managers(search: Option<&str>) -> Vec<PackageManager> {
+	let search = search.map(str::to_ascii_lowercase);
+	package_managers()
+		.iter()
+		.copied()
+		.filter(|package_manager| {
+			search
+				.as_deref()
+				.is_none_or(|search| package_manager_matches_search(*package_manager, search))
+		})
+		.collect()
+}
+
+fn package_manager_matches_search(package_manager: PackageManager, search: &str) -> bool {
+	package_manager.name().contains(search)
+		|| package_manager.install_command().contains(search)
+		|| package_manager.install_pattern().contains(search)
+		|| package_manager
+			.lock_files()
+			.iter()
+			.any(|value| value.to_ascii_lowercase().contains(search))
+		|| package_manager
+			.config_files()
+			.iter()
+			.any(|value| value.to_ascii_lowercase().contains(search))
+		|| package_manager
+			.watched_files()
+			.iter()
+			.any(|value| value.to_ascii_lowercase().contains(search))
 }
 
 fn manager_info_json(package_manager: PackageManager) -> serde_json::Value {
