@@ -980,6 +980,44 @@ fn examples_command_filter_limits_results() {
 }
 
 #[test]
+fn examples_commands_only_prints_clean_commands() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["examples", "--command", "run", "--commands-only"]);
+
+	assert!(
+		output.status.success(),
+		"examples --command run --commands-only should succeed"
+	);
+	let stdout = stdout_text(&output);
+	assert_eq!(
+		stdout.lines().collect::<Vec<_>>(),
+		vec!["pullhook run", "pullhook run --dry-run", "pullhook run --commands-only"]
+	);
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"examples --commands-only should not write stderr"
+	);
+}
+
+#[test]
+fn examples_commands_only_conflicts_with_json() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["examples", "--commands-only", "--json"]);
+
+	assert!(
+		!output.status.success(),
+		"examples --commands-only should conflict with --json"
+	);
+	let stderr = stderr_text(&output);
+	assert!(stderr.contains("cannot be used with"));
+	assert!(stderr.contains("--commands-only"));
+	assert!(stderr.contains("--json"));
+}
+
+#[test]
 fn commands_json_lists_cli_catalog() {
 	let temp = tempfile::tempdir().expect("create temp dir");
 
@@ -1816,6 +1854,7 @@ fn utility_help_groups_options_by_task() {
 	assert!(examples_stdout.contains("Filter options:"));
 	assert!(examples_stdout.contains("Output options:"));
 	assert!(examples_stdout.contains("pullhook examples --command run"));
+	assert!(examples_stdout.contains("pullhook examples --command run --commands-only"));
 	assert!(examples_stdout.contains("pullhook examples --json"));
 
 	let codes = run_pullhook(temp.path(), &["codes", "--help"]);

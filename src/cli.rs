@@ -146,6 +146,7 @@ const EXAMPLES_AFTER_HELP: &str = "\
 Examples:
   pullhook examples
   pullhook examples --command run
+  pullhook examples --command run --commands-only
   pullhook examples --json";
 
 /// Pullhook command line arguments.
@@ -1034,8 +1035,22 @@ pub struct ExamplesArgs {
 	pub command: Option<ExampleCommand>,
 
 	/// Print machine-readable JSON instead of text output.
-	#[arg(long = "json", default_value_t = false, help_heading = "Output options")]
+	#[arg(
+		long = "json",
+		default_value_t = false,
+		conflicts_with = "commands_only",
+		help_heading = "Output options"
+	)]
 	pub json: bool,
+
+	/// Print only example commands, one per line.
+	#[arg(
+		long = "commands-only",
+		default_value_t = false,
+		conflicts_with = "json",
+		help_heading = "Output options"
+	)]
+	pub commands_only: bool,
 }
 
 /// Commands that have workflow examples.

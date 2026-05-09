@@ -267,6 +267,7 @@ pullhook doctor --strict
 pullhook doctor --json
 pullhook examples
 pullhook examples --command run
+pullhook examples --command run --commands-only
 pullhook examples --json
 pullhook commands
 pullhook commands --category diagnostic
@@ -354,6 +355,7 @@ Use `pullhook examples` to inspect common workflows in text form, or `pullhook e
 tool needs example commands without scraping docs.
 Add `--command run`, `--command explain`, `--command validate`, `--command doctor`, `--command init`,
 `--command commands`, `--command codes`, or `--command legacy` to focus the example list.
+Use `pullhook examples --commands-only` when a script or completion helper only needs example command lines.
 Use `pullhook commands` to inspect the command catalog in text form, or `pullhook commands --json` when another
 tool needs supported commands, categories, and repo requirements without scraping help text.
 Add `--category workflow`, `--category diagnostic`, `--category generator`, or `--category reference` to narrow

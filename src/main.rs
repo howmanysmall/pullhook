@@ -691,6 +691,13 @@ fn examples_command(args: &ExamplesArgs) -> Result<()> {
 		return Ok(());
 	}
 
+	if args.commands_only {
+		for example in examples {
+			println!("{}", example.command);
+		}
+		return Ok(());
+	}
+
 	println!("Pullhook examples");
 	if let Some(command) = args.command {
 		println!("filter: command={}", command.label());
