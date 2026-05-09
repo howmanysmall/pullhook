@@ -278,6 +278,7 @@ pullhook shells --json
 pullhook formats
 pullhook formats --search yaml
 pullhook formats --files-only
+pullhook formats --init-commands-only
 pullhook formats --json
 pullhook managers
 pullhook managers --search pnpm
@@ -358,6 +359,7 @@ Use `pullhook shells --names-only` when a script only needs supported shell name
 Use `pullhook formats` to inspect supported config formats and discovery filenames.
 Add `--search <text>` to match format names, config filenames, descriptions, or init commands.
 Use `pullhook formats --files-only` when a script only needs the config filenames pullhook discovers.
+Use `pullhook formats --init-commands-only` when a script only needs starter config commands.
 Use `pullhook managers` to inspect package-manager detection files and install commands.
 Add `--search <text>` to match package-manager names, install commands, detection patterns, or watched files.
 Use `pullhook managers --patterns-only` when a script only needs install detection patterns.

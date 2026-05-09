@@ -930,16 +930,23 @@ fn formats_command(args: &FormatsArgs) -> Result<()> {
 		return Ok(());
 	}
 
-	if args.names_only {
+	if args.output.names_only {
 		for format in formats {
 			println!("{}", format.name);
 		}
 		return Ok(());
 	}
 
-	if args.files_only {
+	if args.output.files_only {
 		for name in config_names {
 			println!("{name}");
+		}
+		return Ok(());
+	}
+
+	if args.output.init_commands_only {
+		for format in formats {
+			println!("{}", format.init_command);
 		}
 		return Ok(());
 	}

@@ -890,6 +890,49 @@ fn formats_search_filter_composes_with_files_only() {
 }
 
 #[test]
+fn formats_init_commands_only_prints_clean_commands() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["formats", "--init-commands-only"]);
+
+	assert!(output.status.success(), "formats --init-commands-only should succeed");
+	let stdout = stdout_text(&output);
+	assert_eq!(
+		stdout.lines().collect::<Vec<_>>(),
+		vec![
+			"pullhook init --format json",
+			"pullhook init --format jsonc",
+			"pullhook init --format yaml",
+			"pullhook init --format toml"
+		]
+	);
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"formats --init-commands-only should not write stderr"
+	);
+}
+
+#[test]
+fn formats_search_filter_composes_with_init_commands_only() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["formats", "--search", "comment", "--init-commands-only"]);
+
+	assert!(
+		output.status.success(),
+		"formats --search comment --init-commands-only should succeed"
+	);
+	let stdout = stdout_text(&output);
+	assert_eq!(stdout.lines().collect::<Vec<_>>(), vec!["pullhook init --format jsonc"]);
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"formats --search comment --init-commands-only should not write stderr"
+	);
+}
+
+#[test]
 fn formats_script_outputs_conflict_with_json() {
 	let temp = tempfile::tempdir().expect("create temp dir");
 
@@ -914,6 +957,38 @@ fn formats_script_outputs_conflict_with_json() {
 	assert!(files_stderr.contains("cannot be used with"));
 	assert!(files_stderr.contains("--files-only"));
 	assert!(files_stderr.contains("--json"));
+
+	let init_commands_output = run_pullhook(temp.path(), &["formats", "--init-commands-only", "--json"]);
+
+	assert!(
+		!init_commands_output.status.success(),
+		"formats --init-commands-only should conflict with --json"
+	);
+	let init_commands_stderr = stderr_text(&init_commands_output);
+	assert!(init_commands_stderr.contains("cannot be used with"));
+	assert!(init_commands_stderr.contains("--init-commands-only"));
+	assert!(init_commands_stderr.contains("--json"));
+}
+
+#[test]
+fn formats_line_outputs_conflict_with_each_other() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+	let conflicting_modes: &[&[&str]] = &[
+		&["formats", "--init-commands-only", "--names-only"],
+		&["formats", "--init-commands-only", "--files-only"],
+		&["formats", "--names-only", "--files-only"],
+	];
+
+	for args in conflicting_modes {
+		let output = run_pullhook(temp.path(), args);
+
+		assert!(
+			!output.status.success(),
+			"format line-output modes should conflict for args {args:?}"
+		);
+		let stderr = stderr_text(&output);
+		assert!(stderr.contains("cannot be used with"));
+	}
 }
 
 #[test]
@@ -3597,6 +3672,7 @@ fn utility_help_groups_options_by_task() {
 	assert!(formats_stdout.contains("pullhook formats --search yaml"));
 	assert!(formats_stdout.contains("pullhook formats --names-only"));
 	assert!(formats_stdout.contains("pullhook formats --files-only"));
+	assert!(formats_stdout.contains("pullhook formats --init-commands-only"));
 	assert!(formats_stdout.contains("pullhook formats --json"));
 
 	let managers = run_pullhook(temp.path(), &["managers", "--help"]);

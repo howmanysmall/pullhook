@@ -150,6 +150,7 @@ Examples:
   pullhook formats --search yaml
   pullhook formats --names-only
   pullhook formats --files-only
+  pullhook formats --init-commands-only
   pullhook formats --json";
 
 const MANAGERS_AFTER_HELP: &str = "\
@@ -1073,16 +1074,23 @@ pub struct FormatsArgs {
 	#[arg(
 		long = "json",
 		default_value_t = false,
-		conflicts_with_all = ["names_only", "files_only"],
+		conflicts_with_all = ["names_only", "files_only", "init_commands_only"],
 		help_heading = "Output options"
 	)]
 	pub json: bool,
 
+	#[command(flatten)]
+	pub output: FormatsLineOutputArgs,
+}
+
+/// Line-output mode arguments for `pullhook formats`.
+#[derive(Debug, Clone, Args)]
+pub struct FormatsLineOutputArgs {
 	/// Print only config format names, one per line.
 	#[arg(
 		long = "names-only",
 		default_value_t = false,
-		conflicts_with_all = ["json", "files_only"],
+		conflicts_with_all = ["json", "files_only", "init_commands_only"],
 		help_heading = "Output options"
 	)]
 	pub names_only: bool,
@@ -1091,10 +1099,19 @@ pub struct FormatsArgs {
 	#[arg(
 		long = "files-only",
 		default_value_t = false,
-		conflicts_with_all = ["json", "names_only"],
+		conflicts_with_all = ["json", "names_only", "init_commands_only"],
 		help_heading = "Output options"
 	)]
 	pub files_only: bool,
+
+	/// Print only config init commands, one per line.
+	#[arg(
+		long = "init-commands-only",
+		default_value_t = false,
+		conflicts_with_all = ["json", "names_only", "files_only"],
+		help_heading = "Output options"
+	)]
+	pub init_commands_only: bool,
 }
 
 /// Arguments for `pullhook managers`.
