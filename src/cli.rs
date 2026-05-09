@@ -544,27 +544,48 @@ pub struct ExplainArgs {
 #[command(after_help = VALIDATE_AFTER_HELP)]
 pub struct ValidateArgs {
 	/// Load config from an explicit path instead of repo-root discovery.
-	#[arg(long = "config", value_name = "path")]
+	#[arg(long = "config", value_name = "path", help_heading = "Input options")]
 	pub config: Option<PathBuf>,
 
 	/// Print machine-readable JSON instead of text output.
-	#[arg(long = "json", default_value_t = false)]
+	#[arg(long = "json", default_value_t = false, help_heading = "Output options")]
 	pub json: bool,
 
 	/// Suppress successful text output.
-	#[arg(long = "quiet", default_value_t = false, conflicts_with = "json")]
+	#[arg(
+		long = "quiet",
+		default_value_t = false,
+		conflicts_with = "json",
+		help_heading = "Output options"
+	)]
 	pub quiet: bool,
 
 	/// Enable debug logging.
-	#[arg(short = 'd', long = "debug", default_value_t = false)]
+	#[arg(
+		short = 'd',
+		long = "debug",
+		default_value_t = false,
+		help_heading = "Display options"
+	)]
 	pub debug: bool,
 
 	/// Control non-debug ANSI styling (`auto`, `always`, `never`).
-	#[arg(long = "render", value_name = "mode", value_enum, default_value_t = RenderMode::Auto)]
+	#[arg(
+		long = "render",
+		value_name = "mode",
+		value_enum,
+		default_value_t = RenderMode::Auto,
+		help_heading = "Display options"
+	)]
 	pub render: RenderMode,
 
 	/// Disable ANSI styling in non-debug output.
-	#[arg(long = "no-color", default_value_t = false, conflicts_with = "render")]
+	#[arg(
+		long = "no-color",
+		default_value_t = false,
+		conflicts_with = "render",
+		help_heading = "Display options"
+	)]
 	pub no_color: bool,
 }
 
@@ -577,31 +598,52 @@ pub struct ValidateArgs {
 #[command(after_help = DOCTOR_AFTER_HELP)]
 pub struct DoctorArgs {
 	/// Load config from an explicit path instead of repo-root discovery.
-	#[arg(long = "config", value_name = "path")]
+	#[arg(long = "config", value_name = "path", help_heading = "Input options")]
 	pub config: Option<PathBuf>,
 
 	/// Print machine-readable JSON instead of text output.
-	#[arg(long = "json", default_value_t = false)]
+	#[arg(long = "json", default_value_t = false, help_heading = "Output options")]
 	pub json: bool,
 
 	/// Suppress text output when all checks pass.
-	#[arg(long = "quiet", default_value_t = false, conflicts_with = "json")]
+	#[arg(
+		long = "quiet",
+		default_value_t = false,
+		conflicts_with = "json",
+		help_heading = "Output options"
+	)]
 	pub quiet: bool,
 
 	/// Exit non-zero on warnings as well as errors.
-	#[arg(long = "strict", default_value_t = false)]
+	#[arg(long = "strict", default_value_t = false, help_heading = "Check options")]
 	pub strict: bool,
 
 	/// Enable debug logging.
-	#[arg(short = 'd', long = "debug", default_value_t = false)]
+	#[arg(
+		short = 'd',
+		long = "debug",
+		default_value_t = false,
+		help_heading = "Display options"
+	)]
 	pub debug: bool,
 
 	/// Control non-debug ANSI styling (`auto`, `always`, `never`).
-	#[arg(long = "render", value_name = "mode", value_enum, default_value_t = RenderMode::Auto)]
+	#[arg(
+		long = "render",
+		value_name = "mode",
+		value_enum,
+		default_value_t = RenderMode::Auto,
+		help_heading = "Display options"
+	)]
 	pub render: RenderMode,
 
 	/// Disable ANSI styling in non-debug output.
-	#[arg(long = "no-color", default_value_t = false, conflicts_with = "render")]
+	#[arg(
+		long = "no-color",
+		default_value_t = false,
+		conflicts_with = "render",
+		help_heading = "Display options"
+	)]
 	pub no_color: bool,
 }
 
@@ -614,31 +656,56 @@ pub struct DoctorArgs {
 #[command(after_help = CONFIG_AFTER_HELP)]
 pub struct ConfigArgs {
 	/// Load config from an explicit path instead of repo-root discovery.
-	#[arg(long = "config", value_name = "path")]
+	#[arg(long = "config", value_name = "path", help_heading = "Input options")]
 	pub config: Option<PathBuf>,
 
 	/// Print only the resolved config path.
-	#[arg(long = "path-only", default_value_t = false, conflicts_with = "json")]
+	#[arg(
+		long = "path-only",
+		default_value_t = false,
+		conflicts_with = "json",
+		help_heading = "Output options"
+	)]
 	pub path_only: bool,
 
 	/// Print machine-readable JSON instead of text output.
-	#[arg(long = "json", default_value_t = false)]
+	#[arg(long = "json", default_value_t = false, help_heading = "Output options")]
 	pub json: bool,
 
 	/// Exit non-zero if the resolved config file does not exist.
-	#[arg(long = "require-existing", default_value_t = false)]
+	#[arg(
+		long = "require-existing",
+		default_value_t = false,
+		help_heading = "Resolution options"
+	)]
 	pub require_existing: bool,
 
 	/// Enable debug logging.
-	#[arg(short = 'd', long = "debug", default_value_t = false)]
+	#[arg(
+		short = 'd',
+		long = "debug",
+		default_value_t = false,
+		help_heading = "Display options"
+	)]
 	pub debug: bool,
 
 	/// Control non-debug ANSI styling (`auto`, `always`, `never`).
-	#[arg(long = "render", value_name = "mode", value_enum, default_value_t = RenderMode::Auto)]
+	#[arg(
+		long = "render",
+		value_name = "mode",
+		value_enum,
+		default_value_t = RenderMode::Auto,
+		help_heading = "Display options"
+	)]
 	pub render: RenderMode,
 
 	/// Disable ANSI styling in non-debug output.
-	#[arg(long = "no-color", default_value_t = false, conflicts_with = "render")]
+	#[arg(
+		long = "no-color",
+		default_value_t = false,
+		conflicts_with = "render",
+		help_heading = "Display options"
+	)]
 	pub no_color: bool,
 }
 
@@ -696,43 +763,80 @@ pub struct InitArgs {
 #[command(after_help = RULES_AFTER_HELP)]
 pub struct RulesArgs {
 	/// Load config from an explicit path instead of repo-root discovery.
-	#[arg(long = "config", value_name = "path")]
+	#[arg(long = "config", value_name = "path", help_heading = "Input options")]
 	pub config: Option<PathBuf>,
 
 	/// Print machine-readable JSON instead of text output.
-	#[arg(long = "json", default_value_t = false)]
+	#[arg(long = "json", default_value_t = false, help_heading = "Output options")]
 	pub json: bool,
 
 	/// Print only rule and group selector names, one per line.
-	#[arg(long = "names-only", default_value_t = false, conflicts_with_all = ["json", "commands_only", "patterns_only"])]
+	#[arg(
+		long = "names-only",
+		default_value_t = false,
+		conflicts_with_all = ["json", "commands_only", "patterns_only"],
+		help_heading = "Output options"
+	)]
 	pub names_only: bool,
 
 	/// Print only configured run commands, one per line.
-	#[arg(long = "commands-only", default_value_t = false, conflicts_with_all = ["json", "names_only", "patterns_only"])]
+	#[arg(
+		long = "commands-only",
+		default_value_t = false,
+		conflicts_with_all = ["json", "names_only", "patterns_only"],
+		help_heading = "Output options"
+	)]
 	pub commands_only: bool,
 
 	/// Print only configured changed-file patterns, one per line.
-	#[arg(long = "patterns-only", default_value_t = false, conflicts_with_all = ["json", "names_only", "commands_only"])]
+	#[arg(
+		long = "patterns-only",
+		default_value_t = false,
+		conflicts_with_all = ["json", "names_only", "commands_only"],
+		help_heading = "Output options"
+	)]
 	pub patterns_only: bool,
 
 	/// Limit inventory to all entries, leaf rules, groups, run rules, or install rules.
-	#[arg(long = "kind", value_name = "kind", value_enum, default_value_t = RulesKind::All)]
+	#[arg(
+		long = "kind",
+		value_name = "kind",
+		value_enum,
+		default_value_t = RulesKind::All,
+		help_heading = "Selection options"
+	)]
 	pub kind: RulesKind,
 
 	/// Limit inventory to one or more named rules or parallel groups.
-	#[arg(long = "rule", value_name = "name")]
+	#[arg(long = "rule", value_name = "name", help_heading = "Selection options")]
 	pub rules: Vec<String>,
 
 	/// Enable debug logging.
-	#[arg(short = 'd', long = "debug", default_value_t = false)]
+	#[arg(
+		short = 'd',
+		long = "debug",
+		default_value_t = false,
+		help_heading = "Display options"
+	)]
 	pub debug: bool,
 
 	/// Control non-debug ANSI styling (`auto`, `always`, `never`).
-	#[arg(long = "render", value_name = "mode", value_enum, default_value_t = RenderMode::Auto)]
+	#[arg(
+		long = "render",
+		value_name = "mode",
+		value_enum,
+		default_value_t = RenderMode::Auto,
+		help_heading = "Display options"
+	)]
 	pub render: RenderMode,
 
 	/// Disable ANSI styling in non-debug output.
-	#[arg(long = "no-color", default_value_t = false, conflicts_with = "render")]
+	#[arg(
+		long = "no-color",
+		default_value_t = false,
+		conflicts_with = "render",
+		help_heading = "Display options"
+	)]
 	pub no_color: bool,
 }
 

@@ -902,8 +902,40 @@ fn rules_help_lists_script_friendly_output_modes() {
 	assert!(stdout.contains("pullhook rules --commands-only"));
 	assert!(stdout.contains("pullhook rules --patterns-only"));
 	assert!(stdout.contains("pullhook rules --rule lint --json"));
+	assert!(stdout.contains("Input options:"));
+	assert!(stdout.contains("Output options:"));
+	assert!(stdout.contains("Selection options:"));
+	assert!(stdout.contains("Display options:"));
 	assert!(stdout.contains("--commands-only"));
 	assert!(stdout.contains("--patterns-only"));
+}
+
+#[test]
+fn diagnostic_help_groups_options_by_task() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let validate = run_pullhook(temp.path(), &["validate", "--help"]);
+	assert!(validate.status.success(), "validate help should succeed");
+	let validate_stdout = stdout_text(&validate);
+	assert!(validate_stdout.contains("Input options:"));
+	assert!(validate_stdout.contains("Output options:"));
+	assert!(validate_stdout.contains("Display options:"));
+
+	let doctor = run_pullhook(temp.path(), &["doctor", "--help"]);
+	assert!(doctor.status.success(), "doctor help should succeed");
+	let doctor_stdout = stdout_text(&doctor);
+	assert!(doctor_stdout.contains("Input options:"));
+	assert!(doctor_stdout.contains("Output options:"));
+	assert!(doctor_stdout.contains("Check options:"));
+	assert!(doctor_stdout.contains("Display options:"));
+
+	let config = run_pullhook(temp.path(), &["config", "--help"]);
+	assert!(config.status.success(), "config help should succeed");
+	let config_stdout = stdout_text(&config);
+	assert!(config_stdout.contains("Input options:"));
+	assert!(config_stdout.contains("Output options:"));
+	assert!(config_stdout.contains("Resolution options:"));
+	assert!(config_stdout.contains("Display options:"));
 }
 
 #[test]
