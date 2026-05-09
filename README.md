@@ -228,6 +228,7 @@ pullhook config --json
 pullhook validate
 pullhook validate --json
 pullhook doctor
+pullhook doctor --strict
 pullhook doctor --json
 pullhook schema
 pullhook schema --output .vscode/pullhook.schema.json
@@ -259,7 +260,8 @@ Placeholders render in every mode.
 `pullhook schema` prints the config JSON Schema, and `pullhook schema --output <path>` writes it for editor setup.
 `validate --json` emits a compact config summary for scripts and still prints structured JSON when the
 config is invalid. `doctor` checks repo discovery, config health, diff-base availability, and `--install`
-detection in one pass, with a short hint for each check. `explain --json` emits the evaluated rule plan,
+detection in one pass, with a short hint for each check. Use `doctor --strict` when CI should fail on warnings.
+`explain --json` emits the evaluated rule plan,
 including changed files, their source (`git`, `explicit`, or `base-missing`), matched files, commands, and
 skip reasons. `run --json` adds real execution results, captured stdout/stderr, and a final summary.
 `run --dry-run --json` emits the same plan plus `plannedCommands`, which is handy for CI or editor integrations.

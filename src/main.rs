@@ -500,6 +500,9 @@ fn doctor_command(args: &DoctorArgs) -> Result<()> {
 	if checks.iter().any(|check| check.level == DoctorLevel::Error) {
 		return Err(anyhow!("doctor found blocking issues"));
 	}
+	if args.strict && checks.iter().any(|check| check.level == DoctorLevel::Warn) {
+		return Err(anyhow!("doctor found warnings in strict mode"));
+	}
 
 	Ok(())
 }

@@ -868,6 +868,25 @@ fn doctor_json_reports_repo_config_diff_base_and_install_detection() {
 }
 
 #[test]
+fn doctor_strict_fails_on_warnings() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+
+	let output = run_pullhook(repo_root, &["doctor", "--strict", "--json"]);
+
+	assert!(!output.status.success(), "doctor --strict should fail on warnings");
+	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse doctor json");
+	let warn_count = value["summary"]["warn"].as_u64().expect("warn count");
+	assert!(warn_count >= 1, "strict doctor should report at least one warning");
+	assert_eq!(value["summary"]["error"], 0);
+	let checks = value["checks"].as_array().expect("checks array");
+	assert_eq!(checks[1]["name"], "config");
+	assert_eq!(checks[1]["level"], "warn");
+	let stderr = stderr_text(&output);
+	assert!(stderr.contains("doctor found warnings in strict mode"));
+}
+
+#[test]
 fn doctor_json_fails_when_config_is_invalid() {
 	let temp = setup_repo_with_merge();
 	let repo_root = temp.path();
