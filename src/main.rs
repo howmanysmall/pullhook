@@ -183,7 +183,7 @@ fn run_legacy(cli: &RunArgs) -> Result<()> {
 
 fn run_config_command(args: &ConfigRunArgs) -> Result<()> {
 	let renderer = Renderer::new(args.render);
-	let (repo, repo_root, config) = load_config_from_cwd(args.debug)?;
+	let (repo, repo_root, config) = load_config_from_cwd(args.debug, args.config.as_deref())?;
 	let (changed_files, base_missing) = resolve_config_changed_files(&repo, &config, args.base.as_deref(), args.debug)?;
 	let evaluation = evaluate_config(&config, &changed_files, base_missing, &repo_root)?;
 	let matched_files = count_config_matched_files(&evaluation);
@@ -232,7 +232,7 @@ fn run_config_command(args: &ConfigRunArgs) -> Result<()> {
 }
 
 fn explain_config_command(args: &ExplainArgs) -> Result<()> {
-	let (repo, repo_root, config) = load_config_from_cwd(args.debug)?;
+	let (repo, repo_root, config) = load_config_from_cwd(args.debug, args.config.as_deref())?;
 	let (changed_files, base_missing) = resolve_config_changed_files(&repo, &config, args.base.as_deref(), args.debug)?;
 	let evaluation = evaluate_config(&config, &changed_files, base_missing, &repo_root)?;
 
@@ -255,7 +255,7 @@ fn explain_config_command(args: &ExplainArgs) -> Result<()> {
 
 fn validate_config_command(args: &ValidateArgs) -> Result<()> {
 	let renderer = Renderer::new(args.render);
-	let (_, _, config) = load_config_from_cwd(args.debug)?;
+	let (_, _, config) = load_config_from_cwd(args.debug, args.config.as_deref())?;
 
 	if args.json {
 		println!("{}", serde_json::to_string_pretty(&config_summary_json(&config))?);
@@ -276,7 +276,7 @@ fn doctor_command(args: &DoctorArgs) -> Result<()> {
 	let cwd = std::env::current_dir().context("failed to read current working directory")?;
 	let repo = GitRepo::discover(&cwd, args.debug).context("failed to resolve repository root")?;
 	let repo_root = repo.root().to_path_buf();
-	let checks = build_doctor_checks(&repo, &repo_root);
+	let checks = build_doctor_checks(&repo, &repo_root, args.config.as_deref());
 
 	if args.json {
 		println!(
@@ -349,18 +349,38 @@ fn init_config_command(args: &InitArgs) -> Result<()> {
 	Ok(())
 }
 
-fn load_config_from_cwd(debug_enabled: bool) -> Result<(GitRepo, std::path::PathBuf, Config)> {
+fn load_config_from_cwd(
+	debug_enabled: bool,
+	explicit_config: Option<&std::path::Path>,
+) -> Result<(GitRepo, std::path::PathBuf, Config)> {
 	let cwd = std::env::current_dir().context("failed to read current working directory")?;
 	let repo = GitRepo::discover(&cwd, debug_enabled).context("failed to resolve repository root")?;
 	let repo_root = repo.root().to_path_buf();
-	let path = config::discover(&repo_root)?.ok_or_else(|| {
+	let path = resolve_config_path(&cwd, &repo_root, explicit_config)?;
+	let config = config::load(&path)?;
+	Ok((repo, repo_root, config))
+}
+
+fn resolve_config_path(
+	cwd: &std::path::Path,
+	repo_root: &std::path::Path,
+	explicit_config: Option<&std::path::Path>,
+) -> Result<std::path::PathBuf> {
+	if let Some(path) = explicit_config {
+		let resolved = if path.is_absolute() {
+			path.to_path_buf()
+		} else {
+			cwd.join(path)
+		};
+		return Ok(resolved);
+	}
+
+	config::discover(repo_root)?.ok_or_else(|| {
 		anyhow!(
 			"no pullhook config found; run `pullhook init` to create {}",
 			config::config_names()[0]
 		)
-	})?;
-	let config = config::load(&path)?;
-	Ok((repo, repo_root, config))
+	})
 }
 
 fn resolve_config_changed_files(
@@ -470,27 +490,53 @@ fn render_evaluated_rule(rule: &EvaluatedRule, all_matches: bool) {
 	}
 }
 
-fn build_doctor_checks(repo: &GitRepo, repo_root: &std::path::Path) -> Vec<DoctorCheck> {
-	let mut checks = Vec::with_capacity(4);
-	checks.push(DoctorCheck {
+fn build_doctor_checks(
+	repo: &GitRepo,
+	repo_root: &std::path::Path,
+	explicit_config: Option<&std::path::Path>,
+) -> Vec<DoctorCheck> {
+	let cwd = std::env::current_dir().unwrap_or_else(|_| repo_root.to_path_buf());
+	vec![
+		doctor_repository_check(repo_root),
+		doctor_config_check(&cwd, repo_root, explicit_config),
+		doctor_diff_base_check(repo),
+		doctor_install_check(repo_root),
+	]
+}
+
+fn doctor_repository_check(repo_root: &std::path::Path) -> DoctorCheck {
+	DoctorCheck {
 		name: "repository",
 		level: DoctorLevel::Ok,
 		summary: format!("repo root resolved to {}", repo_root.display()),
 		details: vec![format!("cwd scope is inside `{}`", repo_root.display())],
-	});
+	}
+}
 
-	checks.push(match config::discover(repo_root) {
-		Ok(Some(path)) => match config::load(&path) {
-			Ok(config) => DoctorCheck {
-				name: "config",
-				level: DoctorLevel::Ok,
-				summary: format!("loaded {}", path.display()),
-				details: vec![
-					format!("entries: {}", config.entries.len()),
-					format!("rules: {}", count_config_rules(&config)),
-					format!("parallel groups: {}", count_config_groups(&config)),
-				],
-			},
+fn doctor_config_check(
+	cwd: &std::path::Path,
+	repo_root: &std::path::Path,
+	explicit_config: Option<&std::path::Path>,
+) -> DoctorCheck {
+	match resolve_config_path(cwd, repo_root, explicit_config) {
+		Ok(path) => match config::load(&path) {
+			Ok(config) => {
+				let config_label = if explicit_config.is_some() {
+					format!("loaded {} from --config", path.display())
+				} else {
+					format!("loaded {}", path.display())
+				};
+				DoctorCheck {
+					name: "config",
+					level: DoctorLevel::Ok,
+					summary: config_label,
+					details: vec![
+						format!("entries: {}", config.entries.len()),
+						format!("rules: {}", count_config_rules(&config)),
+						format!("parallel groups: {}", count_config_groups(&config)),
+					],
+				}
+			}
 			Err(error) => DoctorCheck {
 				name: "config",
 				level: DoctorLevel::Error,
@@ -498,21 +544,25 @@ fn build_doctor_checks(repo: &GitRepo, repo_root: &std::path::Path) -> Vec<Docto
 				details: vec![error.to_string()],
 			},
 		},
-		Ok(None) => DoctorCheck {
-			name: "config",
-			level: DoctorLevel::Warn,
-			summary: "no pullhook config found".to_owned(),
-			details: vec!["run `pullhook init` to create pullhook.json".to_owned()],
-		},
+		Err(error) if explicit_config.is_none() && error.to_string().contains("no pullhook config found") => {
+			DoctorCheck {
+				name: "config",
+				level: DoctorLevel::Warn,
+				summary: "no pullhook config found".to_owned(),
+				details: vec!["run `pullhook init` to create pullhook.json".to_owned()],
+			}
+		}
 		Err(error) => DoctorCheck {
 			name: "config",
 			level: DoctorLevel::Error,
 			summary: "config discovery failed".to_owned(),
 			details: vec![error.to_string()],
 		},
-	});
+	}
+}
 
-	checks.push(match repo.resolve_base_and_changed_files(None, false) {
+fn doctor_diff_base_check(repo: &GitRepo) -> DoctorCheck {
+	match repo.resolve_base_and_changed_files(None, false) {
 		Ok((base, changed_files)) => DoctorCheck {
 			name: "diff base",
 			level: DoctorLevel::Ok,
@@ -531,9 +581,11 @@ fn build_doctor_checks(repo: &GitRepo, repo_root: &std::path::Path) -> Vec<Docto
 			summary: "failed to inspect git history".to_owned(),
 			details: vec![error.to_string()],
 		},
-	});
+	}
+}
 
-	checks.push(match detect_package_manager(repo_root) {
+fn doctor_install_check(repo_root: &std::path::Path) -> DoctorCheck {
+	match detect_package_manager(repo_root) {
 		Ok(package_manager) => DoctorCheck {
 			name: "install detection",
 			level: DoctorLevel::Ok,
@@ -561,9 +613,7 @@ fn build_doctor_checks(repo: &GitRepo, repo_root: &std::path::Path) -> Vec<Docto
 			summary: "package-manager detection failed".to_owned(),
 			details: vec![error.to_string()],
 		},
-	});
-
-	checks
+	}
 }
 
 fn render_doctor_checks(checks: &[DoctorCheck], repo_root: &std::path::Path) {

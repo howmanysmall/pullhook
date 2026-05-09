@@ -1,6 +1,7 @@
 //! CLI parsing and argument helpers.
 
 use std::num::NonZeroUsize;
+use std::path::PathBuf;
 
 use clap::{Args, CommandFactory, Parser, Subcommand, ValueEnum};
 use clap_complete::{Shell, generate};
@@ -114,6 +115,10 @@ pub struct RunArgs {
 	reason = "CLI flags are naturally represented as independent booleans"
 )]
 pub struct ConfigRunArgs {
+	/// Load config from an explicit path instead of repo-root discovery.
+	#[arg(long = "config", value_name = "path")]
+	pub config: Option<PathBuf>,
+
 	/// Override the git base revision.
 	#[arg(long = "base", value_name = "rev")]
 	pub base: Option<String>,
@@ -146,6 +151,10 @@ pub struct ConfigRunArgs {
 /// Arguments for `pullhook explain`.
 #[derive(Debug, Clone, Args)]
 pub struct ExplainArgs {
+	/// Load config from an explicit path instead of repo-root discovery.
+	#[arg(long = "config", value_name = "path")]
+	pub config: Option<PathBuf>,
+
 	/// Override the git base revision.
 	#[arg(long = "base", value_name = "rev")]
 	pub base: Option<String>,
@@ -170,6 +179,10 @@ pub struct ExplainArgs {
 /// Arguments for `pullhook validate`.
 #[derive(Debug, Clone, Args)]
 pub struct ValidateArgs {
+	/// Load config from an explicit path instead of repo-root discovery.
+	#[arg(long = "config", value_name = "path")]
+	pub config: Option<PathBuf>,
+
 	/// Print machine-readable JSON instead of text output.
 	#[arg(long = "json", default_value_t = false)]
 	pub json: bool,
@@ -186,6 +199,10 @@ pub struct ValidateArgs {
 /// Arguments for `pullhook doctor`.
 #[derive(Debug, Clone, Args)]
 pub struct DoctorArgs {
+	/// Load config from an explicit path instead of repo-root discovery.
+	#[arg(long = "config", value_name = "path")]
+	pub config: Option<PathBuf>,
+
 	/// Print machine-readable JSON instead of text output.
 	#[arg(long = "json", default_value_t = false)]
 	pub json: bool,

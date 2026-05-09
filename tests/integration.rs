@@ -386,6 +386,67 @@ fn doctor_json_fails_when_config_is_invalid() {
 }
 
 #[test]
+fn validate_accepts_relative_explicit_config_path_from_subdirectory() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_file(
+		repo_root,
+		Path::new("config/pullhook.custom.json"),
+		r#"{
+  "rules": [
+    {
+      "name": "rebuild package a",
+      "changed": "packages/a/package-lock.json",
+      "run": "cargo test -p package-a"
+    }
+  ]
+}
+"#,
+	);
+
+	let output = run_pullhook(
+		&repo_root.join("packages/a"),
+		&["validate", "--config", "../../config/pullhook.custom.json"],
+	);
+
+	assert!(output.status.success(), "validate should accept explicit config path");
+	let stdout = stdout_text(&output);
+	assert!(stdout.contains("config valid"));
+	assert!(stdout.contains("entries: 1 | rules: 1 | parallel groups: 0"));
+}
+
+#[test]
+fn run_dry_run_uses_explicit_config_path_when_default_config_is_missing() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_file(
+		repo_root,
+		Path::new("config/pullhook.custom.json"),
+		r#"{
+  "rules": [
+    {
+      "name": "rebuild package a",
+      "changed": "packages/a/package-lock.json",
+      "run": "cargo test -p package-a"
+    }
+  ]
+}
+"#,
+	);
+
+	let output = run_pullhook(
+		repo_root,
+		&["run", "--config", "config/pullhook.custom.json", "--dry-run", "--json"],
+	);
+
+	assert!(output.status.success(), "run should use explicit config path");
+	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse run json");
+	assert_eq!(value["plannedCommands"], 1);
+	assert_eq!(value["entries"][0]["name"], "rebuild package a");
+	assert_eq!(value["entries"][0]["status"], "match");
+}
+
+#[test]
 fn explain_json_reports_matches_and_skips() {
 	let temp = setup_repo_with_merge();
 	let repo_root = temp.path();

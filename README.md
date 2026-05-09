@@ -205,6 +205,7 @@ Example:
 Run configured rules:
 
 ```bash
+pullhook validate --config config/pullhook.ci.json
 pullhook validate
 pullhook validate --json
 pullhook doctor
@@ -234,6 +235,9 @@ Styles respect `--render auto|always|never`; placeholders render in every mode.
 health, diff-base availability, and `--install` detection in one pass. `explain --json` emits the
 evaluated rule plan, including changed files, matched files, commands, and skip reasons. `run --dry-run --json`
 emits the same plan plus `plannedCommands`, which is handy for CI or editor integrations.
+
+Use `--config <path>` with `run`, `explain`, `validate`, or `doctor` when you want to point at a
+specific config file instead of repo-root discovery.
 
 ## `--install` Detection
 
