@@ -1671,10 +1671,11 @@ fn init_plan_json(
 
 fn schema_check_json(path: &std::path::Path, exists: bool, matches: bool, error: Option<&str>) -> serde_json::Value {
 	json!({
+		"status": if error.is_some() { "error" } else { "ok" },
+		"error": error,
 		"path": path.display().to_string(),
 		"exists": exists,
 		"matches": matches,
-		"error": error,
 	})
 }
 
@@ -1686,11 +1687,12 @@ fn generated_file_check_json(
 	error: Option<&str>,
 ) -> serde_json::Value {
 	json!({
+		"status": if error.is_some() { "error" } else { "ok" },
+		"error": error,
 		"path": path.display().to_string(),
 		"shell": shell,
 		"exists": exists,
 		"matches": matches,
-		"error": error,
 	})
 }
 

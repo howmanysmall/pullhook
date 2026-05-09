@@ -393,6 +393,7 @@ fn completion_check_json_reports_match_status() {
 		"completion --check --json should fail for stale completion"
 	);
 	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse completion check json");
+	assert_eq!(value["status"], "error");
 	assert!(value["path"].as_str().expect("path").ends_with(output_path_str));
 	assert_eq!(value["shell"], "fish");
 	assert_eq!(value["exists"], true);
@@ -400,6 +401,40 @@ fn completion_check_json_reports_match_status() {
 	assert_eq!(value["error"], "completion output is out of date");
 	let stderr = stderr_text(&output);
 	assert!(stderr.contains("completion out of date"));
+}
+
+#[test]
+fn completion_check_json_reports_up_to_date_status() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+	let output_path = Path::new("completions/fish/pullhook.fish");
+	let output_path_str = output_path.to_str().expect("utf-8 path");
+
+	let write_output = run_pullhook(temp.path(), &["completion", "fish", "--output", output_path_str]);
+	assert!(
+		write_output.status.success(),
+		"completion --output should write generated completion"
+	);
+
+	let output = run_pullhook(
+		temp.path(),
+		&["completion", "fish", "--check", "--output", output_path_str, "--json"],
+	);
+
+	assert!(
+		output.status.success(),
+		"completion --check --json should pass for current completion"
+	);
+	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse completion check json");
+	assert_eq!(value["status"], "ok");
+	assert_eq!(value["error"], serde_json::Value::Null);
+	assert_eq!(value["shell"], "fish");
+	assert_eq!(value["exists"], true);
+	assert_eq!(value["matches"], true);
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"up-to-date completion check should not write stderr"
+	);
 }
 
 #[test]
@@ -1142,6 +1177,7 @@ fn schema_check_json_reports_match_status() {
 		"schema --check --json should fail for stale schema"
 	);
 	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse schema check json");
+	assert_eq!(value["status"], "error");
 	assert!(
 		value["path"]
 			.as_str()
@@ -1153,6 +1189,32 @@ fn schema_check_json_reports_match_status() {
 	assert_eq!(value["error"], "schema output is out of date");
 	let stderr = stderr_text(&output);
 	assert!(stderr.contains("schema out of date"));
+}
+
+#[test]
+fn schema_check_json_reports_up_to_date_status() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+	let schema_path = ".vscode/pullhook.schema.json";
+
+	let write_output = run_pullhook(temp.path(), &["schema", "--output", schema_path]);
+	assert!(write_output.status.success(), "schema --output should write schema");
+
+	let output = run_pullhook(temp.path(), &["schema", "--check", "--output", schema_path, "--json"]);
+
+	assert!(
+		output.status.success(),
+		"schema --check --json should pass for current schema"
+	);
+	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse schema check json");
+	assert_eq!(value["status"], "ok");
+	assert_eq!(value["error"], serde_json::Value::Null);
+	assert_eq!(value["exists"], true);
+	assert_eq!(value["matches"], true);
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"up-to-date schema check should not write stderr"
+	);
 }
 
 #[test]

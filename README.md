@@ -284,6 +284,7 @@ Add `--require-existing` when that script should fail instead of returning a pla
 `config --json` includes `status` and `error` fields for the same automation-friendly result shape used by other JSON commands.
 `pullhook schema` prints the config JSON Schema, and `pullhook schema --output <path>` writes it for editor setup.
 Use `schema --check --output <path>` in CI when a checked-in schema file must stay current.
+`schema --check --json` and `completion <shell> --check --json` include top-level `status` and `error` fields.
 `validate --json` emits a compact config summary for scripts and still prints structured JSON when the
 config is invalid, including `status` and `error` fields. Use `validate --quiet` when CI only needs the exit code. `doctor` checks repo discovery, config health, diff-base availability, and `--install`
 detection in one pass, with a short hint for each check. Use `doctor --strict` when CI should fail on warnings.
