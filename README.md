@@ -458,7 +458,7 @@ Add `--search <text>` to match category names or descriptions case-insensitively
 Use `pullhook categories --descriptions-only` when a script or command palette only needs category descriptions.
 Use `pullhook categories --commands-only` when a script needs command names for matching categories.
 Use `pullhook categories --example-commands-only` when a script needs example command lines for matching categories.
-Use `pullhook commands` to inspect the command catalog in text form, or `pullhook commands --json` when another
+Use `pullhook commands` to inspect the command catalog with example invocations, or `pullhook commands --json` when another
 tool needs supported commands, categories, repo requirements, and example invocations without scraping help text.
 Add `--category workflow`, `--category diagnostic`, `--category generator`, or `--category reference` to narrow
 the catalog.

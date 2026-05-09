@@ -2419,7 +2419,9 @@ fn commands_text_lists_cli_catalog() {
 	assert!(stdout.contains("Pullhook commands"));
 	assert!(stdout.contains("legacy one-off mode is available through top-level options"));
 	assert!(stdout.contains("run [workflow]"));
+	assert!(stdout.contains("example: pullhook run"));
 	assert!(stdout.contains("examples [reference]"));
+	assert!(stdout.contains("example: pullhook commands --json"));
 	assert!(stdout.contains("codes [reference]"));
 	let stderr = stderr_text(&output);
 	assert!(stderr.trim().is_empty(), "commands should not write stderr");
