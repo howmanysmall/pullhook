@@ -332,7 +332,9 @@ fn explain_help_lists_summary_only_example() {
 	assert!(output.status.success(), "explain help should succeed");
 	let stdout = stdout_text(&output);
 	assert!(stdout.contains("pullhook explain --summary-only"));
+	assert!(stdout.contains("pullhook explain --commands-only"));
 	assert!(stdout.contains("--summary-only"));
+	assert!(stdout.contains("--commands-only"));
 }
 
 #[test]
@@ -375,6 +377,33 @@ fn explain_summary_only_conflicts_with_json() {
 	assert!(stderr.contains("cannot be used with"));
 	assert!(stderr.contains("--summary-only"));
 	assert!(stderr.contains("--json"));
+}
+
+#[test]
+fn explain_commands_only_conflicts_with_other_output_modes() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let json_output = run_pullhook(temp.path(), &["explain", "--commands-only", "--json"]);
+
+	assert!(
+		!json_output.status.success(),
+		"explain --commands-only should conflict with --json"
+	);
+	let json_stderr = stderr_text(&json_output);
+	assert!(json_stderr.contains("cannot be used with"));
+	assert!(json_stderr.contains("--commands-only"));
+	assert!(json_stderr.contains("--json"));
+
+	let summary_output = run_pullhook(temp.path(), &["explain", "--commands-only", "--summary-only"]);
+
+	assert!(
+		!summary_output.status.success(),
+		"explain --commands-only should conflict with --summary-only"
+	);
+	let summary_stderr = stderr_text(&summary_output);
+	assert!(summary_stderr.contains("cannot be used with"));
+	assert!(summary_stderr.contains("--commands-only"));
+	assert!(summary_stderr.contains("--summary-only"));
 }
 
 #[test]
@@ -1562,6 +1591,42 @@ fn explain_summary_only_reports_compact_plan_counts() {
 	assert!(
 		stderr.trim().is_empty(),
 		"explain --summary-only should not write stderr"
+	);
+}
+
+#[test]
+fn explain_commands_only_reports_planned_commands() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_file(
+		repo_root,
+		Path::new("pullhook.json"),
+		r#"{
+  "rules": [
+    {
+      "name": "rebuild package a",
+      "changed": "packages/a/package-lock.json",
+      "run": "cargo test -p package-a"
+    },
+    {
+      "name": "skip markdown",
+      "changed": "**/*.md",
+      "run": "cargo test"
+    }
+  ]
+}
+"#,
+	);
+
+	let output = run_pullhook(repo_root, &["explain", "--commands-only"]);
+
+	assert!(output.status.success(), "explain --commands-only should succeed");
+	let stdout = stdout_text(&output);
+	assert_eq!(stdout.trim(), "cargo test -p package-a");
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"explain --commands-only should not write stderr"
 	);
 }
 

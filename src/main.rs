@@ -433,6 +433,11 @@ fn explain_config_command(args: &ExplainArgs) -> Result<()> {
 		return Ok(());
 	}
 
+	if args.commands_only {
+		render_config_evaluation_commands(&evaluation);
+		return Ok(());
+	}
+
 	render_config_evaluation(&config, &evaluation, args.all_matches, false);
 	Ok(())
 }
@@ -1100,6 +1105,12 @@ fn render_config_evaluation_summary(
 	println!("plannedCommands: {}", count_planned_commands(evaluation));
 }
 
+fn render_config_evaluation_commands(evaluation: &[EvaluatedEntry]) {
+	for command in collect_planned_commands(evaluation) {
+		println!("{command}");
+	}
+}
+
 fn render_evaluated_rule(rule: &EvaluatedRule, all_matches: bool) {
 	if rule.should_run() {
 		println!("[match] {}", rule.rule.name);
@@ -1683,6 +1694,31 @@ fn count_planned_commands(evaluation: &[EvaluatedEntry]) -> usize {
 			EvaluatedEntry::Group(group) => group.rules.iter().filter(|rule| rule.should_run()).count(),
 		})
 		.sum()
+}
+
+fn collect_planned_commands(evaluation: &[EvaluatedEntry]) -> Vec<&str> {
+	let mut commands = Vec::new();
+
+	for entry in evaluation {
+		match entry {
+			EvaluatedEntry::Rule(rule) => collect_rule_command(rule, &mut commands),
+			EvaluatedEntry::Group(group) => {
+				for rule in &group.rules {
+					collect_rule_command(rule, &mut commands);
+				}
+			}
+		}
+	}
+
+	commands
+}
+
+fn collect_rule_command<'a>(rule: &'a EvaluatedRule, commands: &mut Vec<&'a str>) {
+	if rule.should_run()
+		&& let Some(command) = &rule.command
+	{
+		commands.push(command);
+	}
 }
 
 fn count_config_matched_files(evaluation: &[EvaluatedEntry]) -> usize {

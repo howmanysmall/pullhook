@@ -47,6 +47,7 @@ Examples:
   git diff --name-only HEAD~1 | pullhook explain --changed-files-stdin
   pullhook explain --rule lint --all-matches
   pullhook explain --summary-only
+  pullhook explain --commands-only
   pullhook explain --json";
 
 const VALIDATE_AFTER_HELP: &str = "\
@@ -318,6 +319,10 @@ pub struct ExplainArgs {
 	/// Print only changed-file and planned-command counts.
 	#[arg(long = "summary-only", default_value_t = false, conflicts_with = "json")]
 	pub summary_only: bool,
+
+	/// Print only planned commands, one per line.
+	#[arg(long = "commands-only", default_value_t = false, conflicts_with_all = ["json", "summary_only"])]
+	pub commands_only: bool,
 
 	/// Print machine-readable JSON instead of text output.
 	#[arg(long = "json", default_value_t = false)]
