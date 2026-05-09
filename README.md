@@ -292,6 +292,7 @@ pullhook examples --category reference
 pullhook examples --category reference --commands-only
 pullhook examples --category reference --titles-only
 pullhook examples --search install
+pullhook examples --search install --summaries-only
 pullhook examples --command run
 pullhook examples --command run --commands-only
 pullhook examples --json
@@ -404,6 +405,7 @@ Use `pullhook examples --category reference` to narrow examples by command categ
 Add `--search <text>` to match example titles, commands, categories, or summaries case-insensitively.
 Use `pullhook examples --commands-only` when a script or completion helper only needs example command lines.
 Use `pullhook examples --titles-only` when a script or completion helper only needs example titles.
+Use `pullhook examples --summaries-only` when a script or command palette only needs short descriptions.
 Use `pullhook categories` to inspect command categories with command and example counts.
 Add `--search <text>` to match category names or descriptions case-insensitively.
 Use `pullhook commands` to inspect the command catalog in text form, or `pullhook commands --json` when another

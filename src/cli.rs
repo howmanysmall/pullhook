@@ -195,6 +195,7 @@ Examples:
   pullhook examples --command run
   pullhook examples --category workflow
   pullhook examples --search install
+  pullhook examples --search install --summaries-only
   pullhook examples --command run --commands-only
   pullhook examples --category reference --commands-only
   pullhook examples --category reference --titles-only
@@ -1309,7 +1310,7 @@ pub struct ExamplesArgs {
 	#[arg(
 		long = "json",
 		default_value_t = false,
-		conflicts_with_all = ["commands_only", "titles_only"],
+		conflicts_with_all = ["commands_only", "titles_only", "summaries_only"],
 		help_heading = "Output options"
 	)]
 	pub json: bool,
@@ -1325,7 +1326,7 @@ pub struct ExamplesLineOutputArgs {
 	#[arg(
 		long = "commands-only",
 		default_value_t = false,
-		conflicts_with_all = ["json", "titles_only"],
+		conflicts_with_all = ["json", "titles_only", "summaries_only"],
 		help_heading = "Output options"
 	)]
 	pub commands_only: bool,
@@ -1334,10 +1335,19 @@ pub struct ExamplesLineOutputArgs {
 	#[arg(
 		long = "titles-only",
 		default_value_t = false,
-		conflicts_with_all = ["json", "commands_only"],
+		conflicts_with_all = ["json", "commands_only", "summaries_only"],
 		help_heading = "Output options"
 	)]
 	pub titles_only: bool,
+
+	/// Print only example summaries, one per line.
+	#[arg(
+		long = "summaries-only",
+		default_value_t = false,
+		conflicts_with_all = ["json", "commands_only", "titles_only"],
+		help_heading = "Output options"
+	)]
+	pub summaries_only: bool,
 }
 
 /// Commands that have workflow examples.

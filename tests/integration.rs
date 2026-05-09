@@ -2184,6 +2184,63 @@ fn examples_titles_only_prints_clean_titles() {
 }
 
 #[test]
+fn examples_summaries_only_prints_clean_summaries() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(
+		temp.path(),
+		&["examples", "--category", "reference", "--summaries-only"],
+	);
+
+	assert!(
+		output.status.success(),
+		"examples --category reference --summaries-only should succeed"
+	);
+	let stdout = stdout_text(&output);
+	assert_eq!(
+		stdout.lines().collect::<Vec<_>>(),
+		vec![
+			"Return supported commands and categories for automation.",
+			"Print supported shell completion targets.",
+			"Print supported config filenames.",
+			"Print install detection patterns.",
+			"Return command categories with command and example counts.",
+			"Print stable status codes for scripts or completion helpers."
+		]
+	);
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"examples --category reference --summaries-only should not write stderr"
+	);
+}
+
+#[test]
+fn examples_search_filter_composes_with_summaries_only() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["examples", "--search", "install", "--summaries-only"]);
+
+	assert!(
+		output.status.success(),
+		"examples --search install --summaries-only should succeed"
+	);
+	let stdout = stdout_text(&output);
+	assert_eq!(
+		stdout.lines().collect::<Vec<_>>(),
+		vec![
+			"Use legacy one-off mode to detect the package manager and run install.",
+			"Print install detection patterns."
+		]
+	);
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"filtered examples --summaries-only should not write stderr"
+	);
+}
+
+#[test]
 fn examples_commands_only_conflicts_with_json() {
 	let temp = tempfile::tempdir().expect("create temp dir");
 
@@ -2217,6 +2274,28 @@ fn examples_titles_only_conflicts_with_other_output_modes() {
 		let stderr = stderr_text(&output);
 		assert!(stderr.contains("cannot be used with"));
 		assert!(stderr.contains("--titles-only"));
+	}
+}
+
+#[test]
+fn examples_summaries_only_conflicts_with_other_output_modes() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+	let conflicting_modes: &[&[&str]] = &[
+		&["examples", "--summaries-only", "--json"],
+		&["examples", "--summaries-only", "--commands-only"],
+		&["examples", "--summaries-only", "--titles-only"],
+	];
+
+	for args in conflicting_modes {
+		let output = run_pullhook(temp.path(), args);
+
+		assert!(
+			!output.status.success(),
+			"examples --summaries-only should conflict for args {args:?}"
+		);
+		let stderr = stderr_text(&output);
+		assert!(stderr.contains("cannot be used with"));
+		assert!(stderr.contains("--summaries-only"));
 	}
 }
 
@@ -3388,6 +3467,7 @@ fn utility_help_groups_options_by_task() {
 	assert!(examples_stdout.contains("pullhook examples --command run"));
 	assert!(examples_stdout.contains("pullhook examples --category workflow"));
 	assert!(examples_stdout.contains("pullhook examples --search install"));
+	assert!(examples_stdout.contains("pullhook examples --search install --summaries-only"));
 	assert!(examples_stdout.contains("pullhook examples --command run --commands-only"));
 	assert!(examples_stdout.contains("pullhook examples --category reference --commands-only"));
 	assert!(examples_stdout.contains("pullhook examples --category reference --titles-only"));
