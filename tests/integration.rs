@@ -1118,6 +1118,10 @@ fn codes_json_lists_stable_json_codes() {
 		value["summary"]["codes"].as_u64().expect("code count"),
 		codes.len() as u64
 	);
+	assert!(
+		value["summary"]["surfaces"].as_u64().expect("surface count") > 1,
+		"codes summary should count distinct surfaces"
+	);
 	let stderr = stderr_text(&output);
 	assert!(stderr.trim().is_empty(), "codes --json should not write stderr");
 }
@@ -1255,6 +1259,52 @@ fn codes_only_prints_clean_stable_codes() {
 }
 
 #[test]
+fn codes_surfaces_only_prints_clean_surfaces() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["codes", "--surfaces-only"]);
+
+	assert!(output.status.success(), "codes --surfaces-only should succeed");
+	let stdout = stdout_text(&output);
+	let surfaces = stdout.lines().collect::<Vec<_>>();
+	assert!(surfaces.contains(&"doctor"));
+	assert!(surfaces.contains(&"run/explain"));
+	assert!(surfaces.contains(&"schema --check"));
+	assert!(
+		!surfaces.contains(&"config_missing"),
+		"surfaces-only output should not include stable codes"
+	);
+	assert!(
+		surfaces.windows(2).all(|window| window[0] <= window[1]),
+		"surfaces-only output should be sorted for stable scripts"
+	);
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"codes --surfaces-only should not write stderr"
+	);
+}
+
+#[test]
+fn codes_surfaces_only_honors_filters() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["codes", "--kind", "doctor-check", "--surfaces-only"]);
+
+	assert!(
+		output.status.success(),
+		"codes --kind doctor-check --surfaces-only should succeed"
+	);
+	let stdout = stdout_text(&output);
+	assert_eq!(stdout.lines().collect::<Vec<_>>(), vec!["doctor"]);
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"filtered codes --surfaces-only should not write stderr"
+	);
+}
+
+#[test]
 fn codes_only_conflicts_with_json() {
 	let temp = tempfile::tempdir().expect("create temp dir");
 
@@ -1268,6 +1318,38 @@ fn codes_only_conflicts_with_json() {
 	assert!(stderr.contains("cannot be used with"));
 	assert!(stderr.contains("--codes-only"));
 	assert!(stderr.contains("--json"));
+}
+
+#[test]
+fn codes_surfaces_only_conflicts_with_json() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["codes", "--surfaces-only", "--json"]);
+
+	assert!(
+		!output.status.success(),
+		"codes --surfaces-only should conflict with --json"
+	);
+	let stderr = stderr_text(&output);
+	assert!(stderr.contains("cannot be used with"));
+	assert!(stderr.contains("--surfaces-only"));
+	assert!(stderr.contains("--json"));
+}
+
+#[test]
+fn codes_surfaces_only_conflicts_with_codes_only() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["codes", "--surfaces-only", "--codes-only"]);
+
+	assert!(
+		!output.status.success(),
+		"codes --surfaces-only should conflict with --codes-only"
+	);
+	let stderr = stderr_text(&output);
+	assert!(stderr.contains("cannot be used with"));
+	assert!(stderr.contains("--surfaces-only"));
+	assert!(stderr.contains("--codes-only"));
 }
 
 #[test]
@@ -2650,6 +2732,7 @@ fn utility_help_groups_options_by_task() {
 	assert!(codes_stdout.contains("Filter options:"));
 	assert!(codes_stdout.contains("Output options:"));
 	assert!(codes_stdout.contains("pullhook codes --surface run"));
+	assert!(codes_stdout.contains("pullhook codes --surfaces-only"));
 	assert!(codes_stdout.contains("pullhook codes --kind error --codes-only"));
 
 	let commands = run_pullhook(temp.path(), &["commands", "--help"]);

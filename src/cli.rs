@@ -168,6 +168,7 @@ Examples:
   pullhook codes
   pullhook codes --kind doctor-check
   pullhook codes --surface run
+  pullhook codes --surfaces-only
   pullhook codes --kind error --codes-only
   pullhook codes --json";
 
@@ -1155,10 +1156,19 @@ pub struct CodesArgs {
 	#[arg(
 		long = "codes-only",
 		default_value_t = false,
-		conflicts_with = "json",
+		conflicts_with_all = ["json", "surfaces_only"],
 		help_heading = "Output options"
 	)]
 	pub codes_only: bool,
+
+	/// Print only matching code surfaces, one per line.
+	#[arg(
+		long = "surfaces-only",
+		default_value_t = false,
+		conflicts_with_all = ["json", "codes_only"],
+		help_heading = "Output options"
+	)]
+	pub surfaces_only: bool,
 }
 
 /// Arguments for `pullhook commands`.
