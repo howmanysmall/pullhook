@@ -20,8 +20,8 @@ use tracing::debug;
 use tracing_subscriber::EnvFilter;
 
 use crate::cli::{
-	Cli, Commands, ConfigArgs, ConfigRunArgs, DoctorArgs, ExplainArgs, InitArgs, RulesArgs, RunArgs, SchemaArgs,
-	ValidateArgs,
+	Cli, Commands, ConfigArgs, ConfigRunArgs, DoctorArgs, ExplainArgs, InitArgs, RulesArgs, RulesKind, RunArgs,
+	SchemaArgs, ValidateArgs,
 };
 use crate::config::{
 	Config, Entry, EvaluatedEntry, EvaluatedGroup, EvaluatedRule, FailTextContext, OnFailure, Pattern,
@@ -548,12 +548,15 @@ fn rules_command(args: &RulesArgs) -> Result<()> {
 	let (_, _, config) = load_config_from_cwd_for_output(args.debug, args.config.as_deref(), args.json)?;
 
 	if args.json {
-		println!("{}", serde_json::to_string_pretty(&config_rules_json(&config))?);
+		println!(
+			"{}",
+			serde_json::to_string_pretty(&config_rules_json(&config, args.kind))?
+		);
 		return Ok(());
 	}
 
 	if args.names_only {
-		for selector in collect_rule_selectors(&config) {
+		for selector in collect_rule_selectors_for_kind(&config, args.kind) {
 			println!("{selector}");
 		}
 		return Ok(());
@@ -563,15 +566,19 @@ fn rules_command(args: &RulesArgs) -> Result<()> {
 	renderer.render_message_stage(&format!(
 		"entries: {} | rules: {} | parallel groups: {}",
 		config.entries.len(),
-		count_config_rules(&config),
-		count_config_groups(&config)
+		count_config_rules_for_kind(&config, args.kind),
+		count_config_groups_for_kind(&config, args.kind)
 	));
 	println!();
 	println!("Rules");
 	for entry in &config.entries {
 		match entry {
-			Entry::Rule(rule) => render_config_rule_inventory(rule),
-			Entry::Group(group) => render_config_group_inventory(group),
+			Entry::Rule(rule) => {
+				if rules_kind_matches_rule(args.kind, rule) {
+					render_config_rule_inventory(rule);
+				}
+			}
+			Entry::Group(group) => render_config_group_inventory(group, args.kind),
 		}
 	}
 
@@ -1263,14 +1270,15 @@ fn config_validation_error_json(path: Option<&std::path::Path>, error: &str) -> 
 	})
 }
 
-fn config_rules_json(config: &Config) -> serde_json::Value {
+fn config_rules_json(config: &Config, kind: RulesKind) -> serde_json::Value {
 	json!({
 		"path": config.path.display().to_string(),
 		"onFailure": on_failure_label(config.on_failure),
-		"selectors": collect_rule_selectors(config),
-		"entries": config.entries.iter().map(config_rule_inventory_json).collect::<Vec<_>>(),
-		"rules": count_config_rules(config),
-		"parallelGroups": count_config_groups(config),
+		"kind": rules_kind_label(kind),
+		"selectors": collect_rule_selectors_for_kind(config, kind),
+		"entries": config.entries.iter().filter_map(|entry| config_rule_inventory_json(entry, kind)).collect::<Vec<_>>(),
+		"rules": count_config_rules_for_kind(config, kind),
+		"parallelGroups": count_config_groups_for_kind(config, kind),
 	})
 }
 
@@ -1414,16 +1422,17 @@ fn config_entry_json(entry: &EvaluatedEntry) -> serde_json::Value {
 	}
 }
 
-fn config_rule_inventory_json(entry: &Entry) -> serde_json::Value {
+fn config_rule_inventory_json(entry: &Entry, kind: RulesKind) -> Option<serde_json::Value> {
 	match entry {
-		Entry::Rule(rule) => json!({
+		Entry::Rule(rule) if rules_kind_matches_rule(kind, rule) => Some(json!({
 			"type": "rule",
 			"name": rule.name,
 			"kind": if rule.install { "install" } else { "run" },
 			"command": rule.run,
 			"runIfBaseMissing": rule.run_if_base_missing,
-		}),
-		Entry::Group(group) => json!({
+		})),
+		Entry::Rule(_) => None,
+		Entry::Group(group) if kind == RulesKind::All || kind == RulesKind::Group => Some(json!({
 			"type": "group",
 			"name": group.name,
 			"jobs": group.jobs,
@@ -1433,7 +1442,32 @@ fn config_rule_inventory_json(entry: &Entry) -> serde_json::Value {
 				"command": rule.run,
 				"runIfBaseMissing": rule.run_if_base_missing,
 			})).collect::<Vec<_>>(),
-		}),
+		})),
+		Entry::Group(group) => {
+			let rules = group
+				.rules
+				.iter()
+				.filter(|rule| rules_kind_matches_rule(kind, rule))
+				.map(|rule| {
+					json!({
+						"name": rule.name,
+						"kind": if rule.install { "install" } else { "run" },
+						"command": rule.run,
+						"runIfBaseMissing": rule.run_if_base_missing,
+					})
+				})
+				.collect::<Vec<_>>();
+			if rules.is_empty() {
+				None
+			} else {
+				Some(json!({
+					"type": "group",
+					"name": group.name,
+					"jobs": group.jobs,
+					"rules": rules,
+				}))
+			}
+		}
 	}
 }
 
@@ -1469,17 +1503,38 @@ fn count_config_rules(config: &Config) -> usize {
 		.sum()
 }
 
-fn collect_rule_selectors(config: &Config) -> Vec<String> {
+fn count_config_rules_for_kind(config: &Config, kind: RulesKind) -> usize {
+	config
+		.entries
+		.iter()
+		.map(|entry| match entry {
+			Entry::Rule(rule) => usize::from(rules_kind_matches_rule(kind, rule)),
+			Entry::Group(group) => group
+				.rules
+				.iter()
+				.filter(|rule| rules_kind_matches_rule(kind, rule))
+				.count(),
+		})
+		.sum()
+}
+
+fn collect_rule_selectors_for_kind(config: &Config, kind: RulesKind) -> Vec<String> {
 	let mut selectors = BTreeSet::new();
 	for entry in &config.entries {
 		match entry {
 			Entry::Rule(rule) => {
-				selectors.insert(rule.name.clone());
+				if rules_kind_matches_rule(kind, rule) {
+					selectors.insert(rule.name.clone());
+				}
 			}
 			Entry::Group(group) => {
-				selectors.insert(group.name.clone());
+				if kind == RulesKind::All || kind == RulesKind::Group {
+					selectors.insert(group.name.clone());
+				}
 				for rule in &group.rules {
-					selectors.insert(rule.name.clone());
+					if rules_kind_matches_rule(kind, rule) {
+						selectors.insert(rule.name.clone());
+					}
 				}
 			}
 		}
@@ -1499,13 +1554,32 @@ fn render_config_rule_inventory(rule: &config::Rule) {
 	println!();
 }
 
-fn render_config_group_inventory(group: &config::Group) {
+fn render_config_group_inventory(group: &config::Group, kind: RulesKind) {
+	if kind == RulesKind::Group {
+		println!("[group] {}", group.name);
+		match group.jobs {
+			Some(jobs) => println!("jobs: {jobs}"),
+			None => println!("jobs: default"),
+		}
+		println!();
+		return;
+	}
+
+	let rules = group
+		.rules
+		.iter()
+		.filter(|rule| rules_kind_matches_rule(kind, rule))
+		.collect::<Vec<_>>();
+	if rules.is_empty() {
+		return;
+	}
+
 	println!("[group] {}", group.name);
 	match group.jobs {
 		Some(jobs) => println!("jobs: {jobs}"),
 		None => println!("jobs: default"),
 	}
-	for rule in &group.rules {
+	for rule in rules {
 		println!("- {}", rule.name);
 		println!("  kind: {}", if rule.install { "install" } else { "run" });
 		if let Some(command) = &rule.run {
@@ -1524,6 +1598,32 @@ fn count_config_groups(config: &Config) -> usize {
 		.iter()
 		.filter(|entry| matches!(entry, Entry::Group(_)))
 		.count()
+}
+
+fn count_config_groups_for_kind(config: &Config, kind: RulesKind) -> usize {
+	if kind != RulesKind::All && kind != RulesKind::Group {
+		return 0;
+	}
+	count_config_groups(config)
+}
+
+const fn rules_kind_matches_rule(kind: RulesKind, rule: &config::Rule) -> bool {
+	match kind {
+		RulesKind::All | RulesKind::Rule => true,
+		RulesKind::Group => false,
+		RulesKind::Run => !rule.install,
+		RulesKind::Install => rule.install,
+	}
+}
+
+const fn rules_kind_label(kind: RulesKind) -> &'static str {
+	match kind {
+		RulesKind::All => "all",
+		RulesKind::Rule => "rule",
+		RulesKind::Group => "group",
+		RulesKind::Run => "run",
+		RulesKind::Install => "install",
+	}
 }
 
 fn count_planned_commands(evaluation: &[EvaluatedEntry]) -> usize {

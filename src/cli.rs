@@ -69,6 +69,7 @@ Examples:
 const RULES_AFTER_HELP: &str = "\
 Examples:
   pullhook rules
+  pullhook rules --kind install
   pullhook rules --names-only
   pullhook rules --json
   pullhook rules --config config/pullhook.custom.json";
@@ -457,6 +458,10 @@ pub struct RulesArgs {
 	#[arg(long = "names-only", default_value_t = false, conflicts_with = "json")]
 	pub names_only: bool,
 
+	/// Limit inventory to all entries, leaf rules, groups, run rules, or install rules.
+	#[arg(long = "kind", value_name = "kind", value_enum, default_value_t = RulesKind::All)]
+	pub kind: RulesKind,
+
 	/// Enable debug logging.
 	#[arg(short = 'd', long = "debug", default_value_t = false)]
 	pub debug: bool,
@@ -468,6 +473,21 @@ pub struct RulesArgs {
 	/// Disable ANSI styling in non-debug output.
 	#[arg(long = "no-color", default_value_t = false, conflicts_with = "render")]
 	pub no_color: bool,
+}
+
+/// Rule inventory filter for `pullhook rules`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum RulesKind {
+	/// Show groups and leaf rules.
+	All,
+	/// Show only leaf rules.
+	Rule,
+	/// Show only parallel group selectors.
+	Group,
+	/// Show only leaf rules that run commands.
+	Run,
+	/// Show only leaf rules that run package-manager install.
+	Install,
 }
 
 /// Arguments for `pullhook schema`.
