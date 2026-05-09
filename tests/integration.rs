@@ -212,6 +212,37 @@ fn validate_reports_invalid_fail_text() {
 }
 
 #[test]
+fn config_validate_and_dry_run_reject_malformed_run_command() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_file(
+		repo_root,
+		Path::new("pullhook.json"),
+		r#"{
+  "rules": [
+    {
+      "name": "bad command",
+      "changed": "packages/*/package-lock.json",
+      "run": "sh -c 'echo nope"
+    }
+  ]
+}
+"#,
+	);
+
+	let validate = run_pullhook(repo_root, &["validate", "--render", "never"]);
+	assert!(
+		!validate.status.success(),
+		"malformed run command should fail validation"
+	);
+	assert_malformed_run_command(&validate);
+
+	let dry_run = run_pullhook(repo_root, &["run", "--dry-run", "--render", "never"]);
+	assert!(!dry_run.status.success(), "malformed run command should fail dry run");
+	assert_malformed_run_command(&dry_run);
+}
+
+#[test]
 fn config_dry_run_plans_matching_rule_without_execution() {
 	let temp = setup_repo_with_merge();
 	let repo_root = temp.path();
@@ -232,6 +263,31 @@ fn config_dry_run_plans_matching_rule_without_execution() {
 }
 
 #[test]
+fn config_no_match_reports_zero_matched_files() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_config_rule(
+		repo_root,
+		"write marker",
+		"**/*.md",
+		"sh -c 'echo ran > .pullhook-config-no-match-marker'",
+	);
+
+	let dry_run = run_pullhook(repo_root, &["run", "--dry-run", "--render", "never"]);
+	assert!(dry_run.status.success(), "no-match dry run should succeed");
+	let dry_run_stdout = stdout_text(&dry_run);
+	assert!(dry_run_stdout.contains("matched files: 0"));
+	assert!(dry_run_stdout.contains("planned commands: 0"));
+
+	let run = run_pullhook(repo_root, &["run", "--render", "never"]);
+	assert!(run.status.success(), "no-match run should succeed");
+	assert!(!predicate::path::is_file().eval(&repo_root.join(".pullhook-config-no-match-marker")));
+	let run_stdout = stdout_text(&run);
+	assert!(run_stdout.contains("matched files: 0"));
+	assert!(run_stdout.contains("task dirs: 0"));
+}
+
+#[test]
 fn config_run_executes_rule_once_from_repo_root() {
 	let temp = setup_repo_with_merge();
 	let repo_root = temp.path();
@@ -247,6 +303,97 @@ fn config_run_executes_rule_once_from_repo_root() {
 	assert!(output.status.success(), "config run should succeed");
 	assert!(predicate::path::is_file().eval(&repo_root.join(".pullhook-config-marker")));
 	assert!(!predicate::path::is_file().eval(&repo_root.join("packages/a/.pullhook-config-marker")));
+}
+
+#[test]
+fn config_without_run_if_base_missing_fails_when_diff_base_is_missing() {
+	let temp = setup_repo_without_diff_base();
+	let repo_root = temp.path();
+	write_config_rule(
+		repo_root,
+		"write marker",
+		"packages/*/package-lock.json",
+		"sh -c 'echo ran > .pullhook-base-missing-marker'",
+	);
+
+	let output = run_pullhook(repo_root, &["run", "--render", "never"]);
+
+	assert!(!output.status.success(), "missing diff base should fail without opt-in");
+	assert!(!predicate::path::is_file().eval(&repo_root.join(".pullhook-base-missing-marker")));
+	let stderr = stderr_text(&output);
+	assert!(stderr.contains("unable to resolve diff base"));
+}
+
+#[test]
+fn config_run_if_base_missing_runs_rule_without_diff_base() {
+	let temp = setup_repo_without_diff_base();
+	let repo_root = temp.path();
+	write_file(
+		repo_root,
+		Path::new("pullhook.json"),
+		r#"{
+  "rules": [
+    {
+      "name": "recover without base",
+      "changed": "packages/*/package-lock.json",
+      "runIfBaseMissing": true,
+      "run": "sh -c 'echo ran > .pullhook-base-missing-marker'"
+    }
+  ]
+}
+"#,
+	);
+
+	let output = run_pullhook(repo_root, &["run", "--render", "never"]);
+
+	assert!(
+		output.status.success(),
+		"runIfBaseMissing rule should run without a diff base"
+	);
+	assert!(predicate::path::is_file().eval(&repo_root.join(".pullhook-base-missing-marker")));
+	let stdout = stdout_text(&output);
+	assert!(stdout.contains("[match] recover without base"));
+	assert!(stdout.contains("matched files: 1"));
+}
+
+#[test]
+fn config_parallel_run_if_base_missing_runs_opted_in_child() {
+	let temp = setup_repo_without_diff_base();
+	let repo_root = temp.path();
+	write_file(
+		repo_root,
+		Path::new("pullhook.json"),
+		r#"{
+  "rules": [
+    {
+      "name": "parallel base recovery",
+      "parallel": [
+        {
+          "name": "skip without opt-in",
+          "changed": "packages/*/package-lock.json",
+          "run": "sh -c 'echo skipped > .pullhook-base-missing-skipped'"
+        },
+        {
+          "name": "recover without base",
+          "changed": "packages/*/package-lock.json",
+          "runIfBaseMissing": true,
+          "run": "sh -c 'echo ran > .pullhook-base-missing-parallel'"
+        }
+      ]
+    }
+  ]
+}
+"#,
+	);
+
+	let output = run_pullhook(repo_root, &["run", "--render", "never"]);
+
+	assert!(
+		output.status.success(),
+		"parallel runIfBaseMissing child should run without a diff base"
+	);
+	assert!(predicate::path::is_file().eval(&repo_root.join(".pullhook-base-missing-parallel")));
+	assert!(!predicate::path::is_file().eval(&repo_root.join(".pullhook-base-missing-skipped")));
 }
 
 #[test]
@@ -374,6 +521,43 @@ fn config_parallel_group_runs_matched_rules_from_repo_root() {
 }
 
 #[test]
+fn config_parallel_group_reports_default_jobs_when_omitted() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_file(
+		repo_root,
+		Path::new("pullhook.json"),
+		r#"{
+  "rules": [
+    {
+      "name": "parallel checks",
+      "parallel": [
+        {
+          "name": "write first marker",
+          "changed": "packages/*/package-lock.json",
+          "run": "sh -c 'echo first > .pullhook-parallel-first'"
+        },
+        {
+          "name": "write second marker",
+          "changed": "packages/*/package-lock.json",
+          "run": "sh -c 'echo second > .pullhook-parallel-second'"
+        }
+      ]
+    }
+  ]
+}
+"#,
+	);
+
+	let output = run_pullhook(repo_root, &["run", "--dry-run", "--render", "never"]);
+
+	assert!(output.status.success(), "parallel dry run should succeed");
+	let stdout = stdout_text(&output);
+	assert!(stdout.contains("group: parallel checks"));
+	assert!(stdout.contains("jobs: default"));
+}
+
+#[test]
 fn validate_rejects_nested_parallel_groups() {
 	let temp = setup_repo_with_merge();
 	let repo_root = temp.path();
@@ -441,6 +625,18 @@ fn assert_install_dry_run_matches_repo_root(output: &Output) {
 	assert!(stdout.contains("command: npm install"));
 }
 
+fn assert_malformed_run_command(output: &Output) {
+	let stdout = stdout_text(output);
+	assert!(
+		stdout.trim().is_empty(),
+		"malformed config should fail before writing stdout:\n{stdout}"
+	);
+
+	let stderr = stderr_text(output);
+	assert!(stderr.contains("invalid `run` command"));
+	assert!(stderr.contains("invalid command `sh -c 'echo nope`"));
+}
+
 fn setup_repo_with_merge() -> TempDir {
 	let temp = tempfile::tempdir().expect("create temp dir");
 	let repo_root = temp.path();
@@ -484,6 +680,27 @@ fn setup_repo_with_merge() -> TempDir {
 		repo_root,
 		&["merge", "--no-ff", "feature/update-locks", "-m", "merge feature"],
 	);
+
+	temp
+}
+
+fn setup_repo_without_diff_base() -> TempDir {
+	let temp = tempfile::tempdir().expect("create temp dir");
+	let repo_root = temp.path();
+
+	run_git(repo_root, &["init"]);
+	run_git(repo_root, &["config", "user.email", "pullhook@example.com"]);
+	run_git(repo_root, &["config", "user.name", "Pullhook Test"]);
+
+	write_file(
+		repo_root,
+		Path::new("packages/a/package-lock.json"),
+		"{\"name\":\"a\",\"version\":1}\n",
+	);
+
+	run_git(repo_root, &["add", "."]);
+	run_git(repo_root, &["commit", "-m", "initial"]);
+	clear_diff_base_files(repo_root);
 
 	temp
 }
@@ -568,6 +785,12 @@ fn setup_repo_with_nested_manifest_change() -> TempDir {
 	);
 
 	temp
+}
+
+fn clear_diff_base_files(repo_root: &Path) {
+	let _ = fs::remove_file(repo_root.join(".git/logs/HEAD"));
+	let _ = fs::remove_dir_all(repo_root.join(".git/logs/refs"));
+	let _ = fs::remove_file(repo_root.join(".git/ORIG_HEAD"));
 }
 
 fn current_branch(repo_root: &Path) -> String {

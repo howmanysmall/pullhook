@@ -9,6 +9,8 @@ mod output;
 mod pm;
 mod runner;
 
+use std::collections::BTreeSet;
+
 use anyhow::{Context, Result, anyhow};
 use clap::Parser;
 use rayon::prelude::*;
@@ -154,13 +156,14 @@ fn run_config_command(args: &ConfigRunArgs) -> Result<()> {
 	let (repo, repo_root, config) = load_config_from_cwd(args.debug)?;
 	let (changed_files, base_missing) = resolve_config_changed_files(&repo, &config, args.base.as_deref(), args.debug)?;
 	let evaluation = evaluate_config(&config, &changed_files, base_missing, &repo_root)?;
+	let matched_files = count_config_matched_files(&evaluation);
 
 	render_config_evaluation(&config, &evaluation, args.all_matches || args.dry_run, args.dry_run);
 
 	if args.dry_run {
 		let planned_commands = count_planned_commands(&evaluation);
 		renderer.render_dry_run_summary_stage(DryRunSummary {
-			matched_files: changed_files.len(),
+			matched_files,
 			task_dirs: planned_commands,
 			planned_commands,
 		});
@@ -170,7 +173,7 @@ fn run_config_command(args: &ConfigRunArgs) -> Result<()> {
 	let counts = execute_config_entries(&renderer, config.on_failure, &evaluation, &repo_root, args)?;
 	let failure_count = counts.failed + counts.interrupted;
 	renderer.render_summary_stage(Summary {
-		matched_files: changed_files.len(),
+		matched_files,
 		task_dirs: counts.task_dirs,
 		passed: counts.passed,
 		failed: counts.failed,
@@ -346,6 +349,29 @@ fn count_planned_commands(evaluation: &[EvaluatedEntry]) -> usize {
 			EvaluatedEntry::Group(group) => group.rules.iter().filter(|rule| rule.should_run()).count(),
 		})
 		.sum()
+}
+
+fn count_config_matched_files(evaluation: &[EvaluatedEntry]) -> usize {
+	let mut matched_files = BTreeSet::new();
+
+	for entry in evaluation {
+		match entry {
+			EvaluatedEntry::Rule(rule) => collect_rule_matches(rule, &mut matched_files),
+			EvaluatedEntry::Group(group) => {
+				for rule in &group.rules {
+					collect_rule_matches(rule, &mut matched_files);
+				}
+			}
+		}
+	}
+
+	matched_files.len()
+}
+
+fn collect_rule_matches(rule: &EvaluatedRule, matched_files: &mut BTreeSet<std::path::PathBuf>) {
+	for path in &rule.matches {
+		matched_files.insert(path.clone());
+	}
 }
 
 fn execute_config_entries(

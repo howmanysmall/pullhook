@@ -8,6 +8,7 @@ use serde::Deserialize;
 use crate::error::PullhookError;
 use crate::matcher;
 use crate::output::RenderMode;
+use crate::runner;
 
 const CONFIG_NAMES: &[&str] = &[
 	"pullhook.json",
@@ -311,6 +312,10 @@ pub const fn config_names() -> &'static [&'static str] {
 
 /// Discover exactly one supported config file from the repo root.
 pub fn discover(repo_root: &Path) -> Result<Option<PathBuf>, PullhookError> {
+	if let Some(path) = find_unsupported_config(repo_root) {
+		return ConfigFormat::from_path(&path).map(|_| None);
+	}
+
 	let found: Vec<_> = CONFIG_NAMES
 		.iter()
 		.map(|name| repo_root.join(name))
@@ -318,7 +323,7 @@ pub fn discover(repo_root: &Path) -> Result<Option<PathBuf>, PullhookError> {
 		.collect();
 
 	match found.as_slice() {
-		[] => discover_unsupported_config(repo_root),
+		[] => Ok(None),
 		[path] => Ok(Some(path.clone())),
 		_ => Err(PullhookError::Message(format!(
 			"multiple pullhook config files found: {}",
@@ -331,12 +336,11 @@ pub fn discover(repo_root: &Path) -> Result<Option<PathBuf>, PullhookError> {
 	}
 }
 
-fn discover_unsupported_config(repo_root: &Path) -> Result<Option<PathBuf>, PullhookError> {
+fn find_unsupported_config(repo_root: &Path) -> Option<PathBuf> {
 	UNSUPPORTED_CONFIG_NAMES
 		.iter()
 		.map(|name| repo_root.join(name))
 		.find(|path| path.is_file())
-		.map_or(Ok(None), |path| ConfigFormat::from_path(&path).map(|_| None))
 }
 
 /// Load and validate a config file.
@@ -474,6 +478,7 @@ fn normalize_rule(raw: RawEntry, label: &str, errors: &mut Vec<String>) -> Optio
 	if raw.jobs.is_some() {
 		errors.push(format!("{label}: `jobs` is only valid on parallel groups"));
 	}
+	let run = raw.run.map(|value| value.trim().to_owned());
 	let has_changed = raw.changed.is_some();
 	let changed = if raw.install {
 		Vec::new()
@@ -481,13 +486,17 @@ fn normalize_rule(raw: RawEntry, label: &str, errors: &mut Vec<String>) -> Optio
 		normalize_patterns(raw.changed, label, "`changed`", errors)
 	};
 	let exclude = normalize_optional_patterns(raw.exclude, label, "`exclude`", errors);
-	if raw.run.as_ref().is_some_and(|value| value.trim().is_empty()) {
+	if run.as_ref().is_some_and(String::is_empty) {
 		errors.push(format!("{label}: `run` cannot be empty"));
+	} else if let Some(command) = &run
+		&& let Err(error) = runner::parse_command(command)
+	{
+		errors.push(format!("{label}: invalid `run` command: {error}"));
 	}
-	if raw.run.is_some() && raw.install {
+	if run.is_some() && raw.install {
 		errors.push(format!("{label}: `run` and `install` cannot be used together"));
 	}
-	if raw.run.is_none() && !raw.install {
+	if run.is_none() && !raw.install {
 		errors.push(format!("{label}: define either `run` or `install: true`"));
 	}
 	if raw.install && has_changed {
@@ -501,7 +510,7 @@ fn normalize_rule(raw: RawEntry, label: &str, errors: &mut Vec<String>) -> Optio
 		name,
 		changed,
 		exclude,
-		run: raw.run.map(|value| value.trim().to_owned()),
+		run,
 		install: raw.install,
 		run_if_base_missing: raw.run_if_base_missing,
 		fail_text,
@@ -798,6 +807,17 @@ mod tests {
 	#[test]
 	fn discover_rejects_unsupported_config_names() {
 		let dir = tempdir().expect("tempdir");
+		fs::write(dir.path().join("pullhook.yml"), "rules: []").expect("write unsupported config");
+
+		let error = discover(dir.path()).expect_err("unsupported config fails");
+
+		assert!(error.to_string().contains("*.yml"));
+	}
+
+	#[test]
+	fn discover_rejects_unsupported_config_even_when_supported_config_exists() {
+		let dir = tempdir().expect("tempdir");
+		fs::write(dir.path().join("pullhook.json"), "{}").expect("write config");
 		fs::write(dir.path().join("pullhook.yml"), "rules: []").expect("write unsupported config");
 
 		let error = discover(dir.path()).expect_err("unsupported config fails");
