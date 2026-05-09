@@ -53,6 +53,12 @@ Examples:
   pullhook doctor --json
   pullhook doctor --config config/pullhook.custom.json";
 
+const RULES_AFTER_HELP: &str = "\
+Examples:
+  pullhook rules
+  pullhook rules --json
+  pullhook rules --config config/pullhook.custom.json";
+
 const INIT_AFTER_HELP: &str = "\
 Examples:
   pullhook init
@@ -93,6 +99,8 @@ pub enum Commands {
 	Validate(ValidateArgs),
 	/// Inspect repository and config readiness.
 	Doctor(DoctorArgs),
+	/// List configured rule and group names.
+	Rules(RulesArgs),
 	/// Create a starter pullhook config file.
 	Init(InitArgs),
 	/// Generate shell completion scripts.
@@ -306,6 +314,27 @@ pub struct InitArgs {
 	/// Overwrite an existing pullhook config file in place.
 	#[arg(long = "force", default_value_t = false)]
 	pub force: bool,
+
+	/// Enable debug logging.
+	#[arg(short = 'd', long = "debug", default_value_t = false)]
+	pub debug: bool,
+
+	/// Control non-debug ANSI styling (`auto`, `always`, `never`).
+	#[arg(long = "render", value_name = "mode", value_enum, default_value_t = RenderMode::Auto)]
+	pub render: RenderMode,
+}
+
+/// Arguments for `pullhook rules`.
+#[derive(Debug, Clone, Args)]
+#[command(after_help = RULES_AFTER_HELP)]
+pub struct RulesArgs {
+	/// Load config from an explicit path instead of repo-root discovery.
+	#[arg(long = "config", value_name = "path")]
+	pub config: Option<PathBuf>,
+
+	/// Print machine-readable JSON instead of text output.
+	#[arg(long = "json", default_value_t = false)]
+	pub json: bool,
 
 	/// Enable debug logging.
 	#[arg(short = 'd', long = "debug", default_value_t = false)]

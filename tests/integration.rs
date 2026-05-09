@@ -540,6 +540,91 @@ fn doctor_json_fails_when_config_is_invalid() {
 }
 
 #[test]
+fn rules_json_reports_rule_inventory() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_file(
+		repo_root,
+		Path::new("pullhook.json"),
+		r#"{
+  "rules": [
+    {
+      "name": "install dependencies",
+      "install": true
+    },
+    {
+      "name": "checks",
+      "parallel": [
+        {
+          "name": "lint",
+          "changed": "packages/a/package-lock.json",
+          "run": "cargo test -p lint"
+        }
+      ]
+    }
+  ]
+}
+"#,
+	);
+
+	let output = run_pullhook(repo_root, &["rules", "--json"]);
+
+	assert!(output.status.success(), "rules --json should succeed");
+	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse rules json");
+	assert_eq!(value["rules"], 2);
+	assert_eq!(value["parallelGroups"], 1);
+	let entries = value["entries"].as_array().expect("entries array");
+	assert_eq!(entries.len(), 2);
+	assert_eq!(entries[0]["type"], "rule");
+	assert_eq!(entries[0]["name"], "install dependencies");
+	assert_eq!(entries[0]["kind"], "install");
+	assert_eq!(entries[1]["type"], "group");
+	assert_eq!(entries[1]["name"], "checks");
+	assert_eq!(entries[1]["rules"][0]["name"], "lint");
+}
+
+#[test]
+fn rules_text_lists_group_members() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_file(
+		repo_root,
+		Path::new("pullhook.json"),
+		r#"{
+  "rules": [
+    {
+      "name": "checks",
+      "parallel": [
+        {
+          "name": "lint",
+          "changed": "packages/a/package-lock.json",
+          "run": "cargo test -p lint"
+        },
+        {
+          "name": "typecheck",
+          "changed": "packages/a/package-lock.json",
+          "run": "cargo test -p typecheck"
+        }
+      ]
+    }
+  ]
+}
+"#,
+	);
+
+	let output = run_pullhook(repo_root, &["rules", "--render", "never"]);
+
+	assert!(output.status.success(), "rules should succeed");
+	let stdout = stdout_text(&output);
+	assert!(stdout.contains("config:"));
+	assert!(stdout.contains("Rules"));
+	assert!(stdout.contains("[group] checks"));
+	assert!(stdout.contains("- lint"));
+	assert!(stdout.contains("- typecheck"));
+	assert!(stdout.contains("command: cargo test -p lint"));
+}
+
+#[test]
 fn validate_accepts_relative_explicit_config_path_from_subdirectory() {
 	let temp = setup_repo_with_merge();
 	let repo_root = temp.path();

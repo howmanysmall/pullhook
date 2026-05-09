@@ -66,6 +66,7 @@ Commands:
   explain     Explain which configured rules match changed files
   validate    Validate the pullhook config file
   doctor      Inspect repository and config readiness
+  rules       List configured rule and group names
   init        Create a starter pullhook config file
   completion  Generate shell completion scripts
   help        Print this message or the help of the given subcommand(s)
@@ -116,6 +117,7 @@ Preview commands without executing:
 ```bash
 pullhook --pattern "**/*.rs" --command "cargo test" --dry-run
 pullhook --pattern "**/*.rs" --command "cargo test" --dry-run --json
+pullhook rules
 pullhook run --rule lint --dry-run
 ```
 
@@ -245,10 +247,11 @@ the same plan plus `plannedCommands`, which is handy for CI or editor integratio
 
 Legacy top-level mode also supports `--json`, including live execution results and dry-run plans.
 
+Use `pullhook rules` to list configured rule and parallel group names before targeting a large config.
 Use `--rule <name>` with `run` or `explain` to focus on specific rule names or parallel groups in large configs.
 Repeat it to target more than one selector, for example `pullhook run --rule lint --rule typecheck`.
 
-Use `--config <path>` with `run`, `explain`, `validate`, or `doctor` when you want to point at a
+Use `--config <path>` with `run`, `explain`, `validate`, `doctor`, or `rules` when you want to point at a
 specific config file instead of repo-root discovery.
 
 ## `--install` Detection

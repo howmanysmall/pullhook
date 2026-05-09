@@ -18,7 +18,7 @@ use serde_json::json;
 use tracing::debug;
 use tracing_subscriber::EnvFilter;
 
-use crate::cli::{Cli, Commands, ConfigRunArgs, DoctorArgs, ExplainArgs, InitArgs, RunArgs, ValidateArgs};
+use crate::cli::{Cli, Commands, ConfigRunArgs, DoctorArgs, ExplainArgs, InitArgs, RulesArgs, RunArgs, ValidateArgs};
 use crate::config::{
 	Config, Entry, EvaluatedEntry, EvaluatedGroup, EvaluatedRule, FailTextContext, OnFailure, Pattern,
 };
@@ -98,6 +98,10 @@ fn main() {
 		Some(Commands::Doctor(args)) => {
 			init_tracing(args.debug);
 			doctor_command(args)
+		}
+		Some(Commands::Rules(args)) => {
+			init_tracing(args.debug);
+			rules_command(args)
 		}
 		Some(Commands::Init(args)) => {
 			init_tracing(args.debug);
@@ -403,6 +407,34 @@ fn doctor_command(args: &DoctorArgs) -> Result<()> {
 
 	if checks.iter().any(|check| check.level == DoctorLevel::Error) {
 		return Err(anyhow!("doctor found blocking issues"));
+	}
+
+	Ok(())
+}
+
+fn rules_command(args: &RulesArgs) -> Result<()> {
+	let renderer = Renderer::new(args.render);
+	let (_, _, config) = load_config_from_cwd(args.debug, args.config.as_deref())?;
+
+	if args.json {
+		println!("{}", serde_json::to_string_pretty(&config_rules_json(&config))?);
+		return Ok(());
+	}
+
+	renderer.render_message_stage(&format!("config: {}", config.path.display()));
+	renderer.render_message_stage(&format!(
+		"entries: {} | rules: {} | parallel groups: {}",
+		config.entries.len(),
+		count_config_rules(&config),
+		count_config_groups(&config)
+	));
+	println!();
+	println!("Rules");
+	for entry in &config.entries {
+		match entry {
+			Entry::Rule(rule) => render_config_rule_inventory(rule),
+			Entry::Group(group) => render_config_group_inventory(group),
+		}
 	}
 
 	Ok(())
@@ -847,6 +879,16 @@ fn config_summary_json(config: &Config) -> serde_json::Value {
 	})
 }
 
+fn config_rules_json(config: &Config) -> serde_json::Value {
+	json!({
+		"path": config.path.display().to_string(),
+		"onFailure": on_failure_label(config.on_failure),
+		"entries": config.entries.iter().map(config_rule_inventory_json).collect::<Vec<_>>(),
+		"rules": count_config_rules(config),
+		"parallelGroups": count_config_groups(config),
+	})
+}
+
 fn config_evaluation_json(
 	config: &Config,
 	changed_files: &[std::path::PathBuf],
@@ -983,6 +1025,29 @@ fn config_entry_json(entry: &EvaluatedEntry) -> serde_json::Value {
 	}
 }
 
+fn config_rule_inventory_json(entry: &Entry) -> serde_json::Value {
+	match entry {
+		Entry::Rule(rule) => json!({
+			"type": "rule",
+			"name": rule.name,
+			"kind": if rule.install { "install" } else { "run" },
+			"command": rule.run,
+			"runIfBaseMissing": rule.run_if_base_missing,
+		}),
+		Entry::Group(group) => json!({
+			"type": "group",
+			"name": group.name,
+			"jobs": group.jobs,
+			"rules": group.rules.iter().map(|rule| json!({
+				"name": rule.name,
+				"kind": if rule.install { "install" } else { "run" },
+				"command": rule.run,
+				"runIfBaseMissing": rule.run_if_base_missing,
+			})).collect::<Vec<_>>(),
+		}),
+	}
+}
+
 fn config_rule_json(rule: &EvaluatedRule) -> serde_json::Value {
 	json!({
 		"type": "rule",
@@ -1013,6 +1078,37 @@ fn count_config_rules(config: &Config) -> usize {
 			Entry::Group(group) => group.rules.len(),
 		})
 		.sum()
+}
+
+fn render_config_rule_inventory(rule: &config::Rule) {
+	println!("[rule] {}", rule.name);
+	println!("kind: {}", if rule.install { "install" } else { "run" });
+	if let Some(command) = &rule.run {
+		println!("command: {command}");
+	}
+	if rule.run_if_base_missing {
+		println!("runIfBaseMissing: true");
+	}
+	println!();
+}
+
+fn render_config_group_inventory(group: &config::Group) {
+	println!("[group] {}", group.name);
+	match group.jobs {
+		Some(jobs) => println!("jobs: {jobs}"),
+		None => println!("jobs: default"),
+	}
+	for rule in &group.rules {
+		println!("- {}", rule.name);
+		println!("  kind: {}", if rule.install { "install" } else { "run" });
+		if let Some(command) = &rule.run {
+			println!("  command: {command}");
+		}
+		if rule.run_if_base_missing {
+			println!("  runIfBaseMissing: true");
+		}
+	}
+	println!();
 }
 
 fn count_config_groups(config: &Config) -> usize {
