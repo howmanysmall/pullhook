@@ -373,6 +373,11 @@ fn run_config_command(args: &ConfigRunArgs) -> Result<()> {
 		return Ok(());
 	}
 
+	if args.summary_only {
+		render_config_evaluation_summary(&changed_files, base_missing, changed_files_source, &evaluation);
+		return Ok(());
+	}
+
 	if args.commands_only {
 		render_config_evaluation_commands(&evaluation);
 		return Ok(());

@@ -347,10 +347,12 @@ fn run_help_lists_json_examples() {
 	assert!(stdout.contains("pullhook run --dry-run"));
 	assert!(stdout.contains("pullhook run --json"));
 	assert!(stdout.contains("pullhook run --quiet"));
+	assert!(stdout.contains("pullhook run --summary-only"));
 	assert!(stdout.contains("pullhook run --commands-only"));
 	assert!(stdout.contains("pullhook run --config config/pullhook.custom.json --all-matches"));
 	assert!(stdout.contains("--no-color"));
 	assert!(stdout.contains("--quiet"));
+	assert!(stdout.contains("--summary-only"));
 	assert!(stdout.contains("--commands-only"));
 }
 
@@ -432,6 +434,44 @@ fn run_commands_only_conflicts_with_other_output_modes() {
 	assert!(quiet_stderr.contains("cannot be used with"));
 	assert!(quiet_stderr.contains("--commands-only"));
 	assert!(quiet_stderr.contains("--quiet"));
+}
+
+#[test]
+fn run_summary_only_conflicts_with_other_output_modes() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let json_output = run_pullhook(temp.path(), &["run", "--summary-only", "--json"]);
+
+	assert!(
+		!json_output.status.success(),
+		"run --summary-only should conflict with --json"
+	);
+	let json_stderr = stderr_text(&json_output);
+	assert!(json_stderr.contains("cannot be used with"));
+	assert!(json_stderr.contains("--summary-only"));
+	assert!(json_stderr.contains("--json"));
+
+	let quiet_output = run_pullhook(temp.path(), &["run", "--summary-only", "--quiet"]);
+
+	assert!(
+		!quiet_output.status.success(),
+		"run --summary-only should conflict with --quiet"
+	);
+	let quiet_stderr = stderr_text(&quiet_output);
+	assert!(quiet_stderr.contains("cannot be used with"));
+	assert!(quiet_stderr.contains("--summary-only"));
+	assert!(quiet_stderr.contains("--quiet"));
+
+	let commands_output = run_pullhook(temp.path(), &["run", "--summary-only", "--commands-only"]);
+
+	assert!(
+		!commands_output.status.success(),
+		"run --summary-only should conflict with --commands-only"
+	);
+	let commands_stderr = stderr_text(&commands_output);
+	assert!(commands_stderr.contains("cannot be used with"));
+	assert!(commands_stderr.contains("--summary-only"));
+	assert!(commands_stderr.contains("--commands-only"));
 }
 
 #[test]
@@ -2025,6 +2065,51 @@ fn run_commands_only_reports_planned_commands_without_execution() {
 	);
 	let stderr = stderr_text(&output);
 	assert!(stderr.trim().is_empty(), "run --commands-only should not write stderr");
+}
+
+#[test]
+fn run_summary_only_reports_plan_counts_without_execution() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_file(
+		repo_root,
+		Path::new("pullhook.json"),
+		r#"{
+  "rules": [
+    {
+      "name": "write marker",
+      "changed": "packages/a/package-lock.json",
+      "run": "touch marker.txt"
+    },
+    {
+      "name": "skip markdown",
+      "changed": "**/*.md",
+      "run": "touch skipped.txt"
+    }
+  ]
+}
+"#,
+	);
+
+	let output = run_pullhook(repo_root, &["run", "--summary-only"]);
+
+	assert!(output.status.success(), "run --summary-only should succeed");
+	let stdout = stdout_text(&output);
+	assert!(stdout.contains("changedFilesSource: git"));
+	assert!(stdout.contains("baseMissing: false"));
+	assert!(stdout.contains("changedFiles: 2"));
+	assert!(stdout.contains("matchedFiles: 1"));
+	assert!(stdout.contains("plannedCommands: 1"));
+	assert!(
+		!repo_root.join("marker.txt").exists(),
+		"summary-only should not execute planned commands"
+	);
+	assert!(
+		!repo_root.join("skipped.txt").exists(),
+		"summary-only should not execute skipped commands"
+	);
+	let stderr = stderr_text(&output);
+	assert!(stderr.trim().is_empty(), "run --summary-only should not write stderr");
 }
 
 #[test]
