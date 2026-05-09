@@ -440,7 +440,7 @@ pub struct InitArgs {
 	pub output: Option<PathBuf>,
 
 	/// Overwrite an existing pullhook config file in place.
-	#[arg(long = "force", default_value_t = false)]
+	#[arg(long = "force", default_value_t = false, conflicts_with = "stdout")]
 	pub force: bool,
 
 	/// Enable debug logging.

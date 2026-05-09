@@ -154,7 +154,7 @@ pullhook init
 ```
 
 `pullhook init` creates `pullhook.json` by default. You can also scaffold another supported format
-or preview the starter config before writing it:
+or preview the starter config before writing it. `--stdout` works outside a git repo because it never writes:
 
 ```bash
 pullhook init --format yaml

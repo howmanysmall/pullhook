@@ -625,15 +625,15 @@ const fn effective_render_mode(render: RenderMode, no_color: bool) -> RenderMode
 }
 
 fn init_config_command(args: &InitArgs) -> Result<()> {
-	let cwd = std::env::current_dir().context("failed to read current working directory")?;
-	let repo = GitRepo::discover(&cwd, args.debug).context("failed to resolve repository root")?;
-	let repo_root = repo.root();
 	let requested_format = args.format.map_or(config::ConfigFormat::Json, Into::into);
-
 	if args.stdout {
 		print!("{}", requested_format.starter_config());
 		return Ok(());
 	}
+
+	let cwd = std::env::current_dir().context("failed to read current working directory")?;
+	let repo = GitRepo::discover(&cwd, args.debug).context("failed to resolve repository root")?;
+	let repo_root = repo.root();
 
 	let renderer = Renderer::new(effective_render_mode(args.render, args.no_color));
 	let (path, format) = if let Some(output) = args.output.as_deref() {

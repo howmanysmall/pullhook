@@ -363,6 +363,19 @@ fn config_path_only_conflicts_with_json() {
 }
 
 #[test]
+fn init_stdout_conflicts_with_force() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["init", "--stdout", "--force"]);
+
+	assert!(!output.status.success(), "--stdout should conflict with --force");
+	let stderr = stderr_text(&output);
+	assert!(stderr.contains("cannot be used with"));
+	assert!(stderr.contains("--stdout"));
+	assert!(stderr.contains("--force"));
+}
+
+#[test]
 fn rules_names_only_conflicts_with_json() {
 	let temp = tempfile::tempdir().expect("create temp dir");
 
@@ -506,6 +519,20 @@ fn init_stdout_prints_requested_format_without_writing_file() {
 	assert!(stdout.contains("\"install\": true"));
 	assert!(!predicate::path::is_file().eval(&repo_root.join("pullhook.json")));
 	assert!(!predicate::path::is_file().eval(&repo_root.join("pullhook.jsonc")));
+	let stderr = stderr_text(&output);
+	assert!(stderr.trim().is_empty(), "stdout init should not write stderr");
+}
+
+#[test]
+fn init_stdout_succeeds_outside_git_repo() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["init", "--stdout"]);
+
+	assert!(output.status.success(), "stdout init should not require a git repo");
+	let stdout = stdout_text(&output);
+	assert!(stdout.contains("\"rules\""));
+	assert!(!predicate::path::is_file().eval(&temp.path().join("pullhook.json")));
 	let stderr = stderr_text(&output);
 	assert!(stderr.trim().is_empty(), "stdout init should not write stderr");
 }
