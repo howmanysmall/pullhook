@@ -1667,6 +1667,17 @@ fn config_require_existing_json_reports_missing_config_path_as_json() {
 	assert_eq!(value["exists"], false);
 	assert_eq!(value["explicit"], true);
 	assert_eq!(value["error"], "resolved config file does not exist");
+	let details = value["details"].as_array().expect("details array");
+	assert!(
+		details
+			.iter()
+			.any(|detail| { detail.as_str().expect("detail").contains("config/pullhook.custom.yaml") })
+	);
+	assert!(
+		details
+			.iter()
+			.any(|detail| { detail.as_str().expect("detail").contains("pullhook init --output") })
+	);
 	let stderr = stderr_text(&output);
 	assert!(stderr.contains("resolved config file does not exist"));
 }

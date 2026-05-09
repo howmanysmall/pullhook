@@ -742,6 +742,10 @@ fn config_command(args: &ConfigArgs) -> Result<()> {
 					"explicit": explicit,
 					"repoRoot": repo_root.display().to_string(),
 					"error": "resolved config file does not exist",
+					"details": [
+						format!("resolved path: {}", path.display()),
+						format!("create it with `pullhook init --output {}`", path.display()),
+					],
 				}))?
 			);
 		}
