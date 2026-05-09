@@ -301,7 +301,7 @@ fn run_config_command(args: &ConfigRunArgs) -> Result<()> {
 	}
 
 	let renderer = Renderer::new(effective_render_mode(args.render, args.no_color));
-	let (repo, repo_root, config) = load_config_from_cwd(args.debug, args.config.as_deref())?;
+	let (repo, repo_root, config) = load_config_from_cwd_for_output(args.debug, args.config.as_deref(), args.json)?;
 	let explicit_changed_files = collect_explicit_changed_files_for_output(
 		&args.changed_files,
 		args.changed_files_file.as_deref(),
@@ -394,7 +394,7 @@ fn run_config_command(args: &ConfigRunArgs) -> Result<()> {
 fn explain_config_command(args: &ExplainArgs) -> Result<()> {
 	ensure_json_without_debug(args.json, args.debug)?;
 
-	let (repo, repo_root, config) = load_config_from_cwd(args.debug, args.config.as_deref())?;
+	let (repo, repo_root, config) = load_config_from_cwd_for_output(args.debug, args.config.as_deref(), args.json)?;
 	let explicit_changed_files = collect_explicit_changed_files_for_output(
 		&args.changed_files,
 		args.changed_files_file.as_deref(),
@@ -545,7 +545,7 @@ fn rules_command(args: &RulesArgs) -> Result<()> {
 	ensure_json_without_debug(args.json, args.debug)?;
 
 	let renderer = Renderer::new(effective_render_mode(args.render, args.no_color));
-	let (_, _, config) = load_config_from_cwd(args.debug, args.config.as_deref())?;
+	let (_, _, config) = load_config_from_cwd_for_output(args.debug, args.config.as_deref(), args.json)?;
 
 	if args.json {
 		println!("{}", serde_json::to_string_pretty(&config_rules_json(&config))?);
@@ -710,6 +710,22 @@ fn load_config_from_cwd(
 	let path = resolve_config_path(&cwd, &repo_root, explicit_config)?;
 	let config = config::load(&path)?;
 	Ok((repo, repo_root, config))
+}
+
+fn load_config_from_cwd_for_output(
+	debug_enabled: bool,
+	explicit_config: Option<&std::path::Path>,
+	json_output: bool,
+) -> Result<(GitRepo, std::path::PathBuf, Config)> {
+	match load_config_from_cwd(debug_enabled, explicit_config) {
+		Ok(loaded) => Ok(loaded),
+		Err(error) => {
+			if json_output {
+				print_json_error(&error)?;
+			}
+			Err(error)
+		}
+	}
 }
 
 fn resolve_config_path(
