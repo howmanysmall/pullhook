@@ -335,7 +335,7 @@ Pattern JSON errors include a `patternError` object with the rejected glob and p
 Legacy command-parse JSON errors include a `commandParse` object with the rejected command and parser reason.
 
 Use `pullhook rules` to list configured rule and parallel group names before targeting a large config.
-`rules --json` includes top-level `status` and `error` fields like the other JSON commands, plus
+`rules --json` includes top-level `status`, stable `code`, and `error` fields like the other JSON commands, plus
 script-friendly `selectors`, `commands`, and `patterns` arrays with summary counts.
 Unknown selector JSON errors include `unknownSelectors`, `availableSelectors`, and `suggestions`, so scripts
 do not need to scrape the human error message.

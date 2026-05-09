@@ -2467,6 +2467,7 @@ fn config_rules_json(config: &Config, kind: RulesKind, selectors: &[String]) -> 
 
 	json!({
 		"status": "ok",
+		"code": serde_json::Value::Null,
 		"error": serde_json::Value::Null,
 		"path": config.path.display().to_string(),
 		"onFailure": on_failure_label(config.on_failure),

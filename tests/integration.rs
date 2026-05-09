@@ -2665,6 +2665,7 @@ fn rules_json_reports_rule_inventory() {
 	assert!(output.status.success(), "rules --json should succeed");
 	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse rules json");
 	assert_eq!(value["status"], "ok");
+	assert_eq!(value["code"], serde_json::Value::Null);
 	assert_eq!(value["error"], serde_json::Value::Null);
 	assert_eq!(value["rules"], 2);
 	assert_eq!(value["parallelGroups"], 1);
