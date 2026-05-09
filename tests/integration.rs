@@ -3531,6 +3531,19 @@ fn explain_json_reports_missing_changed_files_file_as_json() {
 	assert_eq!(value["status"], "error");
 	let error = value["error"].as_str().expect("error message");
 	assert!(error.contains("failed to read changed files from `.pullhook-missing`"));
+	assert_eq!(value["changedFilesFile"], ".pullhook-missing");
+	let details = value["details"].as_array().expect("details array");
+	assert!(details.iter().any(|detail| {
+		detail
+			.as_str()
+			.expect("detail")
+			.contains("check that `.pullhook-missing` exists and is readable")
+	}));
+	assert!(
+		details
+			.iter()
+			.any(|detail| { detail.as_str().expect("detail").contains("--changed-files-file -") })
+	);
 	let stderr = stderr_text(&output);
 	assert!(stderr.contains("failed to read changed files from `.pullhook-missing`"));
 }
@@ -4007,6 +4020,19 @@ fn run_json_reports_missing_changed_files_file_as_json() {
 	assert_eq!(value["status"], "error");
 	let error = value["error"].as_str().expect("error message");
 	assert!(error.contains("failed to read changed files from `.pullhook-missing`"));
+	assert_eq!(value["changedFilesFile"], ".pullhook-missing");
+	let details = value["details"].as_array().expect("details array");
+	assert!(details.iter().any(|detail| {
+		detail
+			.as_str()
+			.expect("detail")
+			.contains("check that `.pullhook-missing` exists and is readable")
+	}));
+	assert!(
+		details
+			.iter()
+			.any(|detail| { detail.as_str().expect("detail").contains("--changed-files-file -") })
+	);
 	let stderr = stderr_text(&output);
 	assert!(stderr.contains("failed to read changed files from `.pullhook-missing`"));
 }

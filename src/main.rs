@@ -79,6 +79,33 @@ impl fmt::Display for UnknownSelectorError {
 
 impl std::error::Error for UnknownSelectorError {}
 
+#[derive(Debug)]
+struct ChangedFilesFileError {
+	path: String,
+	source: std::io::Error,
+}
+
+impl ChangedFilesFileError {
+	fn new(path: &std::path::Path, source: std::io::Error) -> Self {
+		Self {
+			path: path.display().to_string(),
+			source,
+		}
+	}
+}
+
+impl fmt::Display for ChangedFilesFileError {
+	fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+		write!(formatter, "failed to read changed files from `{}`", self.path)
+	}
+}
+
+impl std::error::Error for ChangedFilesFileError {
+	fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+		Some(&self.source)
+	}
+}
+
 #[derive(Debug, Clone)]
 struct LegacyJsonContext {
 	changed_count: usize,
@@ -1266,8 +1293,7 @@ fn collect_explicit_changed_files(
 			read_changed_files_from_stdin(&mut paths)?;
 			stdin_consumed = true;
 		} else {
-			let input = std::fs::read_to_string(path)
-				.with_context(|| format!("failed to read changed files from `{}`", path.display()))?;
+			let input = std::fs::read_to_string(path).map_err(|source| ChangedFilesFileError::new(path, source))?;
 			extend_changed_files_from_lines(&mut paths, &input);
 		}
 	}
@@ -1503,6 +1529,13 @@ fn print_json_error(error: &anyhow::Error) -> Result<()> {
 		);
 		return Ok(());
 	}
+	if let Some(changed_files_error) = error.downcast_ref::<ChangedFilesFileError>() {
+		println!(
+			"{}",
+			serde_json::to_string_pretty(&changed_files_file_error_json(changed_files_error, &details))?
+		);
+		return Ok(());
+	}
 
 	println!(
 		"{}",
@@ -1513,6 +1546,19 @@ fn print_json_error(error: &anyhow::Error) -> Result<()> {
 		}))?
 	);
 	Ok(())
+}
+
+fn changed_files_file_error_json(error: &ChangedFilesFileError, details: &[String]) -> serde_json::Value {
+	let mut details = details.to_vec();
+	details.push(format!("check that `{}` exists and is readable", error.path));
+	details.push("pass `--changed-files-file -` to read changed paths from stdin".to_owned());
+
+	json!({
+		"status": "error",
+		"error": error.to_string(),
+		"details": details,
+		"changedFilesFile": &error.path,
+	})
 }
 
 fn unknown_selector_error_json(error: &UnknownSelectorError, details: &[String]) -> serde_json::Value {

@@ -340,6 +340,8 @@ Use `--changed-file <path>` with `run` or `explain` to evaluate against explicit
 repeat it to simulate several changed files. Use `--changed-files-file <path>` or `--changed-files-stdin` when
 a script already has a newline-delimited file list, such as `git diff --name-only`. Pass `--changed-files-file -`
 to read that list from stdin.
+Missing changed-files file JSON errors include `changedFilesFile` and recovery details, so callers do not need
+to scrape the error string for the path.
 
 Use `--config <path>` with `run`, `explain`, `validate`, `doctor`, or `rules` when you want to point at a
 specific config file instead of repo-root discovery. Pair it with `pullhook init --output <path>` to create
