@@ -636,8 +636,7 @@ fn validate_config_command(args: &ValidateArgs) -> Result<()> {
 	let renderer = Renderer::new(effective_render_mode(args.render, args.no_color));
 
 	if args.json {
-		let cwd = std::env::current_dir().context("failed to read current working directory")?;
-		let repo = GitRepo::discover(&cwd, args.debug).context("failed to resolve repository root")?;
+		let (cwd, repo) = discover_repo_from_cwd_for_output(args.debug, args.json)?;
 		let repo_root = repo.root().to_path_buf();
 		let path = match resolve_config_path(&cwd, &repo_root, args.config.as_deref()) {
 			Ok(path) => path,
@@ -681,8 +680,7 @@ fn validate_config_command(args: &ValidateArgs) -> Result<()> {
 fn doctor_command(args: &DoctorArgs) -> Result<()> {
 	ensure_json_without_debug(args.json, args.debug)?;
 
-	let cwd = std::env::current_dir().context("failed to read current working directory")?;
-	let repo = GitRepo::discover(&cwd, args.debug).context("failed to resolve repository root")?;
+	let (_, repo) = discover_repo_from_cwd_for_output(args.debug, args.json)?;
 	let repo_root = repo.root().to_path_buf();
 	let checks = build_doctor_checks(&repo, &repo_root, args.config.as_deref());
 	let blocking_error = checks.iter().any(|check| check.level == DoctorLevel::Error);
@@ -716,8 +714,7 @@ fn config_command(args: &ConfigArgs) -> Result<()> {
 		return Err(anyhow!("--path-only cannot be used with --debug"));
 	}
 
-	let cwd = std::env::current_dir().context("failed to read current working directory")?;
-	let repo = GitRepo::discover(&cwd, args.debug).context("failed to resolve repository root")?;
+	let (cwd, repo) = discover_repo_from_cwd_for_output(args.debug, args.json)?;
 	let repo_root = repo.root().to_path_buf();
 	let path = resolve_config_path(&cwd, &repo_root, args.config.as_deref())?;
 	let format = config::ConfigFormat::from_path(&path)?;
@@ -917,8 +914,7 @@ fn init_config_command(args: &InitArgs) -> Result<()> {
 		return Ok(());
 	}
 
-	let cwd = std::env::current_dir().context("failed to read current working directory")?;
-	let repo = GitRepo::discover(&cwd, args.debug).context("failed to resolve repository root")?;
+	let (cwd, repo) = discover_repo_from_cwd_for_output(args.debug, args.json)?;
 	let repo_root = repo.root();
 
 	let renderer = Renderer::new(effective_render_mode(args.render, args.no_color));
@@ -1036,6 +1032,19 @@ fn resolve_init_output_path(
 		));
 	}
 	Ok((path, format))
+}
+
+fn discover_repo_from_cwd_for_output(debug_enabled: bool, json_output: bool) -> Result<(std::path::PathBuf, GitRepo)> {
+	let cwd = std::env::current_dir().context("failed to read current working directory")?;
+	match GitRepo::discover(&cwd, debug_enabled).context("failed to resolve repository root") {
+		Ok(repo) => Ok((cwd, repo)),
+		Err(error) => {
+			if json_output {
+				print_json_error(&error)?;
+			}
+			Err(error)
+		}
+	}
 }
 
 fn load_config_from_cwd(

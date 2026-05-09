@@ -280,6 +280,38 @@ fn config_json_commands_reject_debug_mode() {
 }
 
 #[test]
+fn config_mode_json_reports_repo_discovery_errors_as_json() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+	let commands: &[&[&str]] = &[
+		&["validate", "--json"],
+		&["doctor", "--json"],
+		&["config", "--json"],
+		&["init", "--json"],
+	];
+
+	for args in commands {
+		let output = run_pullhook(temp.path(), args);
+
+		assert!(
+			!output.status.success(),
+			"`pullhook {}` should fail outside a git repo",
+			args.join(" ")
+		);
+		let value: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap_or_else(|error| {
+			panic!(
+				"`pullhook {}` should print JSON to stdout: {error}; stdout: {}",
+				args.join(" "),
+				stdout_text(&output)
+			)
+		});
+		assert_eq!(value["status"], "error");
+		assert_eq!(value["error"], "failed to resolve repository root");
+		let stderr = stderr_text(&output);
+		assert!(stderr.contains("failed to resolve repository root"));
+	}
+}
+
+#[test]
 fn completion_command_succeeds_outside_git_repo() {
 	let temp = tempfile::tempdir().expect("create temp dir");
 
