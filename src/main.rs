@@ -1665,7 +1665,7 @@ fn doctor_config_check(
 				name: "config",
 				level: DoctorLevel::Error,
 				summary: format!("config is invalid: {}", path.display()),
-				details: vec![error.to_string()],
+				details: config_load_error_details(&error),
 				hint: Some("run `pullhook validate` after editing the config".to_owned()),
 			},
 		},

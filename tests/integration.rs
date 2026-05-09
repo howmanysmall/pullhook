@@ -2267,6 +2267,13 @@ fn doctor_json_fails_when_config_is_invalid() {
 	assert_eq!(checks[1]["name"], "config");
 	assert_eq!(checks[1]["level"], "error");
 	assert_eq!(checks[1]["hint"], "run `pullhook validate` after editing the config");
+	let details = checks[1]["details"].as_array().expect("config details");
+	assert!(details.iter().any(|detail| {
+		detail
+			.as_str()
+			.expect("detail")
+			.contains("rules[0]: invalid `failText`: unknown style `sparkle`")
+	}));
 	let stderr = stderr_text(&output);
 	assert!(stderr.contains("doctor found blocking issues"));
 }
