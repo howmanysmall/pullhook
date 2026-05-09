@@ -16,6 +16,7 @@ Examples:
   pullhook init --format json
   pullhook examples
   pullhook shells
+  pullhook formats
   pullhook commands --json
   pullhook codes --json
   pullhook run --dry-run
@@ -24,6 +25,7 @@ Next steps:
   Use `pullhook init` to create a repo config.
   Use `pullhook examples` to see common workflows.
   Use `pullhook shells` to list completion targets.
+  Use `pullhook formats` to list supported config formats.
   Use `pullhook explain --all-matches` to preview config rule matches.
   Use `pullhook commands` to inspect the command catalog.
   Use `pullhook codes` to inspect stable JSON status codes.";
@@ -137,6 +139,13 @@ Examples:
   pullhook shells --names-only
   pullhook shells --json";
 
+const FORMATS_AFTER_HELP: &str = "\
+Examples:
+  pullhook formats
+  pullhook formats --names-only
+  pullhook formats --files-only
+  pullhook formats --json";
+
 const CODES_AFTER_HELP: &str = "\
 Examples:
   pullhook codes
@@ -198,6 +207,8 @@ pub enum Commands {
 	Completion(CompletionArgs),
 	/// List supported shell completion targets.
 	Shells(ShellsArgs),
+	/// List supported config formats and filenames.
+	Formats(FormatsArgs),
 	/// Show common pullhook workflows and commands.
 	Examples(ExamplesArgs),
 	/// List pullhook commands for humans or automation.
@@ -1006,6 +1017,38 @@ pub struct ShellsArgs {
 	pub names_only: bool,
 }
 
+/// Arguments for `pullhook formats`.
+#[derive(Debug, Clone, Args)]
+#[command(after_help = FORMATS_AFTER_HELP)]
+pub struct FormatsArgs {
+	/// Print machine-readable JSON instead of text output.
+	#[arg(
+		long = "json",
+		default_value_t = false,
+		conflicts_with_all = ["names_only", "files_only"],
+		help_heading = "Output options"
+	)]
+	pub json: bool,
+
+	/// Print only config format names, one per line.
+	#[arg(
+		long = "names-only",
+		default_value_t = false,
+		conflicts_with_all = ["json", "files_only"],
+		help_heading = "Output options"
+	)]
+	pub names_only: bool,
+
+	/// Print only default config filenames, one per line.
+	#[arg(
+		long = "files-only",
+		default_value_t = false,
+		conflicts_with_all = ["json", "names_only"],
+		help_heading = "Output options"
+	)]
+	pub files_only: bool,
+}
+
 /// Arguments for `pullhook codes`.
 #[derive(Debug, Clone, Args)]
 #[command(after_help = CODES_AFTER_HELP)]
@@ -1106,6 +1149,8 @@ pub enum ExampleCommand {
 	Commands,
 	/// Shell completion target examples.
 	Shells,
+	/// Config format examples.
+	Formats,
 	/// Status code catalog examples.
 	Codes,
 }
@@ -1121,6 +1166,7 @@ impl ExampleCommand {
 			Self::Doctor => "doctor",
 			Self::Commands => "commands",
 			Self::Shells => "shells",
+			Self::Formats => "formats",
 			Self::Codes => "codes",
 		}
 	}

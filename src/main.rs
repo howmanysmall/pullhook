@@ -23,8 +23,8 @@ use tracing_subscriber::EnvFilter;
 
 use crate::cli::{
 	Cli, CodeKind, CodesArgs, CommandCatalogArgs, CommandCategory, Commands, CompletionArgs, ConfigArgs, ConfigRunArgs,
-	DoctorArgs, ExampleCommand, ExamplesArgs, ExplainArgs, InitArgs, RulesArgs, RulesKind, RunArgs, SchemaArgs,
-	ShellsArgs, ValidateArgs,
+	DoctorArgs, ExampleCommand, ExamplesArgs, ExplainArgs, FormatsArgs, InitArgs, RulesArgs, RulesKind, RunArgs,
+	SchemaArgs, ShellsArgs, ValidateArgs,
 };
 use crate::config::{
 	Config, Entry, EvaluatedEntry, EvaluatedGroup, EvaluatedRule, FailTextContext, OnFailure, Pattern,
@@ -198,6 +198,16 @@ struct ShellInfo {
 	description: &'static str,
 }
 
+#[derive(Debug, Clone, Copy, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct FormatInfo {
+	name: &'static str,
+	default_file: &'static str,
+	alternate_file: Option<&'static str>,
+	description: &'static str,
+	init_command: &'static str,
+}
+
 const COMMAND_INFOS: &[CommandInfo] = &[
 	CommandInfo {
 		name: "run",
@@ -275,6 +285,14 @@ const COMMAND_INFOS: &[CommandInfo] = &[
 		name: "shells",
 		category: "reference",
 		summary: "List supported shell completion targets.",
+		json: true,
+		requires_repo: false,
+		script_friendly: true,
+	},
+	CommandInfo {
+		name: "formats",
+		category: "reference",
+		summary: "List supported config formats and filenames.",
 		json: true,
 		requires_repo: false,
 		script_friendly: true,
@@ -367,6 +385,12 @@ const EXAMPLE_INFOS: &[ExampleInfo] = &[
 		summary: "Print supported shell completion targets.",
 	},
 	ExampleInfo {
+		title: "List config formats",
+		command_name: "formats",
+		command: "pullhook formats --files-only",
+		summary: "Print supported config filenames.",
+	},
+	ExampleInfo {
 		title: "List status codes",
 		command_name: "codes",
 		command: "pullhook codes --codes-only",
@@ -399,6 +423,37 @@ const SHELL_INFOS: &[ShellInfo] = &[
 		name: "zsh",
 		completion_command: "pullhook completion zsh",
 		description: "Generate Zsh completion script.",
+	},
+];
+
+const FORMAT_INFOS: &[FormatInfo] = &[
+	FormatInfo {
+		name: "json",
+		default_file: "pullhook.json",
+		alternate_file: Some(".pullhook.json"),
+		description: "JSON config file.",
+		init_command: "pullhook init --format json",
+	},
+	FormatInfo {
+		name: "jsonc",
+		default_file: "pullhook.jsonc",
+		alternate_file: Some(".pullhook.jsonc"),
+		description: "JSON config file with comments.",
+		init_command: "pullhook init --format jsonc",
+	},
+	FormatInfo {
+		name: "yaml",
+		default_file: "pullhook.yaml",
+		alternate_file: Some(".pullhook.yaml"),
+		description: "YAML config file; .yml is not supported.",
+		init_command: "pullhook init --format yaml",
+	},
+	FormatInfo {
+		name: "toml",
+		default_file: "pullhook.toml",
+		alternate_file: Some(".pullhook.toml"),
+		description: "TOML config file.",
+		init_command: "pullhook init --format toml",
 	},
 ];
 
@@ -675,6 +730,7 @@ fn main() {
 	let result = match cli.command.as_ref() {
 		Some(Commands::Completion(args)) => completion_command(args),
 		Some(Commands::Shells(args)) => shells_command(args),
+		Some(Commands::Formats(args)) => formats_command(args),
 		Some(Commands::Examples(args)) => examples_command(args),
 		Some(Commands::CommandCatalog(args)) => command_catalog_command(args),
 		Some(Commands::Codes(args)) => codes_command(args),
@@ -750,6 +806,55 @@ fn shells_command(args: &ShellsArgs) -> Result<()> {
 	for shell in SHELL_INFOS {
 		println!("{}: {}", shell.name, shell.completion_command);
 		println!("  {}", shell.description);
+	}
+	Ok(())
+}
+
+fn formats_command(args: &FormatsArgs) -> Result<()> {
+	if args.json {
+		println!(
+			"{}",
+			serde_json::to_string_pretty(&json!({
+				"status": "ok",
+				"code": serde_json::Value::Null,
+				"formats": FORMAT_INFOS,
+				"discoveryOrder": config::config_names(),
+				"summary": {
+					"formats": FORMAT_INFOS.len(),
+					"configNames": config::config_names().len(),
+				},
+			}))?
+		);
+		return Ok(());
+	}
+
+	if args.names_only {
+		for format in FORMAT_INFOS {
+			println!("{}", format.name);
+		}
+		return Ok(());
+	}
+
+	if args.files_only {
+		for name in config::config_names() {
+			println!("{name}");
+		}
+		return Ok(());
+	}
+
+	println!("Config formats");
+	println!("discovery order:");
+	for name in config::config_names() {
+		println!("  {name}");
+	}
+	println!();
+	for format in FORMAT_INFOS {
+		println!("{}: {}", format.name, format.default_file);
+		if let Some(alternate_file) = format.alternate_file {
+			println!("  alternate: {alternate_file}");
+		}
+		println!("  {}", format.description);
+		println!("  {}", format.init_command);
 	}
 	Ok(())
 }

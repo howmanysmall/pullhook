@@ -691,6 +691,123 @@ fn shells_names_only_conflicts_with_json() {
 }
 
 #[test]
+fn formats_text_lists_config_formats() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["formats"]);
+
+	assert!(output.status.success(), "formats should succeed outside a git repo");
+	let stdout = stdout_text(&output);
+	assert!(stdout.contains("Config formats"));
+	assert!(stdout.contains("pullhook.json"));
+	assert!(stdout.contains(".pullhook.json"));
+	assert!(stdout.contains("yaml: pullhook.yaml"));
+	assert!(stdout.contains("YAML config file; .yml is not supported."));
+	let stderr = stderr_text(&output);
+	assert!(stderr.trim().is_empty(), "formats should not write stderr");
+}
+
+#[test]
+fn formats_json_lists_config_formats() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["formats", "--json"]);
+
+	assert!(
+		output.status.success(),
+		"formats --json should succeed outside a git repo"
+	);
+	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse formats json");
+	assert_eq!(value["status"], "ok");
+	assert_eq!(value["code"], serde_json::Value::Null);
+	let formats = value["formats"].as_array().expect("formats array");
+	assert!(formats.iter().any(|entry| entry["name"] == "yaml"
+		&& entry["defaultFile"] == "pullhook.yaml"
+		&& entry["alternateFile"] == ".pullhook.yaml"));
+	let discovery_order = value["discoveryOrder"].as_array().expect("discovery order array");
+	assert!(discovery_order.iter().any(|entry| entry == "pullhook.json"));
+	assert!(discovery_order.iter().any(|entry| entry == ".pullhook.toml"));
+	assert_eq!(
+		value["summary"]["formats"].as_u64().expect("format count"),
+		formats.len() as u64
+	);
+	assert_eq!(
+		value["summary"]["configNames"].as_u64().expect("config name count"),
+		discovery_order.len() as u64
+	);
+	let stderr = stderr_text(&output);
+	assert!(stderr.trim().is_empty(), "formats --json should not write stderr");
+}
+
+#[test]
+fn formats_names_only_prints_clean_format_names() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["formats", "--names-only"]);
+
+	assert!(output.status.success(), "formats --names-only should succeed");
+	let stdout = stdout_text(&output);
+	assert_eq!(
+		stdout.lines().collect::<Vec<_>>(),
+		vec!["json", "jsonc", "yaml", "toml"]
+	);
+	let stderr = stderr_text(&output);
+	assert!(stderr.trim().is_empty(), "formats --names-only should not write stderr");
+}
+
+#[test]
+fn formats_files_only_prints_clean_config_names() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["formats", "--files-only"]);
+
+	assert!(output.status.success(), "formats --files-only should succeed");
+	let stdout = stdout_text(&output);
+	assert_eq!(
+		stdout.lines().collect::<Vec<_>>(),
+		vec![
+			"pullhook.json",
+			"pullhook.jsonc",
+			"pullhook.yaml",
+			"pullhook.toml",
+			".pullhook.json",
+			".pullhook.jsonc",
+			".pullhook.yaml",
+			".pullhook.toml"
+		]
+	);
+	let stderr = stderr_text(&output);
+	assert!(stderr.trim().is_empty(), "formats --files-only should not write stderr");
+}
+
+#[test]
+fn formats_script_outputs_conflict_with_json() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let names_output = run_pullhook(temp.path(), &["formats", "--names-only", "--json"]);
+
+	assert!(
+		!names_output.status.success(),
+		"formats --names-only should conflict with --json"
+	);
+	let names_stderr = stderr_text(&names_output);
+	assert!(names_stderr.contains("cannot be used with"));
+	assert!(names_stderr.contains("--names-only"));
+	assert!(names_stderr.contains("--json"));
+
+	let files_output = run_pullhook(temp.path(), &["formats", "--files-only", "--json"]);
+
+	assert!(
+		!files_output.status.success(),
+		"formats --files-only should conflict with --json"
+	);
+	let files_stderr = stderr_text(&files_output);
+	assert!(files_stderr.contains("cannot be used with"));
+	assert!(files_stderr.contains("--files-only"));
+	assert!(files_stderr.contains("--json"));
+}
+
+#[test]
 fn completion_command_writes_output_file() {
 	let temp = tempfile::tempdir().expect("create temp dir");
 	let output_path = Path::new("completions/fish/pullhook.fish");
@@ -988,6 +1105,7 @@ fn examples_text_lists_common_workflows() {
 	assert!(stdout.contains("Create a config: pullhook init"));
 	assert!(stdout.contains("Preview configured rules: pullhook explain --all-matches"));
 	assert!(stdout.contains("List completion shells: pullhook shells --names-only"));
+	assert!(stdout.contains("List config formats: pullhook formats --files-only"));
 	assert!(stdout.contains("List status codes: pullhook codes --codes-only"));
 	let stderr = stderr_text(&output);
 	assert!(stderr.trim().is_empty(), "examples should not write stderr");
@@ -1021,6 +1139,11 @@ fn examples_json_lists_common_workflows() {
 		examples
 			.iter()
 			.any(|entry| entry["commandName"] == "shells" && entry["command"] == "pullhook shells --names-only")
+	);
+	assert!(
+		examples
+			.iter()
+			.any(|entry| entry["commandName"] == "formats" && entry["command"] == "pullhook formats --files-only")
 	);
 	assert_eq!(
 		value["summary"]["examples"].as_u64().expect("example count"),
@@ -1130,6 +1253,11 @@ fn commands_json_lists_cli_catalog() {
 	assert!(
 		commands
 			.iter()
+			.any(|entry| entry["name"] == "formats" && entry["category"] == "reference")
+	);
+	assert!(
+		commands
+			.iter()
 			.any(|entry| entry["name"] == "examples" && entry["category"] == "reference")
 	);
 	assert!(
@@ -1200,7 +1328,7 @@ fn commands_names_only_prints_clean_command_names() {
 	let stdout = stdout_text(&output);
 	assert_eq!(
 		stdout.lines().collect::<Vec<_>>(),
-		vec!["shells", "examples", "commands", "codes"]
+		vec!["shells", "formats", "examples", "commands", "codes"]
 	);
 	let stderr = stderr_text(&output);
 	assert!(
@@ -1238,6 +1366,7 @@ fn root_help_lists_common_examples() {
 	assert!(stdout.contains("pullhook init --format json"));
 	assert!(stdout.contains("pullhook examples"));
 	assert!(stdout.contains("pullhook shells"));
+	assert!(stdout.contains("pullhook formats"));
 	assert!(stdout.contains("pullhook commands --json"));
 	assert!(stdout.contains("pullhook codes --json"));
 	assert!(stdout.contains("schema"));
@@ -1245,6 +1374,7 @@ fn root_help_lists_common_examples() {
 	assert!(stdout.contains("Legacy one-off options:"));
 	assert!(stdout.contains("Use `pullhook examples` to see common workflows."));
 	assert!(stdout.contains("Use `pullhook shells` to list completion targets."));
+	assert!(stdout.contains("Use `pullhook formats` to list supported config formats."));
 	assert!(stdout.contains("Use `pullhook explain --all-matches` to preview config rule matches."));
 	assert!(stdout.contains("Use `pullhook commands` to inspect the command catalog."));
 	assert!(stdout.contains("Use `pullhook codes` to inspect stable JSON status codes."));
@@ -1948,6 +2078,14 @@ fn utility_help_groups_options_by_task() {
 	assert!(shells_stdout.contains("Output options:"));
 	assert!(shells_stdout.contains("pullhook shells --names-only"));
 	assert!(shells_stdout.contains("pullhook shells --json"));
+
+	let formats = run_pullhook(temp.path(), &["formats", "--help"]);
+	assert!(formats.status.success(), "formats help should succeed");
+	let formats_stdout = stdout_text(&formats);
+	assert!(formats_stdout.contains("Output options:"));
+	assert!(formats_stdout.contains("pullhook formats --names-only"));
+	assert!(formats_stdout.contains("pullhook formats --files-only"));
+	assert!(formats_stdout.contains("pullhook formats --json"));
 
 	let examples = run_pullhook(temp.path(), &["examples", "--help"]);
 	assert!(examples.status.success(), "examples help should succeed");
