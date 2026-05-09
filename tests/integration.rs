@@ -1,8 +1,9 @@
 //! Integration tests for pullhook CLI behavior.
 
 use std::fs;
+use std::io::Write as _;
 use std::path::{Path, PathBuf};
-use std::process::{Command as ProcessCommand, Output};
+use std::process::{Command as ProcessCommand, Output, Stdio};
 
 use predicates::prelude::*;
 use tempfile::TempDir;
@@ -786,6 +787,28 @@ fn explain_json_uses_explicit_changed_files() {
 }
 
 #[test]
+fn explain_json_reads_changed_files_from_stdin() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_config_rule(repo_root, "docs check", "docs/*.md", "cargo test -p docs");
+
+	let output = run_pullhook_with_stdin(
+		repo_root,
+		&["explain", "--changed-files-stdin", "--json"],
+		"docs/guide.md\n\n",
+	);
+
+	assert!(
+		output.status.success(),
+		"explain with --changed-files-stdin should succeed"
+	);
+	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse explain json");
+	assert_eq!(value["changedFiles"], serde_json::json!(["docs/guide.md"]));
+	assert_eq!(value["matchedFiles"], serde_json::json!(["docs/guide.md"]));
+	assert_eq!(value["entries"][0]["status"], "match");
+}
+
+#[test]
 fn run_dry_run_json_reports_planned_commands() {
 	let temp = setup_repo_with_merge();
 	let repo_root = temp.path();
@@ -849,6 +872,57 @@ fn run_dry_run_json_uses_explicit_changed_files() {
 }
 
 #[test]
+fn run_dry_run_json_reads_changed_files_from_stdin() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_file(
+		repo_root,
+		Path::new("pullhook.json"),
+		r#"{
+  "rules": [
+    {
+      "name": "docs check",
+      "changed": "docs/*.md",
+      "run": "cargo test -p docs"
+    },
+    {
+      "name": "config check",
+      "changed": "config/*.json",
+      "run": "cargo test -p config"
+    }
+  ]
+}
+"#,
+	);
+
+	let output = run_pullhook_with_stdin(
+		repo_root,
+		&[
+			"run",
+			"--dry-run",
+			"--changed-file",
+			"config/app.json",
+			"--changed-files-stdin",
+			"--json",
+		],
+		"docs/guide.md\n",
+	);
+
+	assert!(
+		output.status.success(),
+		"run --dry-run with stdin changed files should succeed"
+	);
+	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse run json");
+	assert_eq!(value["plannedCommands"], 2);
+	assert_eq!(
+		value["changedFiles"],
+		serde_json::json!(["config/app.json", "docs/guide.md"])
+	);
+	assert_eq!(value["entries"][0]["status"], "match");
+	assert_eq!(value["entries"][1]["status"], "match");
+}
+
+#[test]
 fn run_rejects_changed_file_with_base() {
 	let temp = setup_repo_with_merge();
 	let repo_root = temp.path();
@@ -870,6 +944,28 @@ fn run_rejects_changed_file_with_base() {
 	let stderr = stderr_text(&output);
 	assert!(stderr.contains("cannot be used with"));
 	assert!(stderr.contains("--changed-file <path>"));
+	assert!(stderr.contains("--base <rev>"));
+}
+
+#[test]
+fn run_rejects_changed_files_stdin_with_base() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_config_rule(repo_root, "docs check", "docs/*.md", "cargo test -p docs");
+
+	let output = run_pullhook_with_stdin(
+		repo_root,
+		&["run", "--dry-run", "--changed-files-stdin", "--base", "HEAD~1"],
+		"docs/guide.md\n",
+	);
+
+	assert!(
+		!output.status.success(),
+		"run should reject --changed-files-stdin with --base"
+	);
+	let stderr = stderr_text(&output);
+	assert!(stderr.contains("cannot be used with"));
+	assert!(stderr.contains("--changed-files-stdin"));
 	assert!(stderr.contains("--base <rev>"));
 }
 
@@ -1407,6 +1503,26 @@ fn run_pullhook_with_env(repo_root: &Path, args: &[&str], envs: &[(&str, &str)])
 	}
 
 	command.output().expect("command runs")
+}
+
+fn run_pullhook_with_stdin(repo_root: &Path, args: &[&str], stdin: &str) -> Output {
+	let mut child = ProcessCommand::new(assert_cmd::cargo::cargo_bin!("pullhook"))
+		.current_dir(repo_root)
+		.args(args)
+		.stdin(Stdio::piped())
+		.stdout(Stdio::piped())
+		.stderr(Stdio::piped())
+		.spawn()
+		.expect("command starts");
+
+	child
+		.stdin
+		.as_mut()
+		.expect("stdin is piped")
+		.write_all(stdin.as_bytes())
+		.expect("stdin writes");
+
+	child.wait_with_output().expect("command runs")
 }
 
 fn stdout_text(output: &Output) -> String {

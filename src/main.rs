@@ -10,6 +10,7 @@ mod pm;
 mod runner;
 
 use std::collections::BTreeSet;
+use std::io::Read as _;
 
 use anyhow::{Context, Result, anyhow};
 use clap::Parser;
@@ -272,8 +273,14 @@ fn run_config_command(args: &ConfigRunArgs) -> Result<()> {
 
 	let renderer = Renderer::new(args.render);
 	let (repo, repo_root, config) = load_config_from_cwd(args.debug, args.config.as_deref())?;
-	let (changed_files, base_missing) =
-		resolve_config_changed_files(&repo, &config, args.base.as_deref(), &args.changed_files, args.debug)?;
+	let explicit_changed_files = collect_explicit_changed_files(&args.changed_files, args.changed_files_stdin)?;
+	let (changed_files, base_missing) = resolve_config_changed_files(
+		&repo,
+		&config,
+		args.base.as_deref(),
+		&explicit_changed_files,
+		args.debug,
+	)?;
 	let evaluation = filter_config_evaluation(
 		evaluate_config(&config, &changed_files, base_missing, &repo_root)?,
 		&args.rules,
@@ -345,8 +352,14 @@ fn run_config_command(args: &ConfigRunArgs) -> Result<()> {
 
 fn explain_config_command(args: &ExplainArgs) -> Result<()> {
 	let (repo, repo_root, config) = load_config_from_cwd(args.debug, args.config.as_deref())?;
-	let (changed_files, base_missing) =
-		resolve_config_changed_files(&repo, &config, args.base.as_deref(), &args.changed_files, args.debug)?;
+	let explicit_changed_files = collect_explicit_changed_files(&args.changed_files, args.changed_files_stdin)?;
+	let (changed_files, base_missing) = resolve_config_changed_files(
+		&repo,
+		&config,
+		args.base.as_deref(),
+		&explicit_changed_files,
+		args.debug,
+	)?;
 	let evaluation = filter_config_evaluation(
 		evaluate_config(&config, &changed_files, base_missing, &repo_root)?,
 		&args.rules,
@@ -525,6 +538,27 @@ fn resolve_config_path(
 			config::config_names()[0]
 		)
 	})
+}
+
+fn collect_explicit_changed_files(
+	changed_files: &[std::path::PathBuf],
+	read_stdin: bool,
+) -> Result<Vec<std::path::PathBuf>> {
+	let mut paths = changed_files.to_vec();
+	if read_stdin {
+		let mut input = String::new();
+		std::io::stdin()
+			.read_to_string(&mut input)
+			.context("failed to read changed files from stdin")?;
+		paths.extend(
+			input
+				.lines()
+				.map(str::trim)
+				.filter(|line| !line.is_empty())
+				.map(std::path::PathBuf::from),
+		);
+	}
+	Ok(paths)
 }
 
 fn resolve_config_changed_files(

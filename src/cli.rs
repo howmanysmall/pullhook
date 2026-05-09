@@ -32,6 +32,7 @@ Examples:
   pullhook run --dry-run
   pullhook run --json
   pullhook run --changed-file packages/a/package-lock.json --dry-run
+  git diff --name-only HEAD~1 | pullhook run --changed-files-stdin --dry-run
   pullhook run --rule lint --rule typecheck
   pullhook run --config config/pullhook.custom.json --all-matches";
 
@@ -40,6 +41,7 @@ Examples:
   pullhook explain
   pullhook explain --all-matches
   pullhook explain --changed-file packages/a/package-lock.json
+  git diff --name-only HEAD~1 | pullhook explain --changed-files-stdin
   pullhook explain --rule lint --all-matches
   pullhook explain --json";
 
@@ -201,6 +203,10 @@ pub struct ConfigRunArgs {
 	#[arg(long = "changed-file", value_name = "path", conflicts_with = "base")]
 	pub changed_files: Vec<PathBuf>,
 
+	/// Read changed file paths from stdin, one path per line.
+	#[arg(long = "changed-files-stdin", default_value_t = false, conflicts_with = "base")]
+	pub changed_files_stdin: bool,
+
 	/// Max concurrent jobs for top-level work.
 	#[arg(long = "jobs", value_name = "n")]
 	pub jobs: Option<NonZeroUsize>,
@@ -231,6 +237,10 @@ pub struct ConfigRunArgs {
 }
 
 /// Arguments for `pullhook explain`.
+#[expect(
+	clippy::struct_excessive_bools,
+	reason = "CLI flags are naturally represented as independent booleans"
+)]
 #[derive(Debug, Clone, Args)]
 #[command(after_help = EXPLAIN_AFTER_HELP)]
 pub struct ExplainArgs {
@@ -245,6 +255,10 @@ pub struct ExplainArgs {
 	/// Evaluate as if this file changed; repeat for multiple files.
 	#[arg(long = "changed-file", value_name = "path", conflicts_with = "base")]
 	pub changed_files: Vec<PathBuf>,
+
+	/// Read changed file paths from stdin, one path per line.
+	#[arg(long = "changed-files-stdin", default_value_t = false, conflicts_with = "base")]
+	pub changed_files_stdin: bool,
 
 	/// Show skipped rules as well as matched rules.
 	#[arg(long = "all-matches", default_value_t = false)]
