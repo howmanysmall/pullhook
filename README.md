@@ -462,7 +462,7 @@ Use `pullhook commands` to inspect the command catalog in text form, or `pullhoo
 tool needs supported commands, categories, repo requirements, and example invocations without scraping help text.
 Add `--category workflow`, `--category diagnostic`, `--category generator`, or `--category reference` to narrow
 the catalog.
-Add `--search <text>` to match command names, categories, or summaries case-insensitively.
+Add `--search <text>` to match command names, categories, summaries, or example invocations case-insensitively.
 Use `--repo-only` or `--standalone-only` to split commands by whether they need to run inside a Git repository.
 Use `pullhook commands --names-only` when a script or completion helper only needs command names.
 Use `pullhook commands --summaries-only` when a script or command palette only needs command descriptions.

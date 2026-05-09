@@ -1600,7 +1600,12 @@ fn filtered_command_infos(
 }
 
 fn command_info_matches_search(info: &CommandInfo, search: &str) -> bool {
-	info.name.contains(search) || info.category.contains(search) || info.summary.to_ascii_lowercase().contains(search)
+	info.name.contains(search)
+		|| info.category.contains(search)
+		|| info.summary.to_ascii_lowercase().contains(search)
+		|| example_commands_for_command(*info)
+			.iter()
+			.any(|command| command.to_ascii_lowercase().contains(search))
 }
 
 const fn repo_requirement_filter(args: &CommandCatalogArgs) -> Option<bool> {

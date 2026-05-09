@@ -3505,6 +3505,25 @@ fn commands_search_filter_composes_with_repo_filter() {
 }
 
 #[test]
+fn commands_search_filter_matches_example_commands() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["commands", "--search", "dry-run", "--names-only"]);
+
+	assert!(
+		output.status.success(),
+		"commands --search dry-run --names-only should succeed"
+	);
+	let stdout = stdout_text(&output);
+	assert_eq!(stdout.lines().collect::<Vec<_>>(), vec!["run"]);
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"example-command search should not write stderr"
+	);
+}
+
+#[test]
 fn commands_repo_filter_limits_results() {
 	let temp = tempfile::tempdir().expect("create temp dir");
 
