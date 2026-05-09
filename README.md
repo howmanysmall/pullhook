@@ -75,6 +75,10 @@ Commands:
   help        Print this message or the help of the given subcommand(s)
 
 Options:
+  -h, --help                Print help
+  -V, --version             Print version
+
+Legacy one-off options:
   -p, --pattern <glob>      Pattern to match files
   -c, --command <command>   Execute command for each matched file
   -s, --script <script>     Execute npm script for each matched file
@@ -90,11 +94,10 @@ Options:
       --dry-run             Print planned commands and exit
       --json                Print machine-readable JSON instead of text output
       --unique-cwd          Dedupe directories before per-match execution
-  -h, --help                Print help
-  -V, --version             Print version
 ```
 
-The live `--help` output also includes examples and next-step hints for the root command and the main subcommands.
+The live `--help` output also groups subcommand options by task, such as input, output, rule selection,
+checks, and display settings.
 
 ## Examples
 
