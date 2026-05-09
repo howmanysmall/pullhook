@@ -1429,13 +1429,15 @@ fn examples_command(args: &ExamplesArgs) -> Result<()> {
 }
 
 fn collect_example_command_names(examples: &[ExampleInfo]) -> Vec<&'static str> {
-	let mut command_names = Vec::new();
-	for example in examples {
-		if !command_names.contains(&example.command_name) {
-			command_names.push(example.command_name);
-		}
-	}
-	command_names
+	ExampleCommand::value_variants()
+		.iter()
+		.filter_map(|command| {
+			examples
+				.iter()
+				.any(|example| example.command_name == command.label())
+				.then_some(command.label())
+		})
+		.collect()
 }
 
 fn collect_example_categories(examples: &[ExampleInfo]) -> Vec<&'static str> {
