@@ -325,6 +325,7 @@ and the final summary.
 
 Legacy top-level mode also supports `--json`, including the same top-level `status`, `error`, and `details`
 fields for setup failures, live execution results, and dry-run plans.
+Repository-discovery JSON errors include recovery details for running inside or initializing a Git repo.
 Missing-mode legacy JSON errors explain the config-mode path and the explicit legacy `--pattern`/`--command` fallback.
 Legacy command-parse JSON errors include a `commandParse` object with the rejected command and parser reason.
 

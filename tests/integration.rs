@@ -302,6 +302,15 @@ fn legacy_json_reports_repo_discovery_errors_as_json() {
 	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse repo discovery json");
 	assert_eq!(value["status"], "error");
 	assert_eq!(value["error"], "failed to resolve repository root");
+	let details = value["details"].as_array().expect("details array");
+	assert!(
+		details
+			.iter()
+			.any(|detail| detail.as_str().expect("detail") == "rerun from inside a Git working tree")
+	);
+	assert!(details.iter().any(|detail| {
+		detail.as_str().expect("detail") == "or initialize a repository with `git init` before running pullhook"
+	}));
 	let stderr = stderr_text(&output);
 	assert!(stderr.contains("failed to resolve repository root"));
 }

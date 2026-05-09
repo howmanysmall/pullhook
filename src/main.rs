@@ -1618,6 +1618,10 @@ fn json_error_details(error: &anyhow::Error) -> Vec<String> {
 		details.push("check that `--base <rev>` names a commit reachable from this repo".to_owned());
 		details.push("omit `--base` to use pullhook's automatic diff-base fallback".to_owned());
 	}
+	if message == "failed to resolve repository root" {
+		details.push("rerun from inside a Git working tree".to_owned());
+		details.push("or initialize a repository with `git init` before running pullhook".to_owned());
+	}
 	if !details.is_empty() {
 		return details;
 	}
