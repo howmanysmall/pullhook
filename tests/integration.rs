@@ -307,6 +307,19 @@ fn legacy_json_reports_diff_base_errors_as_json() {
 	assert_eq!(value["status"], "error");
 	let error = value["error"].as_str().expect("error");
 	assert!(error.contains("failed to resolve diff base or read changed files"));
+	let details = value["details"].as_array().expect("details array");
+	assert!(details.iter().any(|detail| {
+		detail
+			.as_str()
+			.expect("detail")
+			.contains("check that `--base <rev>` names a commit")
+	}));
+	assert!(details.iter().any(|detail| {
+		detail
+			.as_str()
+			.expect("detail")
+			.contains("automatic diff-base fallback")
+	}));
 	let stderr = stderr_text(&output);
 	assert!(stderr.contains("failed to resolve diff base or read changed files"));
 }
@@ -2130,6 +2143,19 @@ fn run_json_reports_diff_base_errors_as_json() {
 	assert_eq!(value["status"], "error");
 	let error = value["error"].as_str().expect("error");
 	assert!(error.contains("failed to resolve diff base or read changed files"));
+	let details = value["details"].as_array().expect("details array");
+	assert!(details.iter().any(|detail| {
+		detail
+			.as_str()
+			.expect("detail")
+			.contains("check that `--base <rev>` names a commit")
+	}));
+	assert!(details.iter().any(|detail| {
+		detail
+			.as_str()
+			.expect("detail")
+			.contains("automatic diff-base fallback")
+	}));
 	let stderr = stderr_text(&output);
 	assert!(stderr.contains("failed to resolve diff base or read changed files"));
 }

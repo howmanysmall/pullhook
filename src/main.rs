@@ -1588,12 +1588,16 @@ fn unknown_selector_suggestions(error: &UnknownSelectorError) -> Vec<serde_json:
 }
 
 fn json_error_details(error: &anyhow::Error) -> Vec<String> {
-	let details = error.chain().skip(1).map(ToString::to_string).collect::<Vec<_>>();
+	let mut details = error.chain().skip(1).map(ToString::to_string).collect::<Vec<_>>();
+	let message = error.to_string();
+	if message.starts_with("failed to resolve diff base or read changed files") {
+		details.push("check that `--base <rev>` names a commit reachable from this repo".to_owned());
+		details.push("omit `--base` to use pullhook's automatic diff-base fallback".to_owned());
+	}
 	if !details.is_empty() {
 		return details;
 	}
 
-	let message = error.to_string();
 	if message.starts_with("no pullhook config found") {
 		return vec![
 			format!("run `pullhook init` to create {}", config::config_names()[0]),
