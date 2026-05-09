@@ -135,6 +135,7 @@ Examples:
 const COMMANDS_AFTER_HELP: &str = "\
 Examples:
   pullhook commands
+  pullhook commands --category diagnostic
   pullhook commands --json";
 
 /// Pullhook command line arguments.
@@ -975,9 +976,37 @@ pub struct CodesArgs {
 #[derive(Debug, Clone, Args)]
 #[command(after_help = COMMANDS_AFTER_HELP)]
 pub struct CommandCatalogArgs {
+	/// Only list commands for a specific category.
+	#[arg(long = "category", value_enum, help_heading = "Filter options")]
+	pub category: Option<CommandCategory>,
+
 	/// Print machine-readable JSON instead of text output.
 	#[arg(long = "json", default_value_t = false, help_heading = "Output options")]
 	pub json: bool,
+}
+
+/// Supported `pullhook commands` categories.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum CommandCategory {
+	/// Commands that evaluate or run configured workflows.
+	Workflow,
+	/// Commands that inspect repository or config state.
+	Diagnostic,
+	/// Commands that generate files or shell output.
+	Generator,
+	/// Commands that describe pullhook's own CLI surface.
+	Reference,
+}
+
+impl CommandCategory {
+	pub const fn label(self) -> &'static str {
+		match self {
+			Self::Workflow => "workflow",
+			Self::Diagnostic => "diagnostic",
+			Self::Generator => "generator",
+			Self::Reference => "reference",
+		}
+	}
 }
 
 /// Kinds of stable JSON status codes.

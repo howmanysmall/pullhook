@@ -22,8 +22,8 @@ use tracing::debug;
 use tracing_subscriber::EnvFilter;
 
 use crate::cli::{
-	Cli, CodeKind, CodesArgs, CommandCatalogArgs, Commands, CompletionArgs, ConfigArgs, ConfigRunArgs, DoctorArgs,
-	ExplainArgs, InitArgs, RulesArgs, RulesKind, RunArgs, SchemaArgs, ValidateArgs,
+	Cli, CodeKind, CodesArgs, CommandCatalogArgs, CommandCategory, Commands, CompletionArgs, ConfigArgs, ConfigRunArgs,
+	DoctorArgs, ExplainArgs, InitArgs, RulesArgs, RulesKind, RunArgs, SchemaArgs, ValidateArgs,
 };
 use crate::config::{
 	Config, Entry, EvaluatedEntry, EvaluatedGroup, EvaluatedRule, FailTextContext, OnFailure, Pattern,
@@ -590,17 +590,21 @@ fn main() {
 }
 
 fn command_catalog_command(args: &CommandCatalogArgs) -> Result<()> {
+	let commands = filtered_command_infos(args.category);
 	if args.json {
 		println!(
 			"{}",
 			serde_json::to_string_pretty(&json!({
 				"status": "ok",
 				"code": serde_json::Value::Null,
-				"commands": COMMAND_INFOS,
+				"filters": {
+					"category": args.category.map(CommandCategory::label),
+				},
+				"commands": commands,
 				"summary": {
-					"commands": COMMAND_INFOS.len(),
-					"json": COMMAND_INFOS.iter().filter(|info| info.json).count(),
-					"scriptFriendly": COMMAND_INFOS.iter().filter(|info| info.script_friendly).count(),
+					"commands": commands.len(),
+					"json": commands.iter().filter(|info| info.json).count(),
+					"scriptFriendly": commands.iter().filter(|info| info.script_friendly).count(),
 				},
 			}))?
 		);
@@ -609,11 +613,22 @@ fn command_catalog_command(args: &CommandCatalogArgs) -> Result<()> {
 
 	println!("Pullhook commands");
 	println!("legacy one-off mode is available through top-level options");
+	if let Some(category) = args.category {
+		println!("filter: category={}", category.label());
+	}
 	println!();
-	for info in COMMAND_INFOS {
+	for info in commands {
 		println!("{} [{}] {}", info.name, info.category, info.summary);
 	}
 	Ok(())
+}
+
+fn filtered_command_infos(category: Option<CommandCategory>) -> Vec<CommandInfo> {
+	COMMAND_INFOS
+		.iter()
+		.copied()
+		.filter(|info| category.is_none_or(|category| info.category == category.label()))
+		.collect()
 }
 
 fn codes_command(args: &CodesArgs) -> Result<()> {

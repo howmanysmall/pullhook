@@ -265,6 +265,7 @@ pullhook doctor --quiet
 pullhook doctor --strict
 pullhook doctor --json
 pullhook commands
+pullhook commands --category diagnostic
 pullhook commands --json
 pullhook codes
 pullhook codes --kind doctor-check
@@ -345,6 +346,8 @@ Pattern JSON errors include a `patternError` object with the rejected glob and p
 Legacy command-parse JSON errors include a `commandParse` object with the rejected command and parser reason.
 Use `pullhook commands` to inspect the command catalog in text form, or `pullhook commands --json` when another
 tool needs supported commands, categories, and repo requirements without scraping help text.
+Add `--category workflow`, `--category diagnostic`, `--category generator`, or `--category reference` to narrow
+the catalog.
 Use `pullhook codes` to inspect the stable code catalog in text form, or `pullhook codes --json` when another
 tool needs the catalog without scraping docs. Add `--kind error` or `--kind doctor-check` to narrow the list.
 

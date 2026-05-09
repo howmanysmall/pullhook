@@ -891,6 +891,43 @@ fn commands_json_lists_cli_catalog() {
 }
 
 #[test]
+fn commands_category_filter_limits_results() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["commands", "--category", "diagnostic", "--json"]);
+
+	assert!(
+		output.status.success(),
+		"commands --category diagnostic --json should succeed"
+	);
+	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse filtered commands json");
+	assert_eq!(value["filters"]["category"], "diagnostic");
+	let commands = value["commands"].as_array().expect("commands array");
+	assert!(
+		!commands.is_empty(),
+		"diagnostic filter should keep diagnostic commands"
+	);
+	assert!(
+		commands.iter().all(|entry| entry["category"] == "diagnostic"),
+		"diagnostic filter should exclude other command categories"
+	);
+	assert!(commands.iter().any(|entry| entry["name"] == "doctor"));
+	assert!(
+		!commands.iter().any(|entry| entry["name"] == "run"),
+		"run is a workflow command, not a diagnostic command"
+	);
+	assert_eq!(
+		value["summary"]["commands"].as_u64().expect("command count"),
+		commands.len() as u64
+	);
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"filtered commands --json should not write stderr"
+	);
+}
+
+#[test]
 fn root_help_lists_common_examples() {
 	let temp = tempfile::tempdir().expect("create temp dir");
 
@@ -1607,6 +1644,13 @@ fn utility_help_groups_options_by_task() {
 	let codes_stdout = stdout_text(&codes);
 	assert!(codes_stdout.contains("Filter options:"));
 	assert!(codes_stdout.contains("Output options:"));
+
+	let commands = run_pullhook(temp.path(), &["commands", "--help"]);
+	assert!(commands.status.success(), "commands help should succeed");
+	let commands_stdout = stdout_text(&commands);
+	assert!(commands_stdout.contains("Filter options:"));
+	assert!(commands_stdout.contains("Output options:"));
+	assert!(commands_stdout.contains("pullhook commands --category diagnostic"));
 }
 
 #[test]
