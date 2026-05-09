@@ -355,6 +355,19 @@ fn run_help_lists_json_examples() {
 }
 
 #[test]
+fn rules_help_lists_script_friendly_output_modes() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["rules", "--help"]);
+
+	assert!(output.status.success(), "rules help should succeed");
+	let stdout = stdout_text(&output);
+	assert!(stdout.contains("pullhook rules --names-only"));
+	assert!(stdout.contains("pullhook rules --commands-only"));
+	assert!(stdout.contains("--commands-only"));
+}
+
+#[test]
 fn explain_help_lists_summary_only_example() {
 	let temp = tempfile::tempdir().expect("create temp dir");
 
@@ -527,6 +540,33 @@ fn rules_names_only_conflicts_with_json() {
 	assert!(stderr.contains("cannot be used with"));
 	assert!(stderr.contains("--names-only"));
 	assert!(stderr.contains("--json"));
+}
+
+#[test]
+fn rules_commands_only_conflicts_with_other_output_modes() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let json_output = run_pullhook(temp.path(), &["rules", "--commands-only", "--json"]);
+
+	assert!(
+		!json_output.status.success(),
+		"rules --commands-only should conflict with --json"
+	);
+	let json_stderr = stderr_text(&json_output);
+	assert!(json_stderr.contains("cannot be used with"));
+	assert!(json_stderr.contains("--commands-only"));
+	assert!(json_stderr.contains("--json"));
+
+	let names_output = run_pullhook(temp.path(), &["rules", "--commands-only", "--names-only"]);
+
+	assert!(
+		!names_output.status.success(),
+		"rules --commands-only should conflict with --names-only"
+	);
+	let names_stderr = stderr_text(&names_output);
+	assert!(names_stderr.contains("cannot be used with"));
+	assert!(names_stderr.contains("--commands-only"));
+	assert!(names_stderr.contains("--names-only"));
 }
 
 #[test]
@@ -1419,6 +1459,100 @@ fn rules_names_only_filters_by_kind() {
 	assert!(
 		stderr.trim().is_empty(),
 		"rules --kind run --names-only should not write stderr"
+	);
+}
+
+#[test]
+fn rules_commands_only_prints_configured_run_commands() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_file(
+		repo_root,
+		Path::new("pullhook.json"),
+		r#"{
+  "rules": [
+    {
+      "name": "install dependencies",
+      "install": true
+    },
+    {
+      "name": "format",
+      "changed": "packages/a/package-lock.json",
+      "run": "cargo fmt --all"
+    },
+    {
+      "name": "checks",
+      "parallel": [
+        {
+          "name": "lint",
+          "changed": "packages/a/package-lock.json",
+          "run": "cargo clippy --all-targets"
+        },
+        {
+          "name": "test",
+          "changed": "packages/a/package-lock.json",
+          "run": "cargo nextest run"
+        }
+      ]
+    }
+  ]
+}
+"#,
+	);
+
+	let output = run_pullhook(repo_root, &["rules", "--commands-only"]);
+
+	assert!(output.status.success(), "rules --commands-only should succeed");
+	let stdout = stdout_text(&output);
+	assert_eq!(
+		stdout,
+		"cargo fmt --all\ncargo clippy --all-targets\ncargo nextest run\n"
+	);
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"rules --commands-only should not write stderr"
+	);
+}
+
+#[test]
+fn rules_commands_only_respects_kind_filter() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_file(
+		repo_root,
+		Path::new("pullhook.json"),
+		r#"{
+  "rules": [
+    {
+      "name": "install dependencies",
+      "install": true
+    },
+    {
+      "name": "format",
+      "changed": "packages/a/package-lock.json",
+      "run": "cargo fmt --all"
+    }
+  ]
+}
+"#,
+	);
+
+	let output = run_pullhook(repo_root, &["rules", "--kind", "install", "--commands-only"]);
+
+	assert!(
+		output.status.success(),
+		"rules --kind install --commands-only should succeed"
+	);
+	let stdout = stdout_text(&output);
+	assert!(
+		stdout.trim().is_empty(),
+		"install rules without configured run commands should print no commands"
+	);
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"rules --kind install --commands-only should not write stderr"
 	);
 }
 

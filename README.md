@@ -121,6 +121,7 @@ pullhook --pattern "**/*.rs" --command "cargo test" --dry-run
 pullhook --pattern "**/*.rs" --command "cargo test" --dry-run --json
 pullhook rules
 pullhook rules --kind install
+pullhook rules --commands-only
 pullhook schema --output .vscode/pullhook.schema.json
 pullhook explain --changed-file packages/a/package-lock.json
 pullhook explain --summary-only
@@ -286,6 +287,7 @@ Legacy top-level mode also supports `--json`, including live execution results a
 
 Use `pullhook rules` to list configured rule and parallel group names before targeting a large config.
 Use `pullhook rules --names-only` when a script or completion helper only needs valid selector names.
+Use `pullhook rules --commands-only` when a script only needs configured `run` command lines without evaluating changed files.
 Use `pullhook rules --kind install`, `--kind run`, or `--kind group` to narrow inventory output.
 Use `--rule <name>` with `run` or `explain` to focus on specific rule names or parallel groups in large configs.
 Repeat it to target more than one selector, for example `pullhook run --rule lint --rule typecheck`.

@@ -79,6 +79,7 @@ Examples:
   pullhook rules
   pullhook rules --kind install
   pullhook rules --names-only
+  pullhook rules --commands-only
   pullhook rules --json
   pullhook rules --config config/pullhook.custom.json";
 
@@ -506,6 +507,10 @@ pub struct RulesArgs {
 	/// Print only rule and group selector names, one per line.
 	#[arg(long = "names-only", default_value_t = false, conflicts_with = "json")]
 	pub names_only: bool,
+
+	/// Print only configured run commands, one per line.
+	#[arg(long = "commands-only", default_value_t = false, conflicts_with_all = ["json", "names_only"])]
+	pub commands_only: bool,
 
 	/// Limit inventory to all entries, leaf rules, groups, run rules, or install rules.
 	#[arg(long = "kind", value_name = "kind", value_enum, default_value_t = RulesKind::All)]

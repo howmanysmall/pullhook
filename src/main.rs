@@ -622,6 +622,13 @@ fn rules_command(args: &RulesArgs) -> Result<()> {
 		return Ok(());
 	}
 
+	if args.commands_only {
+		for command in collect_config_rule_commands_for_kind(&config, args.kind) {
+			println!("{command}");
+		}
+		return Ok(());
+	}
+
 	renderer.render_message_stage(&format!("config: {}", config.path.display()));
 	renderer.render_message_stage(&format!(
 		"entries: {} | rules: {} | parallel groups: {}",
@@ -1619,6 +1626,29 @@ fn collect_rule_selectors_for_kind(config: &Config, kind: RulesKind) -> Vec<Stri
 		}
 	}
 	selectors.into_iter().collect()
+}
+
+fn collect_config_rule_commands_for_kind(config: &Config, kind: RulesKind) -> Vec<&str> {
+	let mut commands = Vec::new();
+	for entry in &config.entries {
+		match entry {
+			Entry::Rule(rule) => collect_config_rule_command_for_kind(rule, kind, &mut commands),
+			Entry::Group(group) => {
+				for rule in &group.rules {
+					collect_config_rule_command_for_kind(rule, kind, &mut commands);
+				}
+			}
+		}
+	}
+	commands
+}
+
+fn collect_config_rule_command_for_kind<'a>(rule: &'a config::Rule, kind: RulesKind, commands: &mut Vec<&'a str>) {
+	if rules_kind_matches_rule(kind, rule)
+		&& let Some(command) = rule.run.as_deref()
+	{
+		commands.push(command);
+	}
 }
 
 fn render_config_rule_inventory(rule: &config::Rule) {
