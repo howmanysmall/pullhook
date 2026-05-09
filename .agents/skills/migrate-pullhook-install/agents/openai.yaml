@@ -1,0 +1,7 @@
+interface:
+  display_name: "Migrate Pullhook Install"
+  short_description: "Convert pullhook --install hooks to config"
+  default_prompt: "Use $migrate-pullhook-install to convert this repo from legacy pullhook --install hooks to pullhook.json config mode."
+
+policy:
+  allow_implicit_invocation: true
