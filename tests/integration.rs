@@ -302,6 +302,7 @@ fn init_help_lists_generation_examples() {
 	assert!(stdout.contains("pullhook init --stdout"));
 	assert!(stdout.contains("pullhook init --force"));
 	assert!(stdout.contains("pullhook init --format yaml"));
+	assert!(stdout.contains("pullhook init --output config/pullhook.custom.json"));
 }
 
 #[test]
@@ -354,6 +355,25 @@ fn init_can_generate_yaml_starter_config() {
 }
 
 #[test]
+fn init_can_write_starter_config_to_explicit_output_path() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+
+	let output = run_pullhook(
+		repo_root,
+		&["init", "--output", "config/pullhook.custom.json", "--render", "never"],
+	);
+
+	assert!(output.status.success(), "explicit output init should succeed");
+	let config_path = repo_root.join("config/pullhook.custom.json");
+	assert!(predicate::path::is_file().eval(&config_path));
+	let config = fs::read_to_string(config_path).expect("read config");
+	assert!(config.contains("\"rules\""));
+	assert!(config.contains("\"install\""));
+	assert!(!predicate::path::is_file().eval(&repo_root.join("pullhook.json")));
+}
+
+#[test]
 fn init_stdout_prints_requested_format_without_writing_file() {
 	let temp = setup_repo_with_merge();
 	let repo_root = temp.path();
@@ -382,6 +402,42 @@ fn init_refuses_to_overwrite_existing_config_without_force() {
 	let stderr = stderr_text(&output);
 	assert!(stderr.contains("pullhook config already exists"));
 	assert!(stderr.contains("--force"));
+}
+
+#[test]
+fn init_refuses_to_overwrite_explicit_output_without_force() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_file(repo_root, Path::new("config/pullhook.custom.json"), "{}\n");
+
+	let output = run_pullhook(
+		repo_root,
+		&["init", "--output", "config/pullhook.custom.json", "--render", "never"],
+	);
+
+	assert!(!output.status.success(), "explicit output init should refuse overwrite");
+	let stderr = stderr_text(&output);
+	assert!(stderr.contains("refusing to overwrite existing file"));
+	assert!(stderr.contains("pullhook init --force"));
+}
+
+#[test]
+fn init_rejects_mismatched_explicit_format_and_output_extension() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+
+	let output = run_pullhook(
+		repo_root,
+		&["init", "--format", "yaml", "--output", "config/pullhook.custom.json"],
+	);
+
+	assert!(
+		!output.status.success(),
+		"explicit output init should reject mismatched format"
+	);
+	let stderr = stderr_text(&output);
+	assert!(stderr.contains("uses pullhook.json"));
+	assert!(stderr.contains("matching `--format`"));
 }
 
 #[test]

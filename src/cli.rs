@@ -67,6 +67,7 @@ const INIT_AFTER_HELP: &str = "\
 Examples:
   pullhook init
   pullhook init --format yaml
+  pullhook init --output config/pullhook.custom.json
   pullhook init --stdout
   pullhook init --force";
 
@@ -334,6 +335,10 @@ pub struct InitArgs {
 	/// Print the starter config to stdout instead of writing a file.
 	#[arg(long = "stdout", default_value_t = false)]
 	pub stdout: bool,
+
+	/// Write the starter config to an explicit path.
+	#[arg(long = "output", value_name = "path", conflicts_with = "stdout")]
+	pub output: Option<PathBuf>,
 
 	/// Overwrite an existing pullhook config file in place.
 	#[arg(long = "force", default_value_t = false)]

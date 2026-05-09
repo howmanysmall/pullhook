@@ -460,7 +460,6 @@ fn init_config_command(args: &InitArgs) -> Result<()> {
 	let repo = GitRepo::discover(&cwd, args.debug).context("failed to resolve repository root")?;
 	let repo_root = repo.root();
 	let requested_format = args.format.map_or(config::ConfigFormat::Json, Into::into);
-	let existing_path = config::discover(repo_root)?;
 
 	if args.stdout {
 		print!("{}", requested_format.starter_config());
@@ -468,8 +467,41 @@ fn init_config_command(args: &InitArgs) -> Result<()> {
 	}
 
 	let renderer = Renderer::new(args.render);
-	let (path, format) = match existing_path {
-		Some(path) if !args.force => {
+	let (path, format) = if let Some(output) = args.output.as_deref() {
+		resolve_init_output_path(&cwd, output, args.format)?
+	} else {
+		resolve_default_init_output(repo_root, args.format, requested_format, args.force)?
+	};
+
+	if path.exists() && !args.force {
+		return Err(anyhow!(
+			"refusing to overwrite existing file `{}`; rerun with `pullhook init --force`",
+			path.display()
+		));
+	}
+
+	if let Some(parent) = path.parent()
+		&& !parent.as_os_str().is_empty()
+	{
+		std::fs::create_dir_all(parent)
+			.with_context(|| format!("failed to create config directory `{}`", parent.display()))?;
+	}
+
+	std::fs::write(&path, format.starter_config())
+		.with_context(|| format!("failed to write config `{}`", path.display()))?;
+	renderer.render_message_stage(&format!("created {}", path.display()));
+	Ok(())
+}
+
+fn resolve_default_init_output(
+	repo_root: &std::path::Path,
+	format_arg: Option<cli::InitFormat>,
+	requested_format: config::ConfigFormat,
+	force: bool,
+) -> Result<(std::path::PathBuf, config::ConfigFormat)> {
+	let existing_path = config::discover(repo_root)?;
+	let output = match existing_path {
+		Some(path) if !force => {
 			return Err(anyhow!(
 				"pullhook config already exists: {} (rerun with `pullhook init --force` to overwrite it)",
 				path.display()
@@ -477,7 +509,7 @@ fn init_config_command(args: &InitArgs) -> Result<()> {
 		}
 		Some(path) => {
 			let existing_format = config::ConfigFormat::from_path(&path)?;
-			let format = args.format.map_or(existing_format, Into::into);
+			let format = format_arg.map_or(existing_format, Into::into);
 			if format != existing_format {
 				return Err(anyhow!(
 					"existing config `{}` is {}; rerun without `--format` to overwrite it in place or remove it first",
@@ -492,18 +524,29 @@ fn init_config_command(args: &InitArgs) -> Result<()> {
 			(path, requested_format)
 		}
 	};
+	Ok(output)
+}
 
-	if path.exists() && !args.force {
+fn resolve_init_output_path(
+	cwd: &std::path::Path,
+	output: &std::path::Path,
+	format_arg: Option<cli::InitFormat>,
+) -> Result<(std::path::PathBuf, config::ConfigFormat)> {
+	let path = if output.is_absolute() {
+		output.to_path_buf()
+	} else {
+		cwd.join(output)
+	};
+	let extension_format = config::ConfigFormat::from_path(&path)?;
+	let format = format_arg.map_or(extension_format, Into::into);
+	if format != extension_format {
 		return Err(anyhow!(
-			"refusing to overwrite existing file `{}`; rerun with `pullhook init --force`",
-			path.display()
+			"output path `{}` uses {}; choose a matching `--format` or file extension",
+			path.display(),
+			extension_format.default_name()
 		));
 	}
-
-	std::fs::write(&path, format.starter_config())
-		.with_context(|| format!("failed to write config `{}`", path.display()))?;
-	renderer.render_message_stage(&format!("created {}", path.display()));
-	Ok(())
+	Ok((path, format))
 }
 
 fn load_config_from_cwd(

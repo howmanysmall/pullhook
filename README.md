@@ -154,12 +154,15 @@ or preview the starter config before writing it:
 
 ```bash
 pullhook init --format yaml
+pullhook init --output config/pullhook.custom.json
 pullhook init --format jsonc --stdout
 pullhook init --force
 ```
 
 `--force` only overwrites the existing config in place. It will not silently switch an existing repo
 from `pullhook.json` to `pullhook.yaml`.
+Use `--output <path>` when you want to scaffold a custom config path for later use with `--config <path>`;
+the output extension chooses the file format unless you also pass a matching `--format`.
 
 Config discovery supports exactly one of:
 
@@ -258,7 +261,8 @@ repeat it to simulate several changed files. Use `--changed-files-stdin` when a 
 file list, such as `git diff --name-only`.
 
 Use `--config <path>` with `run`, `explain`, `validate`, `doctor`, or `rules` when you want to point at a
-specific config file instead of repo-root discovery.
+specific config file instead of repo-root discovery. Pair it with `pullhook init --output <path>` to create
+that custom file.
 
 ## `--install` Detection
 
