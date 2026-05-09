@@ -1212,7 +1212,7 @@ const fn repo_requirement_filter(args: &CommandCatalogArgs) -> Option<bool> {
 }
 
 fn codes_command(args: &CodesArgs) -> Result<()> {
-	let codes = filtered_json_code_infos(args.kind, args.surface.as_deref());
+	let codes = filtered_json_code_infos(args.kind, args.surface.as_deref(), args.search.as_deref());
 	if args.json {
 		println!(
 			"{}",
@@ -1223,6 +1223,7 @@ fn codes_command(args: &CodesArgs) -> Result<()> {
 				"filters": {
 					"kind": args.kind.map(CodeKind::label),
 					"surface": args.surface.as_deref(),
+					"search": args.search.as_deref(),
 				},
 				"codes": codes,
 				"summary": {
@@ -1264,6 +1265,9 @@ fn codes_command(args: &CodesArgs) -> Result<()> {
 	if let Some(surface) = &args.surface {
 		println!("filter: surface={surface}");
 	}
+	if let Some(search) = &args.search {
+		println!("filter: search={search}");
+	}
 	println!();
 	for info in codes {
 		println!("{} [{}] {}", info.code, info.surface, info.description);
@@ -1271,8 +1275,9 @@ fn codes_command(args: &CodesArgs) -> Result<()> {
 	Ok(())
 }
 
-fn filtered_json_code_infos(kind: Option<CodeKind>, surface: Option<&str>) -> Vec<JsonCodeInfo> {
+fn filtered_json_code_infos(kind: Option<CodeKind>, surface: Option<&str>, search: Option<&str>) -> Vec<JsonCodeInfo> {
 	let surface = surface.map(str::to_ascii_lowercase);
+	let search = search.map(str::to_ascii_lowercase);
 	JSON_CODE_INFOS
 		.iter()
 		.copied()
@@ -1282,7 +1287,19 @@ fn filtered_json_code_infos(kind: Option<CodeKind>, surface: Option<&str>) -> Ve
 				.as_deref()
 				.is_none_or(|surface| info.surface.to_ascii_lowercase().contains(surface))
 		})
+		.filter(|info| {
+			search
+				.as_deref()
+				.is_none_or(|search| json_code_info_matches_search(info, search))
+		})
 		.collect()
+}
+
+fn json_code_info_matches_search(info: &JsonCodeInfo, search: &str) -> bool {
+	info.code.contains(search)
+		|| info.surface.to_ascii_lowercase().contains(search)
+		|| info.kind.contains(search)
+		|| info.description.to_ascii_lowercase().contains(search)
 }
 
 fn unique_code_kinds(codes: &[JsonCodeInfo]) -> Vec<&'static str> {

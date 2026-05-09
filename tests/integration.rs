@@ -1109,7 +1109,9 @@ fn codes_json_lists_stable_json_codes() {
 	assert_eq!(value["status"], "ok");
 	assert_eq!(value["code"], serde_json::Value::Null);
 	assert_eq!(value["successCode"], serde_json::Value::Null);
+	assert_eq!(value["filters"]["kind"], serde_json::Value::Null);
 	assert_eq!(value["filters"]["surface"], serde_json::Value::Null);
+	assert_eq!(value["filters"]["search"], serde_json::Value::Null);
 	let codes = value["codes"].as_array().expect("codes array");
 	assert!(codes.iter().any(|entry| entry["code"] == "config_missing"));
 	assert!(codes.iter().any(|entry| entry["code"] == "no_rules_matched"));
@@ -1145,6 +1147,7 @@ fn codes_kind_filter_limits_results() {
 	assert_eq!(value["status"], "ok");
 	assert_eq!(value["filters"]["kind"], "doctor-check");
 	assert_eq!(value["filters"]["surface"], serde_json::Value::Null);
+	assert_eq!(value["filters"]["search"], serde_json::Value::Null);
 	let codes = value["codes"].as_array().expect("codes array");
 	assert!(!codes.is_empty(), "doctor-check filter should keep doctor codes");
 	assert!(
@@ -1177,6 +1180,7 @@ fn codes_surface_filter_limits_results() {
 	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse surface codes json");
 	assert_eq!(value["filters"]["kind"], serde_json::Value::Null);
 	assert_eq!(value["filters"]["surface"], "RUN");
+	assert_eq!(value["filters"]["search"], serde_json::Value::Null);
 	let codes = value["codes"].as_array().expect("codes array");
 	assert!(!codes.is_empty(), "surface filter should keep matching codes");
 	assert!(
@@ -1200,6 +1204,96 @@ fn codes_surface_filter_limits_results() {
 	assert!(
 		stderr.trim().is_empty(),
 		"codes --surface RUN --json should not write stderr"
+	);
+}
+
+#[test]
+fn codes_search_filter_limits_results() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["codes", "--search", "CONFIG", "--json"]);
+
+	assert!(output.status.success(), "codes --search CONFIG --json should succeed");
+	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse search codes json");
+	assert_eq!(value["filters"]["kind"], serde_json::Value::Null);
+	assert_eq!(value["filters"]["surface"], serde_json::Value::Null);
+	assert_eq!(value["filters"]["search"], "CONFIG");
+	let codes = value["codes"].as_array().expect("codes array");
+	assert!(!codes.is_empty(), "search filter should keep matching codes");
+	assert!(
+		codes.iter().all(|entry| {
+			let code = entry["code"].as_str().expect("code string").to_ascii_lowercase();
+			let surface = entry["surface"].as_str().expect("surface string").to_ascii_lowercase();
+			let kind = entry["kind"].as_str().expect("kind string").to_ascii_lowercase();
+			let description = entry["description"]
+				.as_str()
+				.expect("description string")
+				.to_ascii_lowercase();
+			code.contains("config")
+				|| surface.contains("config")
+				|| kind.contains("config")
+				|| description.contains("config")
+		}),
+		"search filter should exclude unrelated codes"
+	);
+	assert!(codes.iter().any(|entry| entry["code"] == "config_missing"));
+	assert!(
+		!codes.iter().any(|entry| entry["code"] == "schema_out_of_date"),
+		"schema_out_of_date should not match config search"
+	);
+	let stdout = stdout_text(&output);
+	assert!(stdout.contains("\"search\": \"CONFIG\""));
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"codes --search CONFIG --json should not write stderr"
+	);
+}
+
+#[test]
+fn codes_search_filter_composes_with_kind_filter() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(
+		temp.path(),
+		&["codes", "--kind", "doctor-check", "--search", "package", "--codes-only"],
+	);
+
+	assert!(
+		output.status.success(),
+		"codes --kind doctor-check --search package --codes-only should succeed"
+	);
+	let stdout = stdout_text(&output);
+	assert_eq!(
+		stdout.lines().collect::<Vec<_>>(),
+		vec!["package_manager_error", "package_manager_missing", "package_manager_ok"]
+	);
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"codes --kind doctor-check --search package --codes-only should not write stderr"
+	);
+}
+
+#[test]
+fn codes_search_filter_composes_with_surface_filter() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(
+		temp.path(),
+		&["codes", "--surface", "doctor", "--search", "warnings", "--codes-only"],
+	);
+
+	assert!(
+		output.status.success(),
+		"codes --surface doctor --search warnings --codes-only should succeed"
+	);
+	let stdout = stdout_text(&output);
+	assert_eq!(stdout.lines().collect::<Vec<_>>(), vec!["doctor_warnings"]);
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"codes --surface doctor --search warnings --codes-only should not write stderr"
 	);
 }
 
@@ -1244,6 +1338,7 @@ fn codes_kind_and_surface_filters_intersect_results() {
 	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse intersected codes json");
 	assert_eq!(value["filters"]["kind"], "error");
 	assert_eq!(value["filters"]["surface"], "doctor");
+	assert_eq!(value["filters"]["search"], serde_json::Value::Null);
 	let codes = value["codes"].as_array().expect("codes array");
 	assert!(
 		codes
@@ -2949,6 +3044,7 @@ fn utility_help_groups_options_by_task() {
 	assert!(codes_stdout.contains("Filter options:"));
 	assert!(codes_stdout.contains("Output options:"));
 	assert!(codes_stdout.contains("pullhook codes --surface run"));
+	assert!(codes_stdout.contains("pullhook codes --search config"));
 	assert!(codes_stdout.contains("pullhook codes --kinds-only"));
 	assert!(codes_stdout.contains("pullhook codes --surfaces-only"));
 	assert!(codes_stdout.contains("pullhook codes --kind error --codes-only"));

@@ -168,6 +168,7 @@ Examples:
   pullhook codes
   pullhook codes --kind doctor-check
   pullhook codes --surface run
+  pullhook codes --search config
   pullhook codes --kinds-only
   pullhook codes --surfaces-only
   pullhook codes --kind error --codes-only
@@ -1145,6 +1146,10 @@ pub struct CodesArgs {
 	/// Only list codes whose surface contains this text.
 	#[arg(long = "surface", value_name = "TEXT", help_heading = "Filter options")]
 	pub surface: Option<String>,
+
+	/// Only list codes whose code, surface, kind, or description contains this text.
+	#[arg(long = "search", value_name = "TEXT", help_heading = "Filter options")]
+	pub search: Option<String>,
 
 	/// Print machine-readable JSON instead of text output.
 	#[arg(
