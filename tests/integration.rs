@@ -838,6 +838,59 @@ fn codes_kind_filter_limits_results() {
 }
 
 #[test]
+fn commands_text_lists_cli_catalog() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["commands"]);
+
+	assert!(output.status.success(), "commands should succeed outside a git repo");
+	let stdout = stdout_text(&output);
+	assert!(stdout.contains("Pullhook commands"));
+	assert!(stdout.contains("legacy one-off mode is available through top-level options"));
+	assert!(stdout.contains("run [workflow]"));
+	assert!(stdout.contains("codes [reference]"));
+	let stderr = stderr_text(&output);
+	assert!(stderr.trim().is_empty(), "commands should not write stderr");
+}
+
+#[test]
+fn commands_json_lists_cli_catalog() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["commands", "--json"]);
+
+	assert!(
+		output.status.success(),
+		"commands --json should succeed outside a git repo"
+	);
+	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse commands json");
+	assert_eq!(value["status"], "ok");
+	assert_eq!(value["code"], serde_json::Value::Null);
+	let commands = value["commands"].as_array().expect("commands array");
+	assert!(
+		commands
+			.iter()
+			.any(|entry| entry["name"] == "run" && entry["requiresRepo"] == true)
+	);
+	assert!(
+		commands
+			.iter()
+			.any(|entry| entry["name"] == "commands" && entry["category"] == "reference")
+	);
+	assert!(
+		commands
+			.iter()
+			.any(|entry| entry["name"] == "codes" && entry["json"] == true)
+	);
+	assert_eq!(
+		value["summary"]["commands"].as_u64().expect("command count"),
+		commands.len() as u64
+	);
+	let stderr = stderr_text(&output);
+	assert!(stderr.trim().is_empty(), "commands --json should not write stderr");
+}
+
+#[test]
 fn root_help_lists_common_examples() {
 	let temp = tempfile::tempdir().expect("create temp dir");
 
@@ -848,11 +901,13 @@ fn root_help_lists_common_examples() {
 	assert!(stdout.contains("Examples:"));
 	assert!(stdout.contains("pullhook --install --dry-run"));
 	assert!(stdout.contains("pullhook init --format json"));
+	assert!(stdout.contains("pullhook commands --json"));
 	assert!(stdout.contains("pullhook codes --json"));
 	assert!(stdout.contains("schema"));
 	assert!(stdout.contains("codes"));
 	assert!(stdout.contains("Legacy one-off options:"));
 	assert!(stdout.contains("Use `pullhook explain --all-matches` to preview config rule matches."));
+	assert!(stdout.contains("Use `pullhook commands` to inspect the command catalog."));
 	assert!(stdout.contains("Use `pullhook codes` to inspect stable JSON status codes."));
 }
 

@@ -14,12 +14,14 @@ Examples:
   pullhook --pattern \"**/*.rs\" --command \"cargo test\"
   pullhook --install --dry-run
   pullhook init --format json
+  pullhook commands --json
   pullhook codes --json
   pullhook run --dry-run
 
 Next steps:
   Use `pullhook init` to create a repo config.
   Use `pullhook explain --all-matches` to preview config rule matches.
+  Use `pullhook commands` to inspect the command catalog.
   Use `pullhook codes` to inspect stable JSON status codes.";
 
 const LEGACY_RUN_AFTER_HELP: &str = "\
@@ -130,6 +132,11 @@ Examples:
   pullhook codes --kind doctor-check
   pullhook codes --json";
 
+const COMMANDS_AFTER_HELP: &str = "\
+Examples:
+  pullhook commands
+  pullhook commands --json";
+
 /// Pullhook command line arguments.
 #[derive(Debug, Clone, Parser)]
 #[command(name = "pullhook")]
@@ -168,6 +175,9 @@ pub enum Commands {
 	Init(InitArgs),
 	/// Generate shell completion scripts.
 	Completion(CompletionArgs),
+	/// List pullhook commands for humans or automation.
+	#[command(name = "commands")]
+	CommandCatalog(CommandCatalogArgs),
 	/// List stable JSON status codes for automation.
 	Codes(CodesArgs),
 }
@@ -956,6 +966,15 @@ pub struct CodesArgs {
 	#[arg(long = "kind", value_enum, help_heading = "Filter options")]
 	pub kind: Option<CodeKind>,
 
+	/// Print machine-readable JSON instead of text output.
+	#[arg(long = "json", default_value_t = false, help_heading = "Output options")]
+	pub json: bool,
+}
+
+/// Arguments for `pullhook commands`.
+#[derive(Debug, Clone, Args)]
+#[command(after_help = COMMANDS_AFTER_HELP)]
+pub struct CommandCatalogArgs {
 	/// Print machine-readable JSON instead of text output.
 	#[arg(long = "json", default_value_t = false, help_heading = "Output options")]
 	pub json: bool,

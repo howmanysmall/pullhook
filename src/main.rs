@@ -22,8 +22,8 @@ use tracing::debug;
 use tracing_subscriber::EnvFilter;
 
 use crate::cli::{
-	Cli, CodeKind, CodesArgs, Commands, CompletionArgs, ConfigArgs, ConfigRunArgs, DoctorArgs, ExplainArgs, InitArgs,
-	RulesArgs, RulesKind, RunArgs, SchemaArgs, ValidateArgs,
+	Cli, CodeKind, CodesArgs, CommandCatalogArgs, Commands, CompletionArgs, ConfigArgs, ConfigRunArgs, DoctorArgs,
+	ExplainArgs, InitArgs, RulesArgs, RulesKind, RunArgs, SchemaArgs, ValidateArgs,
 };
 use crate::config::{
 	Config, Entry, EvaluatedEntry, EvaluatedGroup, EvaluatedRule, FailTextContext, OnFailure, Pattern,
@@ -168,6 +168,108 @@ struct JsonCodeInfo {
 	kind: &'static str,
 	description: &'static str,
 }
+
+#[derive(Debug, Clone, Copy, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct CommandInfo {
+	name: &'static str,
+	category: &'static str,
+	summary: &'static str,
+	json: bool,
+	requires_repo: bool,
+	script_friendly: bool,
+}
+
+const COMMAND_INFOS: &[CommandInfo] = &[
+	CommandInfo {
+		name: "run",
+		category: "workflow",
+		summary: "Run configured pullhook rules.",
+		json: true,
+		requires_repo: true,
+		script_friendly: true,
+	},
+	CommandInfo {
+		name: "explain",
+		category: "workflow",
+		summary: "Explain which configured rules match changed files.",
+		json: true,
+		requires_repo: true,
+		script_friendly: true,
+	},
+	CommandInfo {
+		name: "validate",
+		category: "diagnostic",
+		summary: "Validate the pullhook config file.",
+		json: true,
+		requires_repo: true,
+		script_friendly: true,
+	},
+	CommandInfo {
+		name: "doctor",
+		category: "diagnostic",
+		summary: "Inspect repository and config readiness.",
+		json: true,
+		requires_repo: true,
+		script_friendly: true,
+	},
+	CommandInfo {
+		name: "config",
+		category: "diagnostic",
+		summary: "Show the resolved pullhook config path.",
+		json: true,
+		requires_repo: true,
+		script_friendly: true,
+	},
+	CommandInfo {
+		name: "rules",
+		category: "diagnostic",
+		summary: "List configured rule and group names.",
+		json: true,
+		requires_repo: true,
+		script_friendly: true,
+	},
+	CommandInfo {
+		name: "init",
+		category: "generator",
+		summary: "Create a starter pullhook config file.",
+		json: true,
+		requires_repo: false,
+		script_friendly: true,
+	},
+	CommandInfo {
+		name: "schema",
+		category: "generator",
+		summary: "Print or write the pullhook JSON Schema.",
+		json: true,
+		requires_repo: false,
+		script_friendly: true,
+	},
+	CommandInfo {
+		name: "completion",
+		category: "generator",
+		summary: "Generate shell completion scripts.",
+		json: true,
+		requires_repo: false,
+		script_friendly: true,
+	},
+	CommandInfo {
+		name: "commands",
+		category: "reference",
+		summary: "List pullhook commands for humans or automation.",
+		json: true,
+		requires_repo: false,
+		script_friendly: true,
+	},
+	CommandInfo {
+		name: "codes",
+		category: "reference",
+		summary: "List stable JSON status codes for automation.",
+		json: true,
+		requires_repo: false,
+		script_friendly: true,
+	},
+];
 
 const JSON_CODE_INFOS: &[JsonCodeInfo] = &[
 	JsonCodeInfo {
@@ -441,6 +543,7 @@ fn main() {
 
 	let result = match cli.command.as_ref() {
 		Some(Commands::Completion(args)) => completion_command(args),
+		Some(Commands::CommandCatalog(args)) => command_catalog_command(args),
 		Some(Commands::Codes(args)) => codes_command(args),
 		Some(Commands::Run(args)) => {
 			init_tracing(args.debug);
@@ -484,6 +587,33 @@ fn main() {
 		eprintln!("error: {error:#}");
 		std::process::exit(1);
 	}
+}
+
+fn command_catalog_command(args: &CommandCatalogArgs) -> Result<()> {
+	if args.json {
+		println!(
+			"{}",
+			serde_json::to_string_pretty(&json!({
+				"status": "ok",
+				"code": serde_json::Value::Null,
+				"commands": COMMAND_INFOS,
+				"summary": {
+					"commands": COMMAND_INFOS.len(),
+					"json": COMMAND_INFOS.iter().filter(|info| info.json).count(),
+					"scriptFriendly": COMMAND_INFOS.iter().filter(|info| info.script_friendly).count(),
+				},
+			}))?
+		);
+		return Ok(());
+	}
+
+	println!("Pullhook commands");
+	println!("legacy one-off mode is available through top-level options");
+	println!();
+	for info in COMMAND_INFOS {
+		println!("{} [{}] {}", info.name, info.category, info.summary);
+	}
+	Ok(())
 }
 
 fn codes_command(args: &CodesArgs) -> Result<()> {

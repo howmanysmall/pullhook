@@ -71,6 +71,7 @@ Commands:
   schema      Print or write the pullhook JSON Schema
   init        Create a starter pullhook config file
   completion  Generate shell completion scripts
+  commands    List pullhook commands for humans or automation
   codes       List stable JSON status codes for automation
   help        Print this message or the help of the given subcommand(s)
 
@@ -263,6 +264,8 @@ pullhook doctor
 pullhook doctor --quiet
 pullhook doctor --strict
 pullhook doctor --json
+pullhook commands
+pullhook commands --json
 pullhook codes
 pullhook codes --kind doctor-check
 pullhook codes --json
@@ -340,6 +343,8 @@ plus a `repositoryError` object with the searched path.
 Missing-mode legacy JSON errors explain the config-mode path and the explicit legacy `--pattern`/`--command` fallback.
 Pattern JSON errors include a `patternError` object with the rejected glob and parser reason.
 Legacy command-parse JSON errors include a `commandParse` object with the rejected command and parser reason.
+Use `pullhook commands` to inspect the command catalog in text form, or `pullhook commands --json` when another
+tool needs supported commands, categories, and repo requirements without scraping help text.
 Use `pullhook codes` to inspect the stable code catalog in text form, or `pullhook codes --json` when another
 tool needs the catalog without scraping docs. Add `--kind error` or `--kind doctor-check` to narrow the list.
 
