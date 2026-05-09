@@ -127,6 +127,7 @@ Examples:
 const CODES_AFTER_HELP: &str = "\
 Examples:
   pullhook codes
+  pullhook codes --kind doctor-check
   pullhook codes --json";
 
 /// Pullhook command line arguments.
@@ -713,9 +714,31 @@ pub struct CompletionArgs {
 #[derive(Debug, Clone, Args)]
 #[command(after_help = CODES_AFTER_HELP)]
 pub struct CodesArgs {
+	/// Only list codes for a specific kind.
+	#[arg(long = "kind", value_enum)]
+	pub kind: Option<CodeKind>,
+
 	/// Print machine-readable JSON instead of text output.
 	#[arg(long = "json", default_value_t = false)]
 	pub json: bool,
+}
+
+/// Kinds of stable JSON status codes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum CodeKind {
+	/// Top-level error response code.
+	Error,
+	/// Per-check doctor status code.
+	DoctorCheck,
+}
+
+impl CodeKind {
+	pub const fn label(self) -> &'static str {
+		match self {
+			Self::Error => "error",
+			Self::DoctorCheck => "doctor-check",
+		}
+	}
 }
 
 /// Supported starter config formats for `pullhook init`.

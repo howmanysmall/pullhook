@@ -803,6 +803,41 @@ fn codes_json_lists_stable_json_codes() {
 }
 
 #[test]
+fn codes_kind_filter_limits_results() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["codes", "--kind", "doctor-check", "--json"]);
+
+	assert!(
+		output.status.success(),
+		"codes --kind doctor-check --json should succeed"
+	);
+	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse filtered codes json");
+	assert_eq!(value["status"], "ok");
+	assert_eq!(value["filters"]["kind"], "doctor-check");
+	let codes = value["codes"].as_array().expect("codes array");
+	assert!(!codes.is_empty(), "doctor-check filter should keep doctor codes");
+	assert!(
+		codes.iter().all(|entry| entry["kind"] == "doctor-check"),
+		"doctor-check filter should exclude error codes"
+	);
+	assert!(codes.iter().any(|entry| entry["code"] == "config_ok"));
+	assert!(
+		!codes.iter().any(|entry| entry["code"] == "config_missing"),
+		"config_missing is an error code, not a doctor-check code"
+	);
+	assert_eq!(
+		value["summary"]["codes"].as_u64().expect("code count"),
+		codes.len() as u64
+	);
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"filtered codes --json should not write stderr"
+	);
+}
+
+#[test]
 fn root_help_lists_common_examples() {
 	let temp = tempfile::tempdir().expect("create temp dir");
 

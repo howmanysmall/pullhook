@@ -261,6 +261,7 @@ pullhook doctor --quiet
 pullhook doctor --strict
 pullhook doctor --json
 pullhook codes
+pullhook codes --kind doctor-check
 pullhook codes --json
 pullhook schema
 pullhook schema --output .vscode/pullhook.schema.json
@@ -337,7 +338,7 @@ Missing-mode legacy JSON errors explain the config-mode path and the explicit le
 Pattern JSON errors include a `patternError` object with the rejected glob and parser reason.
 Legacy command-parse JSON errors include a `commandParse` object with the rejected command and parser reason.
 Use `pullhook codes` to inspect the stable code catalog in text form, or `pullhook codes --json` when another
-tool needs the catalog without scraping docs.
+tool needs the catalog without scraping docs. Add `--kind error` or `--kind doctor-check` to narrow the list.
 
 Use `pullhook rules` to list configured rule and parallel group names before targeting a large config.
 `rules --json` includes top-level `status`, stable `code`, and `error` fields like the other JSON commands, plus

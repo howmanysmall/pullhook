@@ -22,8 +22,8 @@ use tracing::debug;
 use tracing_subscriber::EnvFilter;
 
 use crate::cli::{
-	Cli, CodesArgs, Commands, CompletionArgs, ConfigArgs, ConfigRunArgs, DoctorArgs, ExplainArgs, InitArgs, RulesArgs,
-	RulesKind, RunArgs, SchemaArgs, ValidateArgs,
+	Cli, CodeKind, CodesArgs, Commands, CompletionArgs, ConfigArgs, ConfigRunArgs, DoctorArgs, ExplainArgs, InitArgs,
+	RulesArgs, RulesKind, RunArgs, SchemaArgs, ValidateArgs,
 };
 use crate::config::{
 	Config, Entry, EvaluatedEntry, EvaluatedGroup, EvaluatedRule, FailTextContext, OnFailure, Pattern,
@@ -487,6 +487,7 @@ fn main() {
 }
 
 fn codes_command(args: &CodesArgs) -> Result<()> {
+	let codes = filtered_json_code_infos(args.kind);
 	if args.json {
 		println!(
 			"{}",
@@ -494,9 +495,12 @@ fn codes_command(args: &CodesArgs) -> Result<()> {
 				"status": "ok",
 				"code": serde_json::Value::Null,
 				"successCode": serde_json::Value::Null,
-				"codes": JSON_CODE_INFOS,
+				"filters": {
+					"kind": args.kind.map(CodeKind::label),
+				},
+				"codes": codes,
 				"summary": {
-					"codes": JSON_CODE_INFOS.len(),
+					"codes": codes.len(),
 				},
 			}))?
 		);
@@ -505,11 +509,22 @@ fn codes_command(args: &CodesArgs) -> Result<()> {
 
 	println!("JSON status codes");
 	println!("ok responses use code: null");
+	if let Some(kind) = args.kind {
+		println!("filter: kind={}", kind.label());
+	}
 	println!();
-	for info in JSON_CODE_INFOS {
+	for info in codes {
 		println!("{} [{}] {}", info.code, info.surface, info.description);
 	}
 	Ok(())
+}
+
+fn filtered_json_code_infos(kind: Option<CodeKind>) -> Vec<JsonCodeInfo> {
+	JSON_CODE_INFOS
+		.iter()
+		.copied()
+		.filter(|info| kind.is_none_or(|kind| info.kind == kind.label()))
+		.collect()
 }
 
 fn completion_command(args: &CompletionArgs) -> Result<()> {
