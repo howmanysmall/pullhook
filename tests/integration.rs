@@ -921,6 +921,10 @@ fn explain_help_lists_summary_only_example() {
 	assert!(stdout.contains("pullhook explain --matched-rules-only"));
 	assert!(stdout.contains("pullhook explain --require-match"));
 	assert!(stdout.contains("git diff --name-only HEAD~1 | pullhook explain --changed-files-file -"));
+	assert!(stdout.contains("Input options:"));
+	assert!(stdout.contains("Rule selection:"));
+	assert!(stdout.contains("Output options:"));
+	assert!(stdout.contains("Display options:"));
 	assert!(stdout.contains("--summary-only"));
 	assert!(stdout.contains("--commands-only"));
 	assert!(stdout.contains("--changed-files-only"));
