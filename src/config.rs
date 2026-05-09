@@ -129,9 +129,9 @@ pub struct Rule {
 	/// Rule name.
 	pub name: String,
 	/// Changed globs.
-	pub changed: Vec<String>,
+	pub changed: Vec<Pattern>,
 	/// Excluded globs.
-	pub exclude: Vec<String>,
+	pub exclude: Vec<Pattern>,
 	/// Command to run from repo root.
 	pub run: Option<String>,
 	/// Whether this rule runs package-manager install.
@@ -140,6 +140,25 @@ pub struct Rule {
 	pub run_if_base_missing: bool,
 	/// Optional failure text.
 	pub fail_text: Option<FailText>,
+}
+
+/// A validated glob pattern and its compiled matcher.
+#[derive(Debug, Clone)]
+pub struct Pattern {
+	matcher: matcher::Matcher,
+}
+
+impl Pattern {
+	/// Compile a user-facing pattern once.
+	pub fn new(raw: impl Into<String>) -> Result<Self, PullhookError> {
+		let raw = raw.into();
+		let matcher = matcher::compile(&raw)?;
+		Ok(Self { matcher })
+	}
+
+	fn is_match(&self, path: &Path) -> bool {
+		self.matcher.is_match(path)
+	}
 }
 
 /// Parallel group definition.
@@ -322,28 +341,28 @@ pub fn evaluate(
 	config: &Config,
 	changed_files: &[PathBuf],
 	base_missing: bool,
-	install_plan: impl Fn(&Rule) -> Result<(Option<String>, Vec<String>), PullhookError>,
+	mut install_plan: impl FnMut(&Rule) -> Result<(Option<String>, Vec<Pattern>), PullhookError>,
 ) -> Result<Vec<EvaluatedEntry>, PullhookError> {
-	config
-		.entries
-		.iter()
-		.map(|entry| match entry {
+	let mut evaluated = Vec::with_capacity(config.entries.len());
+	for entry in &config.entries {
+		evaluated.push(match entry {
 			Entry::Rule(rule) => {
-				evaluate_rule(rule, changed_files, base_missing, &install_plan).map(EvaluatedEntry::Rule)
+				evaluate_rule(rule, changed_files, base_missing, &mut install_plan).map(EvaluatedEntry::Rule)?
 			}
 			Entry::Group(group) => {
-				let rules = group
-					.rules
-					.iter()
-					.map(|rule| evaluate_rule(rule, changed_files, base_missing, &install_plan))
-					.collect::<Result<Vec<_>, _>>()?;
-				Ok(EvaluatedEntry::Group(EvaluatedGroup {
+				let mut rules = Vec::with_capacity(group.rules.len());
+				for rule in &group.rules {
+					rules.push(evaluate_rule(rule, changed_files, base_missing, &mut install_plan)?);
+				}
+				EvaluatedEntry::Group(EvaluatedGroup {
 					group: group.clone(),
 					rules,
-				}))
+				})
 			}
-		})
-		.collect()
+		});
+	}
+
+	Ok(evaluated)
 }
 
 fn parse_raw(path: &Path, text: &str, format: ConfigFormat) -> Result<RawConfig, PullhookError> {
@@ -492,7 +511,7 @@ fn normalize_patterns(
 	label: &str,
 	field: &str,
 	errors: &mut Vec<String>,
-) -> Vec<String> {
+) -> Vec<Pattern> {
 	let Some(patterns) = patterns else {
 		errors.push(format!("{label}: {field} is required"));
 		return Vec::new();
@@ -510,13 +529,13 @@ fn normalize_optional_patterns(
 	label: &str,
 	field: &str,
 	errors: &mut Vec<String>,
-) -> Vec<String> {
+) -> Vec<Pattern> {
 	patterns
 		.map(|patterns| normalize_pattern_values(patterns.into_vec(), label, field, errors))
 		.unwrap_or_default()
 }
 
-fn normalize_pattern_values(values: Vec<String>, label: &str, field: &str, errors: &mut Vec<String>) -> Vec<String> {
+fn normalize_pattern_values(values: Vec<String>, label: &str, field: &str, errors: &mut Vec<String>) -> Vec<Pattern> {
 	values
 		.into_iter()
 		.filter_map(|value| {
@@ -525,11 +544,13 @@ fn normalize_pattern_values(values: Vec<String>, label: &str, field: &str, error
 				errors.push(format!("{label}: {field} cannot contain empty patterns"));
 				return None;
 			}
-			if let Err(error) = matcher::compile(&value) {
-				errors.push(format!("{label}: invalid {field} pattern `{value}`: {error}"));
-				return None;
+			match Pattern::new(value.clone()) {
+				Ok(pattern) => Some(pattern),
+				Err(error) => {
+					errors.push(format!("{label}: invalid {field} pattern `{value}`: {error}"));
+					None
+				}
 			}
-			Some(value)
 		})
 		.collect()
 }
@@ -549,7 +570,7 @@ fn evaluate_rule(
 	rule: &Rule,
 	changed_files: &[PathBuf],
 	base_missing: bool,
-	install_plan: &impl Fn(&Rule) -> Result<(Option<String>, Vec<String>), PullhookError>,
+	install_plan: &mut impl FnMut(&Rule) -> Result<(Option<String>, Vec<Pattern>), PullhookError>,
 ) -> Result<EvaluatedRule, PullhookError> {
 	let (command, changed_patterns) = if rule.install {
 		install_plan(rule)?
@@ -560,7 +581,7 @@ fn evaluate_rule(
 	let matches = if base_missing && rule.run_if_base_missing {
 		vec![PathBuf::from(".")]
 	} else {
-		match_rule_paths(&changed_patterns, &rule.exclude, changed_files)?
+		match_rule_paths(&changed_patterns, &rule.exclude, changed_files)
 	};
 
 	let skip_reason = if matches.is_empty() {
@@ -580,26 +601,13 @@ fn evaluate_rule(
 }
 
 /// Match changed files for a rule.
-pub fn match_rule_paths(
-	changed: &[String],
-	exclude: &[String],
-	changed_files: &[PathBuf],
-) -> Result<Vec<PathBuf>, PullhookError> {
-	let changed_matchers = changed
+pub fn match_rule_paths(changed: &[Pattern], exclude: &[Pattern], changed_files: &[PathBuf]) -> Vec<PathBuf> {
+	changed_files
 		.iter()
-		.map(|pattern| matcher::compile(pattern))
-		.collect::<Result<Vec<_>, _>>()?;
-	let exclude_matchers = exclude
-		.iter()
-		.map(|pattern| matcher::compile(pattern))
-		.collect::<Result<Vec<_>, _>>()?;
-
-	Ok(changed_files
-		.iter()
-		.filter(|path| changed_matchers.iter().any(|matcher| matcher.is_match(path)))
-		.filter(|path| !exclude_matchers.iter().any(|matcher| matcher.is_match(path)))
+		.filter(|path| changed.iter().any(|pattern| pattern.is_match(path)))
+		.filter(|path| !exclude.iter().any(|pattern| pattern.is_match(path)))
 		.cloned()
-		.collect())
+		.collect()
 }
 
 fn validate_template(template: &str) -> Result<(), String> {
@@ -631,22 +639,22 @@ fn render_template_checked(
 	let mut cursor = 0usize;
 	while let Some(start_offset) = template[cursor..].find('{') {
 		let start = cursor + start_offset;
-		output.push_str(&template[cursor..start]);
+		let literal = &template[cursor..start];
+		if literal.contains('}') {
+			return Err("unmatched `}`".to_owned());
+		}
+		output.push_str(literal);
 		let end = find_matching_brace(template, start).ok_or_else(|| "unclosed `{`".to_owned())?;
 		let block = &template[start + 1..end];
 		let rendered = render_block(block, context, styled, validate_only)?;
 		output.push_str(&rendered);
 		cursor = end + 1;
 	}
-	output.push_str(&template[cursor..]);
-
-	if output[cursor.min(output.len())..].contains('}') {
+	let tail = &template[cursor..];
+	if tail.contains('}') {
 		return Err("unmatched `}`".to_owned());
 	}
-
-	if template[cursor..].contains('}') {
-		return Err("unmatched `}`".to_owned());
-	}
+	output.push_str(tail);
 
 	Ok(output)
 }
@@ -803,16 +811,24 @@ mod tests {
 	}
 
 	#[test]
+	fn invalid_fail_text_unmatched_closing_brace_errors_before_later_block() {
+		let mut errors = Vec::new();
+		let _ = normalize_fail_text(Some("oops } then {rule}".to_owned()), "rule", &mut errors);
+
+		assert!(errors.iter().any(|error| error.contains("unmatched `}`")));
+	}
+
+	#[test]
 	fn matches_changed_and_excludes() {
-		let changed = vec!["src/**/*.rs".to_owned()];
-		let exclude = vec!["src/generated/**".to_owned()];
+		let changed = vec![Pattern::new("src/**/*.rs").expect("changed pattern")];
+		let exclude = vec![Pattern::new("src/generated/**").expect("exclude pattern")];
 		let files = vec![
 			PathBuf::from("src/main.rs"),
 			PathBuf::from("src/generated/code.rs"),
 			PathBuf::from("README.md"),
 		];
 
-		let matched = match_rule_paths(&changed, &exclude, &files).expect("match");
+		let matched = match_rule_paths(&changed, &exclude, &files);
 
 		assert_eq!(matched, vec![PathBuf::from("src/main.rs")]);
 	}

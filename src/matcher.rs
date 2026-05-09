@@ -8,7 +8,7 @@ use globset::{GlobBuilder, GlobMatcher};
 use crate::error::PullhookError;
 
 /// Compiled pattern matcher.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Matcher {
 	matchers: Vec<GlobMatcher>,
 }

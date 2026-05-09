@@ -14,7 +14,7 @@ allow-branch = ["main"]
 verify = true
 sign-commit = false
 sign-tag = false
-pre-release-hook = ["./scripts/pre-commit.sh"]
+pre-release-hook = ["./scripts/pre-release.sh"]
 pre-release-commit-message = "chore: release {{version}}"
 tag-message = "Release {{version}}"
 

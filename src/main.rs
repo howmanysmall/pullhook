@@ -16,7 +16,9 @@ use tracing::debug;
 use tracing_subscriber::EnvFilter;
 
 use crate::cli::{Cli, Commands, ConfigRunArgs, ExplainArgs, InitArgs, RunArgs, ValidateArgs};
-use crate::config::{Config, Entry, EvaluatedEntry, EvaluatedGroup, EvaluatedRule, FailTextContext, OnFailure};
+use crate::config::{
+	Config, Entry, EvaluatedEntry, EvaluatedGroup, EvaluatedRule, FailTextContext, OnFailure, Pattern,
+};
 use crate::git::GitRepo;
 use crate::output::{DryRunSummary, NonSuccessReport, RenderMode, Renderer, Summary, TaskBlock};
 use crate::pm::{PackageManager, detect_package_manager};
@@ -286,9 +288,11 @@ fn evaluate_config(
 	base_missing: bool,
 	repo_root: &std::path::Path,
 ) -> Result<Vec<EvaluatedEntry>> {
-	config::evaluate(config, changed_files, base_missing, |rule| {
-		if !rule.install {
-			return Ok((rule.run.clone(), rule.changed.clone()));
+	let mut install_plan: Option<(String, Vec<Pattern>)> = None;
+
+	config::evaluate(config, changed_files, base_missing, |_rule| {
+		if let Some((command, patterns)) = &install_plan {
+			return Ok((Some(command.clone()), patterns.clone()));
 		}
 
 		let package_manager = detect_package_manager(repo_root).map_err(|error| {
@@ -296,14 +300,10 @@ fn evaluate_config(
 				"failed to detect package manager for config install rule: {error}"
 			))
 		})?;
-		Ok((
-			Some(package_manager.install_command()),
-			package_manager
-				.watched_files()
-				.iter()
-				.map(|value| (*value).to_owned())
-				.collect(),
-		))
+		let command = package_manager.install_command();
+		let patterns = vec![Pattern::new(package_manager.install_pattern())?];
+		install_plan = Some((command.clone(), patterns.clone()));
+		Ok((Some(command), patterns))
 	})
 	.map_err(Into::into)
 }
@@ -383,7 +383,7 @@ fn execute_config_entries(
 				if !rule.should_run() {
 					continue;
 				}
-				let rule_failed = execute_config_rule(renderer, rule, repo_root, args.debug, args.render)?;
+				let rule_failed = execute_config_rule(renderer, rule, repo_root, args.debug, args.render);
 				failed += usize::from(rule_failed);
 			}
 			EvaluatedEntry::Group(group) => {
@@ -409,17 +409,9 @@ fn execute_config_rule(
 	repo_root: &std::path::Path,
 	debug_enabled: bool,
 	render_mode: RenderMode,
-) -> Result<bool> {
-	let command = rule.command.as_deref().unwrap_or_default();
-	let invocations = runner::prepare_invocations(Some(command), None).context("failed to prepare config command")?;
-	let result = runner::run_task_dir(repo_root, &invocations, false, debug_enabled);
-	render_task_results(renderer, std::slice::from_ref(&result), repo_root);
-	report_debug_errors(debug_enabled, std::slice::from_ref(&result));
-	let failed = result.state != runner::ResultState::Success;
-	if failed {
-		render_rule_fail_text(rule, &result, repo_root, render_mode);
-	}
-	Ok(failed)
+) -> bool {
+	let result = run_config_rule_task(rule, repo_root, debug_enabled);
+	render_config_rule_result(renderer, rule, &result, repo_root, debug_enabled, render_mode)
 }
 
 fn execute_config_group(
@@ -430,37 +422,28 @@ fn execute_config_group(
 ) -> Result<usize> {
 	let runnable: Vec<_> = group.rules.iter().filter(|rule| rule.should_run()).collect();
 	let jobs = group.group.jobs.unwrap_or_else(|| args.effective_jobs()).max(1);
-	let pool = rayon::ThreadPoolBuilder::new()
-		.num_threads(jobs)
-		.build()
-		.map_err(|error| anyhow!(error.to_string()))?;
-	let results = pool.install(|| {
+	let results = if runnable.len() <= 1 || jobs <= 1 {
 		runnable
-			.par_iter()
-			.map(|rule| {
-				let command = rule.command.as_deref().unwrap_or_default();
-				let invocations = runner::prepare_invocations(Some(command), None);
-				let result = invocations.map_or_else(
-					|error| runner::TaskResult {
-						cwd: repo_root.to_path_buf(),
-						outputs: Vec::new(),
-						state: runner::ResultState::SpawnError,
-						error: Some(error),
-					},
-					|invocations| runner::run_task_dir(repo_root, &invocations, false, args.debug),
-				);
-				(*rule, result)
-			})
+			.iter()
+			.map(|rule| (*rule, run_config_rule_task(rule, repo_root, args.debug)))
 			.collect::<Vec<_>>()
-	});
+	} else {
+		let pool = rayon::ThreadPoolBuilder::new()
+			.num_threads(jobs)
+			.build()
+			.map_err(|error| anyhow!(error.to_string()))?;
+		pool.install(|| {
+			runnable
+				.par_iter()
+				.map(|rule| (*rule, run_config_rule_task(rule, repo_root, args.debug)))
+				.collect::<Vec<_>>()
+		})
+	};
 
 	let mut failed = 0usize;
 	for (rule, result) in &results {
-		render_task_results(renderer, std::slice::from_ref(result), repo_root);
-		report_debug_errors(args.debug, std::slice::from_ref(result));
-		if result.state != runner::ResultState::Success {
+		if render_config_rule_result(renderer, rule, result, repo_root, args.debug, args.render) {
 			failed += 1;
-			render_rule_fail_text(rule, result, repo_root, args.render);
 		}
 	}
 
@@ -469,6 +452,37 @@ fn execute_config_group(
 	}
 
 	Ok(failed)
+}
+
+fn run_config_rule_task(rule: &EvaluatedRule, repo_root: &std::path::Path, debug_enabled: bool) -> runner::TaskResult {
+	let command = rule.command.as_deref().unwrap_or_default();
+	let invocations = runner::prepare_invocations(Some(command), None);
+	invocations.map_or_else(
+		|error| runner::TaskResult {
+			cwd: repo_root.to_path_buf(),
+			outputs: Vec::new(),
+			state: runner::ResultState::SpawnError,
+			error: Some(error),
+		},
+		|invocations| runner::run_task_dir(repo_root, &invocations, false, debug_enabled),
+	)
+}
+
+fn render_config_rule_result(
+	renderer: &Renderer,
+	rule: &EvaluatedRule,
+	result: &runner::TaskResult,
+	repo_root: &std::path::Path,
+	debug_enabled: bool,
+	render_mode: RenderMode,
+) -> bool {
+	render_task_results(renderer, std::slice::from_ref(result), repo_root);
+	report_debug_errors(debug_enabled, std::slice::from_ref(result));
+	let failed = result.state != runner::ResultState::Success;
+	if failed {
+		render_rule_fail_text(rule, result, repo_root, render_mode);
+	}
+	failed
 }
 
 fn render_rule_fail_text(

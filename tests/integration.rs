@@ -354,6 +354,89 @@ fn config_install_rule_reuses_package_manager_detection() {
 	assert!(stdout.contains("command: npm install"));
 }
 
+#[test]
+fn config_parallel_group_runs_matched_rules_from_repo_root() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_file(
+		repo_root,
+		Path::new("pullhook.json"),
+		r#"{
+  "rules": [
+    {
+      "name": "parallel checks",
+      "jobs": 2,
+      "parallel": [
+        {
+          "name": "write first marker",
+          "changed": "packages/*/package-lock.json",
+          "run": "sh -c 'echo first > .pullhook-parallel-first'"
+        },
+        {
+          "name": "write second marker",
+          "changed": "packages/*/package-lock.json",
+          "run": "sh -c 'echo second > .pullhook-parallel-second'"
+        }
+      ]
+    }
+  ]
+}
+"#,
+	);
+
+	let output = ProcessCommand::new(assert_cmd::cargo::cargo_bin!("pullhook"))
+		.current_dir(repo_root)
+		.args(["run", "--render", "never"])
+		.output()
+		.expect("command runs");
+
+	assert!(output.status.success(), "parallel group should succeed");
+	assert!(predicate::path::is_file().eval(&repo_root.join(".pullhook-parallel-first")));
+	assert!(predicate::path::is_file().eval(&repo_root.join(".pullhook-parallel-second")));
+	assert!(!predicate::path::is_file().eval(&repo_root.join("packages/a/.pullhook-parallel-first")));
+	assert!(!predicate::path::is_file().eval(&repo_root.join("packages/a/.pullhook-parallel-second")));
+}
+
+#[test]
+fn validate_rejects_nested_parallel_groups() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_file(
+		repo_root,
+		Path::new("pullhook.json"),
+		r#"{
+  "rules": [
+    {
+      "name": "outer",
+      "parallel": [
+        {
+          "name": "inner",
+          "parallel": [
+            {
+              "name": "leaf",
+              "changed": "packages/*/package-lock.json",
+              "run": "true"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+"#,
+	);
+
+	let output = ProcessCommand::new(assert_cmd::cargo::cargo_bin!("pullhook"))
+		.current_dir(repo_root)
+		.args(["validate", "--render", "never"])
+		.output()
+		.expect("command runs");
+
+	assert!(!output.status.success(), "nested parallel group should fail");
+	let stderr = String::from_utf8_lossy(&output.stderr);
+	assert!(stderr.contains("nested parallel groups are not supported"));
+}
+
 fn setup_repo_with_merge() -> TempDir {
 	let temp = tempfile::tempdir().expect("create temp dir");
 	let repo_root = temp.path();
