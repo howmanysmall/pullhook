@@ -1172,7 +1172,7 @@ const fn repo_requirement_filter(args: &CommandCatalogArgs) -> Option<bool> {
 }
 
 fn codes_command(args: &CodesArgs) -> Result<()> {
-	let codes = filtered_json_code_infos(args.kind);
+	let codes = filtered_json_code_infos(args.kind, args.surface.as_deref());
 	if args.json {
 		println!(
 			"{}",
@@ -1182,6 +1182,7 @@ fn codes_command(args: &CodesArgs) -> Result<()> {
 				"successCode": serde_json::Value::Null,
 				"filters": {
 					"kind": args.kind.map(CodeKind::label),
+					"surface": args.surface.as_deref(),
 				},
 				"codes": codes,
 				"summary": {
@@ -1204,6 +1205,9 @@ fn codes_command(args: &CodesArgs) -> Result<()> {
 	if let Some(kind) = args.kind {
 		println!("filter: kind={}", kind.label());
 	}
+	if let Some(surface) = &args.surface {
+		println!("filter: surface={surface}");
+	}
 	println!();
 	for info in codes {
 		println!("{} [{}] {}", info.code, info.surface, info.description);
@@ -1211,11 +1215,12 @@ fn codes_command(args: &CodesArgs) -> Result<()> {
 	Ok(())
 }
 
-fn filtered_json_code_infos(kind: Option<CodeKind>) -> Vec<JsonCodeInfo> {
+fn filtered_json_code_infos(kind: Option<CodeKind>, surface: Option<&str>) -> Vec<JsonCodeInfo> {
 	JSON_CODE_INFOS
 		.iter()
 		.copied()
 		.filter(|info| kind.is_none_or(|kind| info.kind == kind.label()))
+		.filter(|info| surface.is_none_or(|surface| info.surface.contains(surface)))
 		.collect()
 }
 

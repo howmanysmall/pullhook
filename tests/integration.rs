@@ -1109,6 +1109,7 @@ fn codes_json_lists_stable_json_codes() {
 	assert_eq!(value["status"], "ok");
 	assert_eq!(value["code"], serde_json::Value::Null);
 	assert_eq!(value["successCode"], serde_json::Value::Null);
+	assert_eq!(value["filters"]["surface"], serde_json::Value::Null);
 	let codes = value["codes"].as_array().expect("codes array");
 	assert!(codes.iter().any(|entry| entry["code"] == "config_missing"));
 	assert!(codes.iter().any(|entry| entry["code"] == "no_rules_matched"));
@@ -1134,6 +1135,7 @@ fn codes_kind_filter_limits_results() {
 	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse filtered codes json");
 	assert_eq!(value["status"], "ok");
 	assert_eq!(value["filters"]["kind"], "doctor-check");
+	assert_eq!(value["filters"]["surface"], serde_json::Value::Null);
 	let codes = value["codes"].as_array().expect("codes array");
 	assert!(!codes.is_empty(), "doctor-check filter should keep doctor codes");
 	assert!(
@@ -1153,6 +1155,76 @@ fn codes_kind_filter_limits_results() {
 	assert!(
 		stderr.trim().is_empty(),
 		"filtered codes --json should not write stderr"
+	);
+}
+
+#[test]
+fn codes_surface_filter_limits_results() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["codes", "--surface", "run", "--json"]);
+
+	assert!(output.status.success(), "codes --surface run --json should succeed");
+	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse surface codes json");
+	assert_eq!(value["filters"]["kind"], serde_json::Value::Null);
+	assert_eq!(value["filters"]["surface"], "run");
+	let codes = value["codes"].as_array().expect("codes array");
+	assert!(!codes.is_empty(), "surface filter should keep matching codes");
+	assert!(
+		codes
+			.iter()
+			.all(|entry| entry["surface"].as_str().expect("surface string").contains("run")),
+		"surface filter should exclude codes from other surfaces"
+	);
+	assert!(codes.iter().any(|entry| entry["code"] == "config_rule_failed"));
+	assert!(
+		!codes.iter().any(|entry| entry["code"] == "config_ok"),
+		"config_ok is a doctor-only surface"
+	);
+	assert_eq!(
+		value["summary"]["codes"].as_u64().expect("code count"),
+		codes.len() as u64
+	);
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"codes --surface run --json should not write stderr"
+	);
+}
+
+#[test]
+fn codes_kind_and_surface_filters_intersect_results() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(
+		temp.path(),
+		&["codes", "--kind", "error", "--surface", "doctor", "--json"],
+	);
+
+	assert!(
+		output.status.success(),
+		"codes --kind error --surface doctor --json should succeed"
+	);
+	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse intersected codes json");
+	assert_eq!(value["filters"]["kind"], "error");
+	assert_eq!(value["filters"]["surface"], "doctor");
+	let codes = value["codes"].as_array().expect("codes array");
+	assert!(
+		codes
+			.iter()
+			.all(|entry| entry["kind"] == "error"
+				&& entry["surface"].as_str().expect("surface string").contains("doctor")),
+		"kind and surface filters should both apply"
+	);
+	assert!(codes.iter().any(|entry| entry["code"] == "doctor_error"));
+	assert!(
+		!codes.iter().any(|entry| entry["code"] == "config_ok"),
+		"doctor-check codes should be excluded by --kind error"
+	);
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"intersected codes --json should not write stderr"
 	);
 }
 
@@ -2577,6 +2649,7 @@ fn utility_help_groups_options_by_task() {
 	let codes_stdout = stdout_text(&codes);
 	assert!(codes_stdout.contains("Filter options:"));
 	assert!(codes_stdout.contains("Output options:"));
+	assert!(codes_stdout.contains("pullhook codes --surface run"));
 	assert!(codes_stdout.contains("pullhook codes --kind error --codes-only"));
 
 	let commands = run_pullhook(temp.path(), &["commands", "--help"]);

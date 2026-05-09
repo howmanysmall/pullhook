@@ -167,6 +167,7 @@ const CODES_AFTER_HELP: &str = "\
 Examples:
   pullhook codes
   pullhook codes --kind doctor-check
+  pullhook codes --surface run
   pullhook codes --kind error --codes-only
   pullhook codes --json";
 
@@ -1136,6 +1137,10 @@ pub struct CodesArgs {
 	/// Only list codes for a specific kind.
 	#[arg(long = "kind", value_enum, help_heading = "Filter options")]
 	pub kind: Option<CodeKind>,
+
+	/// Only list codes whose surface contains this text.
+	#[arg(long = "surface", value_name = "TEXT", help_heading = "Filter options")]
+	pub surface: Option<String>,
 
 	/// Print machine-readable JSON instead of text output.
 	#[arg(
