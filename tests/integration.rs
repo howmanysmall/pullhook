@@ -5736,11 +5736,12 @@ fn rules_text_lists_group_members() {
         {
           "name": "lint",
           "changed": "packages/a/package-lock.json",
+          "exclude": "packages/a/generated/**",
           "run": "cargo test -p lint"
         },
         {
           "name": "typecheck",
-          "changed": "packages/a/package-lock.json",
+          "changed": ["packages/a/package.json", "packages/a/package-lock.json"],
           "run": "cargo test -p typecheck"
         }
       ]
@@ -5759,7 +5760,42 @@ fn rules_text_lists_group_members() {
 	assert!(stdout.contains("[group] checks"));
 	assert!(stdout.contains("- lint"));
 	assert!(stdout.contains("- typecheck"));
+	assert!(stdout.contains("changed: packages/a/package-lock.json"));
+	assert!(stdout.contains("exclude: packages/a/generated/**"));
+	assert!(stdout.contains("changed: packages/a/package.json, packages/a/package-lock.json"));
 	assert!(stdout.contains("command: cargo test -p lint"));
+}
+
+#[test]
+fn rules_text_lists_standalone_rule_patterns() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_file(
+		repo_root,
+		Path::new("pullhook.json"),
+		r#"{
+  "rules": [
+    {
+      "name": "format",
+      "changed": ["src/**/*.rs", "tests/**/*.rs"],
+      "exclude": "src/generated/**",
+      "run": "cargo fmt --all"
+    }
+  ]
+}
+"#,
+	);
+
+	let output = run_pullhook(repo_root, &["rules", "--render", "never"]);
+
+	assert!(output.status.success(), "rules should succeed");
+	let stdout = stdout_text(&output);
+	assert!(stdout.contains("[rule] format"));
+	assert!(stdout.contains("changed: src/**/*.rs, tests/**/*.rs"));
+	assert!(stdout.contains("exclude: src/generated/**"));
+	assert!(stdout.contains("command: cargo fmt --all"));
+	let stderr = stderr_text(&output);
+	assert!(stderr.trim().is_empty(), "rules should not write stderr");
 }
 
 #[test]

@@ -4159,6 +4159,7 @@ fn collect_config_rule_command_for_kind<'a>(rule: &'a config::Rule, kind: RulesK
 fn render_config_rule_inventory(rule: &config::Rule) {
 	println!("[rule] {}", rule.name);
 	println!("kind: {}", if rule.install { "install" } else { "run" });
+	render_rule_patterns(rule, "");
 	if let Some(command) = &rule.run {
 		println!("command: {command}");
 	}
@@ -4196,6 +4197,7 @@ fn render_config_group_inventory(group: &config::Group, kind: RulesKind) {
 	for rule in rules {
 		println!("- {}", rule.name);
 		println!("  kind: {}", if rule.install { "install" } else { "run" });
+		render_rule_patterns(rule, "  ");
 		if let Some(command) = &rule.run {
 			println!("  command: {command}");
 		}
@@ -4204,6 +4206,23 @@ fn render_config_group_inventory(group: &config::Group, kind: RulesKind) {
 		}
 	}
 	println!();
+}
+
+fn render_rule_patterns(rule: &config::Rule, indent: &str) {
+	if !rule.changed.is_empty() {
+		println!("{indent}changed: {}", render_pattern_list(&rule.changed));
+	}
+	if !rule.exclude.is_empty() {
+		println!("{indent}exclude: {}", render_pattern_list(&rule.exclude));
+	}
+}
+
+fn render_pattern_list(patterns: &[config::Pattern]) -> String {
+	patterns
+		.iter()
+		.map(config::Pattern::as_str)
+		.collect::<Vec<_>>()
+		.join(", ")
 }
 
 fn count_config_groups(config: &Config) -> usize {
