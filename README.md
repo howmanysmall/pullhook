@@ -290,6 +290,7 @@ Use `pullhook config --path-only` when a script needs the resolved path as one c
 Add `--require-existing` when that script should fail instead of returning a planned-but-missing config path.
 `config --json` includes `status`, `source`, and `error` fields for the same automation-friendly result shape used by other JSON commands.
 Standard JSON errors also include `details` when there is a deeper cause chain, so scripts can show the short error while still keeping the useful diagnostic text.
+Missing config JSON errors include setup details for `pullhook init` and `--config <path>`.
 `pullhook schema` prints the config JSON Schema, and `pullhook schema --output <path>` writes it for editor setup.
 Use `schema --check --output <path>` in CI when a checked-in schema file must stay current.
 `schema --check --json` and `completion <shell> --check --json` include top-level `status`, `error`, and

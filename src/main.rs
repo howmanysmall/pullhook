@@ -1593,7 +1593,15 @@ fn json_error_details(error: &anyhow::Error) -> Vec<String> {
 		return details;
 	}
 
-	match error.to_string().as_str() {
+	let message = error.to_string();
+	if message.starts_with("no pullhook config found") {
+		return vec![
+			format!("run `pullhook init` to create {}", config::config_names()[0]),
+			"use `--config <path>` to point at a custom config file".to_owned(),
+		];
+	}
+
+	match message.as_str() {
 		"--json cannot be used with --debug" => vec![
 			"rerun without `--debug` when a script needs JSON".to_owned(),
 			"rerun without `--json` when you need debug traces".to_owned(),

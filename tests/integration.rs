@@ -2052,7 +2052,13 @@ fn validate_json_reports_missing_config_as_json() {
 			.expect("error")
 			.contains("no pullhook config found")
 	);
-	assert_eq!(value["details"], serde_json::json!([]));
+	assert_eq!(
+		value["details"],
+		serde_json::json!([
+			"run `pullhook init` to create pullhook.json",
+			"use `--config <path>` to point at a custom config file"
+		])
+	);
 	let stderr = stderr_text(&output);
 	assert!(stderr.contains("no pullhook config found"));
 }
@@ -2073,6 +2079,13 @@ fn run_json_reports_missing_config_as_json() {
 			.expect("error")
 			.contains("no pullhook config found")
 	);
+	assert_eq!(
+		value["details"],
+		serde_json::json!([
+			"run `pullhook init` to create pullhook.json",
+			"use `--config <path>` to point at a custom config file"
+		])
+	);
 	let stderr = stderr_text(&output);
 	assert!(stderr.contains("no pullhook config found"));
 }
@@ -2092,6 +2105,13 @@ fn explain_json_reports_missing_config_as_json() {
 			.as_str()
 			.expect("error")
 			.contains("no pullhook config found")
+	);
+	assert_eq!(
+		value["details"],
+		serde_json::json!([
+			"run `pullhook init` to create pullhook.json",
+			"use `--config <path>` to point at a custom config file"
+		])
 	);
 	let stderr = stderr_text(&output);
 	assert!(stderr.contains("no pullhook config found"));
@@ -2149,6 +2169,13 @@ fn rules_json_reports_missing_config_as_json() {
 			.as_str()
 			.expect("error")
 			.contains("no pullhook config found")
+	);
+	assert_eq!(
+		value["details"],
+		serde_json::json!([
+			"run `pullhook init` to create pullhook.json",
+			"use `--config <path>` to point at a custom config file"
+		])
 	);
 	let stderr = stderr_text(&output);
 	assert!(stderr.contains("no pullhook config found"));
