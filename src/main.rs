@@ -237,9 +237,7 @@ fn run_legacy(cli: &RunArgs) -> Result<()> {
 			"missing required argument: use `--pattern <glob>`, `--install`, or the `run` subcommand"
 		));
 	}
-	if cli.json && cli.debug {
-		return Err(anyhow!("--json cannot be used with --debug"));
-	}
+	ensure_json_without_debug(cli.json, cli.debug)?;
 
 	let renderer = Renderer::new(effective_render_mode(cli.render, cli.no_color));
 	let cwd = std::env::current_dir().context("failed to read current working directory")?;
@@ -377,9 +375,7 @@ fn run_legacy_json(cli: &RunArgs, context: LegacyJsonContext, repo_root: &std::p
 }
 
 fn run_config_command(args: &ConfigRunArgs) -> Result<()> {
-	if args.json && args.debug {
-		return Err(anyhow!("--json cannot be used with --debug"));
-	}
+	ensure_json_without_debug(args.json, args.debug)?;
 
 	let renderer = Renderer::new(effective_render_mode(args.render, args.no_color));
 	let (repo, repo_root, config) = load_config_from_cwd_for_output(args.debug, args.config.as_deref(), args.json)?;
@@ -896,7 +892,9 @@ fn check_schema_output(path: &std::path::Path, json_output: bool) -> Result<()> 
 
 fn ensure_json_without_debug(json_output: bool, debug_enabled: bool) -> Result<()> {
 	if json_output && debug_enabled {
-		return Err(anyhow!("--json cannot be used with --debug"));
+		let error = anyhow!("--json cannot be used with --debug");
+		print_json_error(&error)?;
+		return Err(error);
 	}
 	Ok(())
 }

@@ -247,6 +247,9 @@ fn legacy_run_json_rejects_debug_mode() {
 	);
 
 	assert!(!output.status.success(), "legacy run json should reject debug mode");
+	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse debug conflict json");
+	assert_eq!(value["status"], "error");
+	assert_eq!(value["error"], "--json cannot be used with --debug");
 	let stderr = stderr_text(&output);
 	assert!(stderr.contains("--json cannot be used with --debug"));
 }
@@ -270,6 +273,15 @@ fn config_json_commands_reject_debug_mode() {
 			"`pullhook {}` should reject --json --debug",
 			args.join(" ")
 		);
+		let value: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap_or_else(|error| {
+			panic!(
+				"`pullhook {}` should print JSON to stdout: {error}; stdout: {}",
+				args.join(" "),
+				stdout_text(&output)
+			)
+		});
+		assert_eq!(value["status"], "error");
+		assert_eq!(value["error"], "--json cannot be used with --debug");
 		let stderr = stderr_text(&output);
 		assert!(
 			stderr.contains("--json cannot be used with --debug"),
@@ -3815,6 +3827,9 @@ fn run_json_rejects_debug_mode() {
 	let output = run_pullhook(repo_root, &["run", "--json", "--debug"]);
 
 	assert!(!output.status.success(), "run --json --debug should fail");
+	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse debug conflict json");
+	assert_eq!(value["status"], "error");
+	assert_eq!(value["error"], "--json cannot be used with --debug");
 	let stderr = stderr_text(&output);
 	assert!(stderr.contains("--json cannot be used with --debug"));
 }
