@@ -716,19 +716,87 @@ fn shells_search_filter_composes_with_names_only() {
 }
 
 #[test]
-fn shells_names_only_conflicts_with_json() {
+fn shells_commands_only_prints_clean_completion_commands() {
 	let temp = tempfile::tempdir().expect("create temp dir");
 
-	let output = run_pullhook(temp.path(), &["shells", "--names-only", "--json"]);
+	let output = run_pullhook(temp.path(), &["shells", "--commands-only"]);
+
+	assert!(output.status.success(), "shells --commands-only should succeed");
+	let stdout = stdout_text(&output);
+	assert_eq!(
+		stdout.lines().collect::<Vec<_>>(),
+		vec![
+			"pullhook completion bash",
+			"pullhook completion elvish",
+			"pullhook completion fish",
+			"pullhook completion powershell",
+			"pullhook completion zsh"
+		]
+	);
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"shells --commands-only should not write stderr"
+	);
+}
+
+#[test]
+fn shells_search_filter_composes_with_commands_only() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["shells", "--search", "power", "--commands-only"]);
+
+	assert!(
+		output.status.success(),
+		"shells --search power --commands-only should succeed"
+	);
+	let stdout = stdout_text(&output);
+	assert_eq!(
+		stdout.lines().collect::<Vec<_>>(),
+		vec!["pullhook completion powershell"]
+	);
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"shells --search power --commands-only should not write stderr"
+	);
+}
+
+#[test]
+fn shells_line_outputs_conflict_with_json() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+	let conflicting_modes: &[&[&str]] = &[
+		&["shells", "--names-only", "--json"],
+		&["shells", "--commands-only", "--json"],
+	];
+
+	for args in conflicting_modes {
+		let output = run_pullhook(temp.path(), args);
+
+		assert!(
+			!output.status.success(),
+			"shell line-output mode should conflict with --json for args {args:?}"
+		);
+		let stderr = stderr_text(&output);
+		assert!(stderr.contains("cannot be used with"));
+		assert!(stderr.contains("--json"));
+	}
+}
+
+#[test]
+fn shells_line_outputs_conflict_with_each_other() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["shells", "--names-only", "--commands-only"]);
 
 	assert!(
 		!output.status.success(),
-		"shells --names-only should conflict with --json"
+		"shells line-output modes should conflict with each other"
 	);
 	let stderr = stderr_text(&output);
 	assert!(stderr.contains("cannot be used with"));
 	assert!(stderr.contains("--names-only"));
-	assert!(stderr.contains("--json"));
+	assert!(stderr.contains("--commands-only"));
 }
 
 #[test]
@@ -3663,6 +3731,7 @@ fn utility_help_groups_options_by_task() {
 	assert!(shells_stdout.contains("Output options:"));
 	assert!(shells_stdout.contains("pullhook shells --search fish"));
 	assert!(shells_stdout.contains("pullhook shells --names-only"));
+	assert!(shells_stdout.contains("pullhook shells --commands-only"));
 	assert!(shells_stdout.contains("pullhook shells --json"));
 
 	let formats = run_pullhook(temp.path(), &["formats", "--help"]);

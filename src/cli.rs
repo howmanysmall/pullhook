@@ -142,6 +142,7 @@ Examples:
   pullhook shells
   pullhook shells --search fish
   pullhook shells --names-only
+  pullhook shells --commands-only
   pullhook shells --json";
 
 const FORMATS_AFTER_HELP: &str = "\
@@ -1047,7 +1048,7 @@ pub struct ShellsArgs {
 	#[arg(
 		long = "json",
 		default_value_t = false,
-		conflicts_with = "names_only",
+		conflicts_with_all = ["names_only", "commands_only"],
 		help_heading = "Output options"
 	)]
 	pub json: bool,
@@ -1056,10 +1057,19 @@ pub struct ShellsArgs {
 	#[arg(
 		long = "names-only",
 		default_value_t = false,
-		conflicts_with = "json",
+		conflicts_with_all = ["json", "commands_only"],
 		help_heading = "Output options"
 	)]
 	pub names_only: bool,
+
+	/// Print only completion commands, one per line.
+	#[arg(
+		long = "commands-only",
+		default_value_t = false,
+		conflicts_with_all = ["json", "names_only"],
+		help_heading = "Output options"
+	)]
+	pub commands_only: bool,
 }
 
 /// Arguments for `pullhook formats`.

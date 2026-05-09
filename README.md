@@ -274,6 +274,7 @@ pullhook doctor --json
 pullhook shells
 pullhook shells --search fish
 pullhook shells --names-only
+pullhook shells --commands-only
 pullhook shells --json
 pullhook formats
 pullhook formats --search yaml
@@ -356,6 +357,7 @@ Use `pullhook shells` to inspect supported shell completion targets in text form
 when another tool needs shell names and generation commands without scraping help text.
 Add `--search <text>` to match shell names, completion commands, or descriptions case-insensitively.
 Use `pullhook shells --names-only` when a script only needs supported shell names.
+Use `pullhook shells --commands-only` when a script only needs shell completion commands.
 Use `pullhook formats` to inspect supported config formats and discovery filenames.
 Add `--search <text>` to match format names, config filenames, descriptions, or init commands.
 Use `pullhook formats --files-only` when a script only needs the config filenames pullhook discovers.
