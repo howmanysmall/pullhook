@@ -60,6 +60,7 @@ Examples:
 const RULES_AFTER_HELP: &str = "\
 Examples:
   pullhook rules
+  pullhook rules --names-only
   pullhook rules --json
   pullhook rules --config config/pullhook.custom.json";
 
@@ -364,6 +365,10 @@ pub struct RulesArgs {
 	/// Print machine-readable JSON instead of text output.
 	#[arg(long = "json", default_value_t = false)]
 	pub json: bool,
+
+	/// Print only rule and group selector names, one per line.
+	#[arg(long = "names-only", default_value_t = false, conflicts_with = "json")]
+	pub names_only: bool,
 
 	/// Enable debug logging.
 	#[arg(short = 'd', long = "debug", default_value_t = false)]

@@ -459,6 +459,13 @@ fn rules_command(args: &RulesArgs) -> Result<()> {
 		return Ok(());
 	}
 
+	if args.names_only {
+		for selector in collect_rule_selectors(&config) {
+			println!("{selector}");
+		}
+		return Ok(());
+	}
+
 	renderer.render_message_stage(&format!("config: {}", config.path.display()));
 	renderer.render_message_stage(&format!(
 		"entries: {} | rules: {} | parallel groups: {}",
@@ -1004,6 +1011,7 @@ fn config_rules_json(config: &Config) -> serde_json::Value {
 	json!({
 		"path": config.path.display().to_string(),
 		"onFailure": on_failure_label(config.on_failure),
+		"selectors": collect_rule_selectors(config),
 		"entries": config.entries.iter().map(config_rule_inventory_json).collect::<Vec<_>>(),
 		"rules": count_config_rules(config),
 		"parallelGroups": count_config_groups(config),
@@ -1199,6 +1207,24 @@ fn count_config_rules(config: &Config) -> usize {
 			Entry::Group(group) => group.rules.len(),
 		})
 		.sum()
+}
+
+fn collect_rule_selectors(config: &Config) -> Vec<String> {
+	let mut selectors = BTreeSet::new();
+	for entry in &config.entries {
+		match entry {
+			Entry::Rule(rule) => {
+				selectors.insert(rule.name.clone());
+			}
+			Entry::Group(group) => {
+				selectors.insert(group.name.clone());
+				for rule in &group.rules {
+					selectors.insert(rule.name.clone());
+				}
+			}
+		}
+	}
+	selectors.into_iter().collect()
 }
 
 fn render_config_rule_inventory(rule: &config::Rule) {

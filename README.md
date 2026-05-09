@@ -255,6 +255,7 @@ or editor integrations.
 Legacy top-level mode also supports `--json`, including live execution results and dry-run plans.
 
 Use `pullhook rules` to list configured rule and parallel group names before targeting a large config.
+Use `pullhook rules --names-only` when a script or completion helper only needs valid selector names.
 Use `--rule <name>` with `run` or `explain` to focus on specific rule names or parallel groups in large configs.
 Repeat it to target more than one selector, for example `pullhook run --rule lint --rule typecheck`.
 Use `--changed-file <path>` with `run` or `explain` to evaluate against explicit paths instead of the git diff;
