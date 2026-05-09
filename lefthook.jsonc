@@ -88,18 +88,46 @@
 				"group": {
 					"jobs": [
 						{
+							"glob": [
+								"**/*.rs",
+								"**/Cargo.toml",
+								"**/Cargo.lock",
+								"**/deny.toml",
+								"**/.cargo/config.toml",
+							],
 							"name": "audit",
 							"run": "cargo audit --quiet",
 						},
 						{
+							"glob": [
+								"**/*.rs",
+								"**/Cargo.toml",
+								"**/Cargo.lock",
+								"**/deny.toml",
+								"**/.cargo/config.toml",
+							],
 							"name": "clippy",
 							"run": "cargo clippy --all-targets -- -D warnings",
 						},
 						{
+							"glob": [
+								"**/*.rs",
+								"**/Cargo.toml",
+								"**/Cargo.lock",
+								"**/deny.toml",
+								"**/.cargo/config.toml",
+							],
 							"name": "deny",
 							"run": "cargo deny check",
 						},
 						{
+							"glob": [
+								"**/*.rs",
+								"**/Cargo.toml",
+								"**/Cargo.lock",
+								"**/deny.toml",
+								"**/.cargo/config.toml",
+							],
 							"name": "shear",
 							"run": "cargo shear",
 						},

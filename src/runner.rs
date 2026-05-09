@@ -213,6 +213,12 @@ fn run_task(cwd: &Path, invocations: &[Invocation], shell: bool, debug_enabled: 
 	}
 }
 
+/// Execute one task directory with the provided invocations.
+#[must_use]
+pub fn run_task_dir(cwd: &Path, invocations: &[Invocation], shell: bool, debug_enabled: bool) -> TaskResult {
+	run_task(cwd, invocations, shell, debug_enabled)
+}
+
 fn run_invocation(invocation: &Invocation, cwd: &Path, shell: bool, debug_enabled: bool) -> InvocationExecution {
 	match invocation {
 		Invocation::Command { raw, argv } => {

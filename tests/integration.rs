@@ -189,6 +189,171 @@ fn completion_command_rejects_run_arguments() {
 	assert!(stderr.contains("completion"));
 }
 
+#[test]
+fn init_creates_starter_config() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+
+	let output = ProcessCommand::new(assert_cmd::cargo::cargo_bin!("pullhook"))
+		.current_dir(repo_root)
+		.env("PULLHOOK_RENDER_MODE", "never")
+		.args(["init", "--render", "never"])
+		.output()
+		.expect("command runs");
+
+	assert!(output.status.success(), "init should succeed");
+	assert!(predicate::path::is_file().eval(&repo_root.join("pullhook.json")));
+	let config = fs::read_to_string(repo_root.join("pullhook.json")).expect("read config");
+	assert!(config.contains("\"rules\""));
+	assert!(config.contains("\"install\""));
+}
+
+#[test]
+fn validate_reports_invalid_fail_text() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_file(
+		repo_root,
+		Path::new("pullhook.json"),
+		r#"{
+  "rules": [
+    {
+      "name": "bad copy",
+      "changed": "**/*.rs",
+      "run": "cargo test",
+      "failText": "{sparkle nope}"
+    }
+  ]
+}
+"#,
+	);
+
+	let output = ProcessCommand::new(assert_cmd::cargo::cargo_bin!("pullhook"))
+		.current_dir(repo_root)
+		.args(["validate", "--render", "never"])
+		.output()
+		.expect("command runs");
+
+	assert!(!output.status.success(), "invalid config should fail");
+	let stderr = String::from_utf8_lossy(&output.stderr);
+	assert!(stderr.contains("unknown style `sparkle`"));
+	assert!(stderr.contains("pullhook.json"));
+}
+
+#[test]
+fn config_dry_run_plans_matching_rule_without_execution() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_config_rule(
+		repo_root,
+		"write marker",
+		"packages/*/package-lock.json",
+		"sh -c 'echo ran > .pullhook-config-marker'",
+	);
+
+	let output = ProcessCommand::new(assert_cmd::cargo::cargo_bin!("pullhook"))
+		.current_dir(repo_root)
+		.args(["run", "--dry-run", "--render", "never"])
+		.output()
+		.expect("command runs");
+
+	assert!(output.status.success(), "dry run should succeed");
+	let stdout = String::from_utf8_lossy(&output.stdout);
+	assert!(stdout.contains("[match] write marker"));
+	assert!(stdout.contains("command: sh -c 'echo ran > .pullhook-config-marker'"));
+	assert!(!predicate::path::is_file().eval(&repo_root.join(".pullhook-config-marker")));
+}
+
+#[test]
+fn config_run_executes_rule_once_from_repo_root() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_config_rule(
+		repo_root,
+		"write marker",
+		"packages/*/package-lock.json",
+		"sh -c 'echo ran > .pullhook-config-marker'",
+	);
+
+	let output = ProcessCommand::new(assert_cmd::cargo::cargo_bin!("pullhook"))
+		.current_dir(repo_root)
+		.args(["run", "--render", "never"])
+		.output()
+		.expect("command runs");
+
+	assert!(output.status.success(), "config run should succeed");
+	assert!(predicate::path::is_file().eval(&repo_root.join(".pullhook-config-marker")));
+	assert!(!predicate::path::is_file().eval(&repo_root.join("packages/a/.pullhook-config-marker")));
+}
+
+#[test]
+fn config_on_failure_continue_runs_later_rules() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_file(
+		repo_root,
+		Path::new("pullhook.json"),
+		r#"{
+  "onFailure": "continue",
+  "rules": [
+    {
+      "name": "fail first",
+      "changed": "packages/*/package-lock.json",
+      "run": "sh -c 'exit 7'",
+      "failText": "{red.bold {rule} failed}"
+    },
+    {
+      "name": "run second",
+      "changed": "packages/*/package-lock.json",
+      "run": "sh -c 'echo ran > .pullhook-continue-marker'"
+    }
+  ]
+}
+"#,
+	);
+
+	let output = ProcessCommand::new(assert_cmd::cargo::cargo_bin!("pullhook"))
+		.current_dir(repo_root)
+		.args(["run", "--render", "never"])
+		.output()
+		.expect("command runs");
+
+	assert!(!output.status.success(), "failed rule should exit non-zero");
+	assert!(predicate::path::is_file().eval(&repo_root.join(".pullhook-continue-marker")));
+	let stderr = String::from_utf8_lossy(&output.stderr);
+	assert!(stderr.contains("fail first failed"));
+}
+
+#[test]
+fn config_install_rule_reuses_package_manager_detection() {
+	let temp = setup_repo_with_root_manifest_change();
+	let repo_root = temp.path();
+	write_file(
+		repo_root,
+		Path::new("pullhook.json"),
+		r#"{
+  "rules": [
+    {
+      "name": "install dependencies",
+      "install": true
+    }
+  ]
+}
+"#,
+	);
+
+	let output = ProcessCommand::new(assert_cmd::cargo::cargo_bin!("pullhook"))
+		.current_dir(repo_root)
+		.args(["run", "--dry-run", "--render", "never"])
+		.output()
+		.expect("command runs");
+
+	assert!(output.status.success(), "install dry run should succeed");
+	let stdout = String::from_utf8_lossy(&output.stdout);
+	assert!(stdout.contains("[match] install dependencies"));
+	assert!(stdout.contains("command: npm install"));
+}
+
 fn setup_repo_with_merge() -> TempDir {
 	let temp = tempfile::tempdir().expect("create temp dir");
 	let repo_root = temp.path();
@@ -336,6 +501,25 @@ fn write_file(repo_root: &Path, relative_path: &Path, contents: &str) {
 	}
 
 	fs::write(path, contents).expect("write file");
+}
+
+fn write_config_rule(repo_root: &Path, name: &str, changed: &str, run: &str) {
+	write_file(
+		repo_root,
+		Path::new("pullhook.json"),
+		&format!(
+			r#"{{
+  "rules": [
+    {{
+      "name": "{name}",
+      "changed": "{changed}",
+      "run": "{run}"
+    }}
+  ]
+}}
+"#
+		),
+	);
 }
 
 fn run_git(repo_root: &Path, args: &[&str]) {

@@ -62,6 +62,10 @@ Usage: pullhook [OPTIONS]
        pullhook <COMMAND>
 
 Commands:
+  run         Run configured pullhook rules
+  explain     Explain which configured rules match changed files
+  validate    Validate the pullhook config file
+  init        Create a starter pullhook config file
   completion  Generate shell completion scripts
   help        Print this message or the help of the given subcommand(s)
 
@@ -122,6 +126,91 @@ Limit parallel work:
 ```bash
 pullhook --pattern "packages/*/package-lock.json" --command "npm install" --jobs 4
 ```
+
+## Config Mode
+
+Config mode is for repo-local post-pull recovery rules. It runs named commands once from the repository
+root when files changed by a pull or merge match configured globs.
+
+Create a starter config:
+
+```bash
+pullhook init
+```
+
+`pullhook init` creates `pullhook.json` by default. Config discovery supports exactly one of:
+
+- `pullhook.json`
+- `pullhook.jsonc`
+- `pullhook.yaml`
+- `pullhook.toml`
+- `.pullhook.json`
+- `.pullhook.jsonc`
+- `.pullhook.yaml`
+- `.pullhook.toml`
+
+JSON5 and `.yml` are intentionally unsupported.
+
+Example:
+
+```json
+{
+  "$schema": "https://pullhook.dev/schema.json",
+  "onFailure": "stop",
+  "rules": [
+    {
+      "name": "install dependencies",
+      "install": true
+    },
+    {
+      "name": "build generated assets",
+      "changed": ["src/generated/**", "package.json"],
+      "exclude": "src/generated/README.md",
+      "run": "npm run build:generated",
+      "failText": "{red.bold {rule} failed}. Try {cyan {command}} from {cwd}."
+    },
+    {
+      "name": "independent checks",
+      "jobs": 2,
+      "parallel": [
+        {
+          "name": "typecheck",
+          "changed": ["src/**/*.ts", "tsconfig.json"],
+          "run": "npm run typecheck"
+        },
+        {
+          "name": "unit tests",
+          "changed": ["src/**/*.rs", "Cargo.toml"],
+          "run": "cargo test"
+        }
+      ]
+    }
+  ]
+}
+```
+
+Run configured rules:
+
+```bash
+pullhook validate
+pullhook explain
+pullhook run --dry-run
+pullhook run
+```
+
+Rules match when any `changed` pattern matches and no `exclude` pattern matches. Top-level entries stop
+on the first failure by default; set `"onFailure": "continue"` to run later top-level entries while still
+exiting non-zero at the end.
+
+`install: true` reuses the same package-manager detection as `pullhook --install` and watches the same
+package-manager files. Config-mode commands always run from the repository root.
+
+`failText` supports fixed placeholders and Chalk-like style blocks:
+
+- Placeholders: `{rule}`, `{command}`, `{cwd}`, `{exitCode}`
+- Style examples: `{bold text}`, `{red.bold text}`, `{bgRed.white.bold text}`
+
+Styles respect `--render auto|always|never`; placeholders render in every mode.
 
 ## `--install` Detection
 

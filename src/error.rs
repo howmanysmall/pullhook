@@ -69,6 +69,24 @@ pub enum PullhookError {
 		reason: String,
 	},
 
+	/// Config file could not be parsed.
+	#[error("failed to parse config `{path}`: {reason}")]
+	ConfigParse {
+		/// Config path.
+		path: String,
+		/// Parse failure reason.
+		reason: String,
+	},
+
+	/// Config validation failed.
+	#[error("invalid config `{path}`:\n{details}")]
+	ConfigValidation {
+		/// Config path.
+		path: String,
+		/// Validation details.
+		details: String,
+	},
+
 	/// Command failed to start.
 	#[error("failed to execute `{command}` in `{cwd}`: {source}")]
 	CommandIo {

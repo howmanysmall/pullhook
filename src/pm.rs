@@ -71,13 +71,13 @@ const VLT_SPEC: PackageManagerSpec = PackageManagerSpec {
 // TODO: add wally support?
 
 const LOCKFILE_DETECTION_ORDER: [PackageManager; 7] = [
-	PackageManager::Aube,
 	PackageManager::Bun,
 	PackageManager::Npm,
 	PackageManager::Yarn,
 	PackageManager::Pnpm,
 	PackageManager::Deno,
 	PackageManager::Vlt,
+	PackageManager::Aube,
 ];
 
 /// Supported package managers.

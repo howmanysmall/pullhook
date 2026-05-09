@@ -1,6 +1,7 @@
 //! Pullhook CLI entry point.
 
 mod cli;
+mod config;
 mod error;
 mod git;
 mod matcher;
@@ -10,12 +11,14 @@ mod runner;
 
 use anyhow::{Context, Result, anyhow};
 use clap::Parser;
+use rayon::prelude::*;
 use tracing::debug;
 use tracing_subscriber::EnvFilter;
 
-use crate::cli::{Cli, Commands, RunArgs};
+use crate::cli::{Cli, Commands, ConfigRunArgs, ExplainArgs, InitArgs, RunArgs, ValidateArgs};
+use crate::config::{Config, Entry, EvaluatedEntry, EvaluatedGroup, EvaluatedRule, FailTextContext, OnFailure};
 use crate::git::GitRepo;
-use crate::output::{DryRunSummary, NonSuccessReport, Renderer, Summary, TaskBlock};
+use crate::output::{DryRunSummary, NonSuccessReport, RenderMode, Renderer, Summary, TaskBlock};
 use crate::pm::{PackageManager, detect_package_manager};
 
 #[derive(Debug, Clone)]
@@ -55,14 +58,34 @@ impl MatchStrategy {
 fn main() {
 	let cli = Cli::parse();
 
-	if let Some(Commands::Completion { shell }) = cli.command.as_ref() {
-		print_completion(*shell);
-		return;
-	}
+	let result = match cli.command.as_ref() {
+		Some(Commands::Completion { shell }) => {
+			print_completion(*shell);
+			return;
+		}
+		Some(Commands::Run(args)) => {
+			init_tracing(args.debug);
+			run_config_command(args)
+		}
+		Some(Commands::Explain(args)) => {
+			init_tracing(args.debug);
+			explain_config_command(args)
+		}
+		Some(Commands::Validate(args)) => {
+			init_tracing(args.debug);
+			validate_config_command(args)
+		}
+		Some(Commands::Init(args)) => {
+			init_tracing(args.debug);
+			init_config_command(args)
+		}
+		None => {
+			init_tracing(cli.run.debug);
+			run_legacy(&cli.run)
+		}
+	};
 
-	init_tracing(cli.run.debug);
-
-	if let Err(error) = run(&cli.run) {
+	if let Err(error) = result {
 		eprintln!("error: {error:#}");
 		std::process::exit(1);
 	}
@@ -72,7 +95,13 @@ fn print_completion(shell: clap_complete::Shell) {
 	Cli::print_completion(shell);
 }
 
-fn run(cli: &RunArgs) -> Result<()> {
+fn run_legacy(cli: &RunArgs) -> Result<()> {
+	if cli.pattern.is_none() && !cli.install {
+		return Err(anyhow!(
+			"missing required argument: use `--pattern <glob>`, `--install`, or the `run` subcommand"
+		));
+	}
+
 	let renderer = Renderer::new(cli.render);
 	let cwd = std::env::current_dir().context("failed to read current working directory")?;
 	let repo = GitRepo::discover(&cwd, cli.debug).context("failed to resolve repository root")?;
@@ -135,6 +164,354 @@ fn run(cli: &RunArgs) -> Result<()> {
 	}
 
 	Ok(())
+}
+
+fn run_config_command(args: &ConfigRunArgs) -> Result<()> {
+	let renderer = Renderer::new(args.render);
+	let (repo, repo_root, config) = load_config_from_cwd(args.debug)?;
+	let (changed_files, base_missing) = resolve_config_changed_files(&repo, &config, args.base.as_deref(), args.debug)?;
+	let evaluation = evaluate_config(&config, &changed_files, base_missing, &repo_root)?;
+
+	render_config_evaluation(&config, &evaluation, args.all_matches || args.dry_run, args.dry_run);
+
+	if args.dry_run {
+		let planned_commands = count_planned_commands(&evaluation);
+		renderer.render_dry_run_summary_stage(DryRunSummary {
+			matched_files: changed_files.len(),
+			task_dirs: planned_commands,
+			planned_commands,
+		});
+		return Ok(());
+	}
+
+	let failed = execute_config_entries(&renderer, config.on_failure, &evaluation, &repo_root, args)?;
+	let planned_commands = count_planned_commands(&evaluation);
+	renderer.render_summary_stage(Summary {
+		matched_files: changed_files.len(),
+		task_dirs: planned_commands,
+		passed: planned_commands.saturating_sub(failed),
+		failed,
+		interrupted: 0,
+	});
+	if failed > 0 {
+		return Err(anyhow!("{failed} config rule(s) failed"));
+	}
+
+	Ok(())
+}
+
+fn explain_config_command(args: &ExplainArgs) -> Result<()> {
+	let (repo, repo_root, config) = load_config_from_cwd(args.debug)?;
+	let (changed_files, base_missing) = resolve_config_changed_files(&repo, &config, args.base.as_deref(), args.debug)?;
+	let evaluation = evaluate_config(&config, &changed_files, base_missing, &repo_root)?;
+
+	render_config_evaluation(&config, &evaluation, args.all_matches, false);
+	Ok(())
+}
+
+fn validate_config_command(args: &ValidateArgs) -> Result<()> {
+	let renderer = Renderer::new(args.render);
+	let (_, _, config) = load_config_from_cwd(args.debug)?;
+
+	renderer.render_message_stage(&format!("config valid: {}", config.path.display()));
+	Ok(())
+}
+
+fn init_config_command(args: &InitArgs) -> Result<()> {
+	let renderer = Renderer::new(args.render);
+	let cwd = std::env::current_dir().context("failed to read current working directory")?;
+	let repo = GitRepo::discover(&cwd, args.debug).context("failed to resolve repository root")?;
+	let repo_root = repo.root();
+
+	if let Some(path) = config::discover(repo_root)? {
+		return Err(anyhow!("pullhook config already exists: {}", path.display()));
+	}
+
+	let path = repo_root.join("pullhook.json");
+	std::fs::write(&path, config::STARTER_CONFIG)
+		.with_context(|| format!("failed to write config `{}`", path.display()))?;
+	renderer.render_message_stage(&format!("created {}", path.display()));
+	Ok(())
+}
+
+fn load_config_from_cwd(debug_enabled: bool) -> Result<(GitRepo, std::path::PathBuf, Config)> {
+	let cwd = std::env::current_dir().context("failed to read current working directory")?;
+	let repo = GitRepo::discover(&cwd, debug_enabled).context("failed to resolve repository root")?;
+	let repo_root = repo.root().to_path_buf();
+	let path = config::discover(&repo_root)?.ok_or_else(|| {
+		anyhow!(
+			"no pullhook config found; run `pullhook init` to create {}",
+			config::config_names()[0]
+		)
+	})?;
+	let config = config::load(&path)?;
+	Ok((repo, repo_root, config))
+}
+
+fn resolve_config_changed_files(
+	repo: &GitRepo,
+	config: &Config,
+	base: Option<&str>,
+	debug_enabled: bool,
+) -> Result<(Vec<std::path::PathBuf>, bool)> {
+	match repo.resolve_base_and_changed_files(base, debug_enabled) {
+		Ok((resolved_base, changed_files)) => {
+			if debug_enabled {
+				debug!(base = %resolved_base, changed = changed_files.len(), "resolved config changed files");
+			}
+			Ok((changed_files, false))
+		}
+		Err(error)
+			if config_allows_base_missing(config) && error.to_string().contains("unable to resolve diff base") =>
+		{
+			if debug_enabled {
+				debug!("diff base missing; evaluating runIfBaseMissing rules");
+			}
+			Ok((Vec::new(), true))
+		}
+		Err(error) => Err(error).context("failed to resolve diff base or read changed files"),
+	}
+}
+
+fn config_allows_base_missing(config: &Config) -> bool {
+	config.entries.iter().any(|entry| match entry {
+		Entry::Rule(rule) => rule.run_if_base_missing,
+		Entry::Group(group) => group.rules.iter().any(|rule| rule.run_if_base_missing),
+	})
+}
+
+fn evaluate_config(
+	config: &Config,
+	changed_files: &[std::path::PathBuf],
+	base_missing: bool,
+	repo_root: &std::path::Path,
+) -> Result<Vec<EvaluatedEntry>> {
+	config::evaluate(config, changed_files, base_missing, |rule| {
+		if !rule.install {
+			return Ok((rule.run.clone(), rule.changed.clone()));
+		}
+
+		let package_manager = detect_package_manager(repo_root).map_err(|error| {
+			error::PullhookError::Message(format!(
+				"failed to detect package manager for config install rule: {error}"
+			))
+		})?;
+		Ok((
+			Some(package_manager.install_command()),
+			package_manager
+				.watched_files()
+				.iter()
+				.map(|value| (*value).to_owned())
+				.collect(),
+		))
+	})
+	.map_err(Into::into)
+}
+
+fn render_config_evaluation(config: &Config, evaluation: &[EvaluatedEntry], all_matches: bool, dry_run: bool) {
+	println!("Config");
+	println!("path: {}", config.path.display());
+	println!(
+		"onFailure: {}",
+		match config.on_failure {
+			OnFailure::Stop => "stop",
+			OnFailure::Continue => "continue",
+		}
+	);
+
+	println!();
+	if dry_run {
+		println!("Dry Run");
+	} else {
+		println!("Rules");
+	}
+
+	for entry in evaluation {
+		match entry {
+			EvaluatedEntry::Rule(rule) => render_evaluated_rule(rule, all_matches),
+			EvaluatedEntry::Group(group) => {
+				if group.should_run() || all_matches {
+					println!("group: {}", group.group.name);
+					println!("jobs: {}", group.group.jobs.unwrap_or(1));
+				}
+				for rule in &group.rules {
+					render_evaluated_rule(rule, all_matches);
+				}
+			}
+		}
+	}
+}
+
+fn render_evaluated_rule(rule: &EvaluatedRule, all_matches: bool) {
+	if rule.should_run() {
+		println!("[match] {}", rule.rule.name);
+		println!("matches: {}", rule.matches.len());
+		if let Some(command) = &rule.command {
+			println!("command: {command}");
+		}
+		return;
+	}
+
+	if all_matches {
+		println!("[skip] {}", rule.rule.name);
+		println!("reason: {}", rule.skip_reason.as_deref().unwrap_or("not runnable"));
+	}
+}
+
+fn count_planned_commands(evaluation: &[EvaluatedEntry]) -> usize {
+	evaluation
+		.iter()
+		.map(|entry| match entry {
+			EvaluatedEntry::Rule(rule) => usize::from(rule.should_run()),
+			EvaluatedEntry::Group(group) => group.rules.iter().filter(|rule| rule.should_run()).count(),
+		})
+		.sum()
+}
+
+fn execute_config_entries(
+	renderer: &Renderer,
+	on_failure: OnFailure,
+	evaluation: &[EvaluatedEntry],
+	repo_root: &std::path::Path,
+	args: &ConfigRunArgs,
+) -> Result<usize> {
+	let mut failed = 0usize;
+
+	for entry in evaluation {
+		match entry {
+			EvaluatedEntry::Rule(rule) => {
+				if !rule.should_run() {
+					continue;
+				}
+				let rule_failed = execute_config_rule(renderer, rule, repo_root, args.debug, args.render)?;
+				failed += usize::from(rule_failed);
+			}
+			EvaluatedEntry::Group(group) => {
+				if !group.should_run() {
+					continue;
+				}
+				let group_failed = execute_config_group(renderer, group, repo_root, args)?;
+				failed += group_failed;
+			}
+		}
+
+		if failed > 0 && on_failure == OnFailure::Stop {
+			break;
+		}
+	}
+
+	Ok(failed)
+}
+
+fn execute_config_rule(
+	renderer: &Renderer,
+	rule: &EvaluatedRule,
+	repo_root: &std::path::Path,
+	debug_enabled: bool,
+	render_mode: RenderMode,
+) -> Result<bool> {
+	let command = rule.command.as_deref().unwrap_or_default();
+	let invocations = runner::prepare_invocations(Some(command), None).context("failed to prepare config command")?;
+	let result = runner::run_task_dir(repo_root, &invocations, false, debug_enabled);
+	render_task_results(renderer, std::slice::from_ref(&result), repo_root);
+	report_debug_errors(debug_enabled, std::slice::from_ref(&result));
+	let failed = result.state != runner::ResultState::Success;
+	if failed {
+		render_rule_fail_text(rule, &result, repo_root, render_mode);
+	}
+	Ok(failed)
+}
+
+fn execute_config_group(
+	renderer: &Renderer,
+	group: &EvaluatedGroup,
+	repo_root: &std::path::Path,
+	args: &ConfigRunArgs,
+) -> Result<usize> {
+	let runnable: Vec<_> = group.rules.iter().filter(|rule| rule.should_run()).collect();
+	let jobs = group.group.jobs.unwrap_or_else(|| args.effective_jobs()).max(1);
+	let pool = rayon::ThreadPoolBuilder::new()
+		.num_threads(jobs)
+		.build()
+		.map_err(|error| anyhow!(error.to_string()))?;
+	let results = pool.install(|| {
+		runnable
+			.par_iter()
+			.map(|rule| {
+				let command = rule.command.as_deref().unwrap_or_default();
+				let invocations = runner::prepare_invocations(Some(command), None);
+				let result = invocations.map_or_else(
+					|error| runner::TaskResult {
+						cwd: repo_root.to_path_buf(),
+						outputs: Vec::new(),
+						state: runner::ResultState::SpawnError,
+						error: Some(error),
+					},
+					|invocations| runner::run_task_dir(repo_root, &invocations, false, args.debug),
+				);
+				(*rule, result)
+			})
+			.collect::<Vec<_>>()
+	});
+
+	let mut failed = 0usize;
+	for (rule, result) in &results {
+		render_task_results(renderer, std::slice::from_ref(result), repo_root);
+		report_debug_errors(args.debug, std::slice::from_ref(result));
+		if result.state != runner::ResultState::Success {
+			failed += 1;
+			render_rule_fail_text(rule, result, repo_root, args.render);
+		}
+	}
+
+	if failed > 0 {
+		render_group_fail_text(group, args.render);
+	}
+
+	Ok(failed)
+}
+
+fn render_rule_fail_text(
+	rule: &EvaluatedRule,
+	result: &runner::TaskResult,
+	repo_root: &std::path::Path,
+	render_mode: RenderMode,
+) {
+	let Some(fail_text) = &rule.rule.fail_text else {
+		return;
+	};
+	let (command, exit_code) = result.outputs.last().map_or_else(
+		|| ("", "unavailable".to_owned()),
+		|output| {
+			(
+				output.command.as_str(),
+				output
+					.exit_code
+					.map_or_else(|| "unavailable".to_owned(), |code| code.to_string()),
+			)
+		},
+	);
+	let cwd = runner::relative_cwd_label(&result.cwd, repo_root);
+	let context = FailTextContext {
+		rule: &rule.rule.name,
+		command,
+		cwd: &cwd,
+		exit_code: &exit_code,
+	};
+	eprintln!("{}", fail_text.render(&context, render_mode));
+}
+
+fn render_group_fail_text(group: &EvaluatedGroup, render_mode: RenderMode) {
+	let Some(fail_text) = &group.group.fail_text else {
+		return;
+	};
+	let context = FailTextContext {
+		rule: &group.group.name,
+		command: "parallel group",
+		cwd: ".",
+		exit_code: "1",
+	};
+	eprintln!("{}", fail_text.render(&context, render_mode));
 }
 
 fn resolve_run_config(cli: &RunArgs, repo_root: &std::path::Path) -> Result<RunConfig> {

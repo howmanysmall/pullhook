@@ -26,6 +26,14 @@ pub struct Cli {
 /// Non-run command variants.
 #[derive(Debug, Clone, Subcommand)]
 pub enum Commands {
+	/// Run configured pullhook rules.
+	Run(ConfigRunArgs),
+	/// Explain which configured rules match changed files.
+	Explain(ExplainArgs),
+	/// Validate the pullhook config file.
+	Validate(ValidateArgs),
+	/// Create a starter pullhook config file.
+	Init(InitArgs),
 	/// Generate shell completion scripts.
 	Completion {
 		/// Shell to generate completions for.
@@ -42,7 +50,6 @@ pub enum Commands {
 pub struct RunArgs {
 	/// Pattern to match files.
 	#[arg(short = 'p', long = "pattern", value_name = "glob")]
-	#[arg(required_unless_present = "install")]
 	#[arg(conflicts_with = "install")]
 	pub pattern: Option<String>,
 
@@ -97,6 +104,78 @@ pub struct RunArgs {
 	pub unique_cwd: bool,
 }
 
+/// Arguments for `pullhook run`.
+#[derive(Debug, Clone, Args)]
+pub struct ConfigRunArgs {
+	/// Override the git base revision.
+	#[arg(long = "base", value_name = "rev")]
+	pub base: Option<String>,
+
+	/// Max concurrent jobs for top-level work.
+	#[arg(long = "jobs", value_name = "n")]
+	pub jobs: Option<NonZeroUsize>,
+
+	/// Print planned commands and exit.
+	#[arg(long = "dry-run", default_value_t = false)]
+	pub dry_run: bool,
+
+	/// Show skipped rules as well as matched rules.
+	#[arg(long = "all-matches", default_value_t = false)]
+	pub all_matches: bool,
+
+	/// Enable debug logging.
+	#[arg(short = 'd', long = "debug", default_value_t = false)]
+	pub debug: bool,
+
+	/// Control non-debug ANSI styling (`auto`, `always`, `never`).
+	#[arg(long = "render", value_name = "mode", value_enum, default_value_t = RenderMode::Auto)]
+	pub render: RenderMode,
+}
+
+/// Arguments for `pullhook explain`.
+#[derive(Debug, Clone, Args)]
+pub struct ExplainArgs {
+	/// Override the git base revision.
+	#[arg(long = "base", value_name = "rev")]
+	pub base: Option<String>,
+
+	/// Show skipped rules as well as matched rules.
+	#[arg(long = "all-matches", default_value_t = false)]
+	pub all_matches: bool,
+
+	/// Enable debug logging.
+	#[arg(short = 'd', long = "debug", default_value_t = false)]
+	pub debug: bool,
+
+	/// Control non-debug ANSI styling (`auto`, `always`, `never`).
+	#[arg(long = "render", value_name = "mode", value_enum, default_value_t = RenderMode::Auto)]
+	pub render: RenderMode,
+}
+
+/// Arguments for `pullhook validate`.
+#[derive(Debug, Clone, Args)]
+pub struct ValidateArgs {
+	/// Enable debug logging.
+	#[arg(short = 'd', long = "debug", default_value_t = false)]
+	pub debug: bool,
+
+	/// Control non-debug ANSI styling (`auto`, `always`, `never`).
+	#[arg(long = "render", value_name = "mode", value_enum, default_value_t = RenderMode::Auto)]
+	pub render: RenderMode,
+}
+
+/// Arguments for `pullhook init`.
+#[derive(Debug, Clone, Args)]
+pub struct InitArgs {
+	/// Enable debug logging.
+	#[arg(short = 'd', long = "debug", default_value_t = false)]
+	pub debug: bool,
+
+	/// Control non-debug ANSI styling (`auto`, `always`, `never`).
+	#[arg(long = "render", value_name = "mode", value_enum, default_value_t = RenderMode::Auto)]
+	pub render: RenderMode,
+}
+
 impl Cli {
 	/// Write shell completions to stdout.
 	pub fn print_completion(shell: Shell) {
@@ -111,6 +190,14 @@ impl RunArgs {
 		self.once || self.install
 	}
 
+	/// Compute the effective jobs value.
+	#[must_use]
+	pub fn effective_jobs(&self) -> usize {
+		self.jobs.map_or_else(default_jobs, NonZeroUsize::get)
+	}
+}
+
+impl ConfigRunArgs {
 	/// Compute the effective jobs value.
 	#[must_use]
 	pub fn effective_jobs(&self) -> usize {
@@ -137,6 +224,13 @@ mod tests {
 
 		assert!(matches!(cli.command, Some(Commands::Completion { shell: Shell::Bash })));
 		assert!(cli.run.pattern.is_none());
+	}
+
+	#[test]
+	fn run_subcommand_parses_without_legacy_pattern() {
+		let cli = Cli::try_parse_from(["pullhook", "run", "--dry-run"]).expect("run parses");
+
+		assert!(matches!(cli.command, Some(Commands::Run(args)) if args.dry_run));
 	}
 
 	#[test]
