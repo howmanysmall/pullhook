@@ -851,6 +851,7 @@ fn root_help_lists_common_examples() {
 	assert!(stdout.contains("pullhook codes --json"));
 	assert!(stdout.contains("schema"));
 	assert!(stdout.contains("codes"));
+	assert!(stdout.contains("Legacy one-off options:"));
 	assert!(stdout.contains("Use `pullhook explain --all-matches` to preview config rule matches."));
 	assert!(stdout.contains("Use `pullhook codes` to inspect stable JSON status codes."));
 }

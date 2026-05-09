@@ -179,6 +179,7 @@ pub enum Commands {
 	reason = "CLI flags are naturally represented as independent booleans"
 )]
 #[command(after_help = LEGACY_RUN_AFTER_HELP)]
+#[command(next_help_heading = "Legacy one-off options")]
 pub struct RunArgs {
 	/// Pattern to match files.
 	#[arg(short = 'p', long = "pattern", value_name = "glob")]
