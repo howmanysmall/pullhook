@@ -1061,6 +1061,28 @@ fn explain_json_reads_changed_files_from_stdin() {
 }
 
 #[test]
+fn explain_json_reads_changed_files_from_file() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_config_rule(repo_root, "docs check", "docs/*.md", "cargo test -p docs");
+	write_file(repo_root, Path::new(".pullhook-changed"), "docs/guide.md\n\n");
+
+	let output = run_pullhook(
+		repo_root,
+		&["explain", "--changed-files-file", ".pullhook-changed", "--json"],
+	);
+
+	assert!(
+		output.status.success(),
+		"explain with --changed-files-file should succeed"
+	);
+	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse explain json");
+	assert_eq!(value["changedFiles"], serde_json::json!(["docs/guide.md"]));
+	assert_eq!(value["matchedFiles"], serde_json::json!(["docs/guide.md"]));
+	assert_eq!(value["entries"][0]["status"], "match");
+}
+
+#[test]
 fn run_dry_run_json_reports_planned_commands() {
 	let temp = setup_repo_with_merge();
 	let repo_root = temp.path();
@@ -1175,6 +1197,34 @@ fn run_dry_run_json_reads_changed_files_from_stdin() {
 }
 
 #[test]
+fn run_dry_run_json_reads_changed_files_from_file() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_config_rule(repo_root, "docs check", "docs/*.md", "cargo test -p docs");
+	write_file(repo_root, Path::new(".pullhook-changed"), "docs/guide.md\n\n");
+
+	let output = run_pullhook(
+		repo_root,
+		&[
+			"run",
+			"--dry-run",
+			"--changed-files-file",
+			".pullhook-changed",
+			"--json",
+		],
+	);
+
+	assert!(
+		output.status.success(),
+		"run --dry-run with --changed-files-file should succeed"
+	);
+	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse run json");
+	assert_eq!(value["plannedCommands"], 1);
+	assert_eq!(value["changedFiles"], serde_json::json!(["docs/guide.md"]));
+	assert_eq!(value["entries"][0]["status"], "match");
+}
+
+#[test]
 fn run_rejects_changed_file_with_base() {
 	let temp = setup_repo_with_merge();
 	let repo_root = temp.path();
@@ -1218,6 +1268,35 @@ fn run_rejects_changed_files_stdin_with_base() {
 	let stderr = stderr_text(&output);
 	assert!(stderr.contains("cannot be used with"));
 	assert!(stderr.contains("--changed-files-stdin"));
+	assert!(stderr.contains("--base <rev>"));
+}
+
+#[test]
+fn run_rejects_changed_files_file_with_base() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_config_rule(repo_root, "docs check", "docs/*.md", "cargo test -p docs");
+	write_file(repo_root, Path::new(".pullhook-changed"), "docs/guide.md\n");
+
+	let output = run_pullhook(
+		repo_root,
+		&[
+			"run",
+			"--dry-run",
+			"--changed-files-file",
+			".pullhook-changed",
+			"--base",
+			"HEAD~1",
+		],
+	);
+
+	assert!(
+		!output.status.success(),
+		"run should reject --changed-files-file with --base"
+	);
+	let stderr = stderr_text(&output);
+	assert!(stderr.contains("cannot be used with"));
+	assert!(stderr.contains("--changed-files-file <path>"));
 	assert!(stderr.contains("--base <rev>"));
 }
 

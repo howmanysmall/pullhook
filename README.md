@@ -263,8 +263,8 @@ Use `--rule <name>` with `run` or `explain` to focus on specific rule names or p
 Repeat it to target more than one selector, for example `pullhook run --rule lint --rule typecheck`.
 Rule and group names share one selector namespace, so each configured name must be unique.
 Use `--changed-file <path>` with `run` or `explain` to evaluate against explicit paths instead of the git diff;
-repeat it to simulate several changed files. Use `--changed-files-stdin` when a script already has a newline-delimited
-file list, such as `git diff --name-only`.
+repeat it to simulate several changed files. Use `--changed-files-file <path>` or `--changed-files-stdin` when
+a script already has a newline-delimited file list, such as `git diff --name-only`.
 
 Use `--config <path>` with `run`, `explain`, `validate`, `doctor`, or `rules` when you want to point at a
 specific config file instead of repo-root discovery. Pair it with `pullhook init --output <path>` to create

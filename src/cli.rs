@@ -32,6 +32,7 @@ Examples:
   pullhook run --dry-run
   pullhook run --json
   pullhook run --changed-file packages/a/package-lock.json --dry-run
+  pullhook run --changed-files-file .pullhook-changed --dry-run
   git diff --name-only HEAD~1 | pullhook run --changed-files-stdin --dry-run
   pullhook run --rule lint --rule typecheck
   pullhook run --config config/pullhook.custom.json --all-matches";
@@ -41,6 +42,7 @@ Examples:
   pullhook explain
   pullhook explain --all-matches
   pullhook explain --changed-file packages/a/package-lock.json
+  pullhook explain --changed-files-file .pullhook-changed
   git diff --name-only HEAD~1 | pullhook explain --changed-files-stdin
   pullhook explain --rule lint --all-matches
   pullhook explain --json";
@@ -213,6 +215,10 @@ pub struct ConfigRunArgs {
 	#[arg(long = "changed-file", value_name = "path", conflicts_with = "base")]
 	pub changed_files: Vec<PathBuf>,
 
+	/// Read changed file paths from a newline-delimited file.
+	#[arg(long = "changed-files-file", value_name = "path", conflicts_with = "base")]
+	pub changed_files_file: Option<PathBuf>,
+
 	/// Read changed file paths from stdin, one path per line.
 	#[arg(long = "changed-files-stdin", default_value_t = false, conflicts_with = "base")]
 	pub changed_files_stdin: bool,
@@ -265,6 +271,10 @@ pub struct ExplainArgs {
 	/// Evaluate as if this file changed; repeat for multiple files.
 	#[arg(long = "changed-file", value_name = "path", conflicts_with = "base")]
 	pub changed_files: Vec<PathBuf>,
+
+	/// Read changed file paths from a newline-delimited file.
+	#[arg(long = "changed-files-file", value_name = "path", conflicts_with = "base")]
+	pub changed_files_file: Option<PathBuf>,
 
 	/// Read changed file paths from stdin, one path per line.
 	#[arg(long = "changed-files-stdin", default_value_t = false, conflicts_with = "base")]

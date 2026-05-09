@@ -280,7 +280,11 @@ fn run_config_command(args: &ConfigRunArgs) -> Result<()> {
 
 	let renderer = Renderer::new(args.render);
 	let (repo, repo_root, config) = load_config_from_cwd(args.debug, args.config.as_deref())?;
-	let explicit_changed_files = collect_explicit_changed_files(&args.changed_files, args.changed_files_stdin)?;
+	let explicit_changed_files = collect_explicit_changed_files(
+		&args.changed_files,
+		args.changed_files_file.as_deref(),
+		args.changed_files_stdin,
+	)?;
 	let (changed_files, base_missing) = resolve_config_changed_files(
 		&repo,
 		&config,
@@ -359,7 +363,11 @@ fn run_config_command(args: &ConfigRunArgs) -> Result<()> {
 
 fn explain_config_command(args: &ExplainArgs) -> Result<()> {
 	let (repo, repo_root, config) = load_config_from_cwd(args.debug, args.config.as_deref())?;
-	let explicit_changed_files = collect_explicit_changed_files(&args.changed_files, args.changed_files_stdin)?;
+	let explicit_changed_files = collect_explicit_changed_files(
+		&args.changed_files,
+		args.changed_files_file.as_deref(),
+		args.changed_files_stdin,
+	)?;
 	let (changed_files, base_missing) = resolve_config_changed_files(
 		&repo,
 		&config,
@@ -657,23 +665,33 @@ fn resolve_config_path(
 
 fn collect_explicit_changed_files(
 	changed_files: &[std::path::PathBuf],
+	changed_files_file: Option<&std::path::Path>,
 	read_stdin: bool,
 ) -> Result<Vec<std::path::PathBuf>> {
 	let mut paths = changed_files.to_vec();
+	if let Some(path) = changed_files_file {
+		let input = std::fs::read_to_string(path)
+			.with_context(|| format!("failed to read changed files from `{}`", path.display()))?;
+		extend_changed_files_from_lines(&mut paths, &input);
+	}
 	if read_stdin {
 		let mut input = String::new();
 		std::io::stdin()
 			.read_to_string(&mut input)
 			.context("failed to read changed files from stdin")?;
-		paths.extend(
-			input
-				.lines()
-				.map(str::trim)
-				.filter(|line| !line.is_empty())
-				.map(std::path::PathBuf::from),
-		);
+		extend_changed_files_from_lines(&mut paths, &input);
 	}
 	Ok(paths)
+}
+
+fn extend_changed_files_from_lines(paths: &mut Vec<std::path::PathBuf>, input: &str) {
+	paths.extend(
+		input
+			.lines()
+			.map(str::trim)
+			.filter(|line| !line.is_empty())
+			.map(std::path::PathBuf::from),
+	);
 }
 
 fn resolve_config_changed_files(
