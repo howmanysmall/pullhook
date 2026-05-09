@@ -347,6 +347,13 @@ fn legacy_json_reports_command_parse_errors_as_json() {
 	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse command error json");
 	assert_eq!(value["status"], "error");
 	assert_eq!(value["error"], "failed to prepare command invocations");
+	assert_eq!(value["commandParse"]["command"], "sh -c 'echo nope");
+	assert!(
+		value["commandParse"]["reason"]
+			.as_str()
+			.expect("parse reason")
+			.contains("missing closing quote")
+	);
 	let details = value["details"].as_array().expect("details array");
 	assert!(details.iter().any(|detail| {
 		detail

@@ -324,6 +324,7 @@ and the final summary.
 
 Legacy top-level mode also supports `--json`, including the same top-level `status`, `error`, and `details`
 fields for setup failures, live execution results, and dry-run plans.
+Legacy command-parse JSON errors include a `commandParse` object with the rejected command and parser reason.
 
 Use `pullhook rules` to list configured rule and parallel group names before targeting a large config.
 `rules --json` includes top-level `status` and `error` fields like the other JSON commands, plus

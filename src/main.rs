@@ -1536,6 +1536,13 @@ fn print_json_error(error: &anyhow::Error) -> Result<()> {
 		);
 		return Ok(());
 	}
+	if let Some(error::PullhookError::CommandParse { command, reason }) = error.downcast_ref::<error::PullhookError>() {
+		println!(
+			"{}",
+			serde_json::to_string_pretty(&command_parse_error_json(error, &details, command, reason))?
+		);
+		return Ok(());
+	}
 
 	println!(
 		"{}",
@@ -1546,6 +1553,23 @@ fn print_json_error(error: &anyhow::Error) -> Result<()> {
 		}))?
 	);
 	Ok(())
+}
+
+fn command_parse_error_json(
+	error: &anyhow::Error,
+	details: &[String],
+	command: &str,
+	reason: &str,
+) -> serde_json::Value {
+	json!({
+		"status": "error",
+		"error": error.to_string(),
+		"details": details,
+		"commandParse": {
+			"command": command,
+			"reason": reason,
+		},
+	})
 }
 
 fn changed_files_file_error_json(error: &ChangedFilesFileError, details: &[String]) -> serde_json::Value {
