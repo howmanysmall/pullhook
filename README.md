@@ -359,6 +359,7 @@ pullhook codes --kinds-only
 pullhook codes --surfaces-only
 pullhook codes --search config --descriptions-only
 pullhook codes --kind doctor-check --codes-only
+pullhook codes --markdown
 pullhook codes --json
 pullhook schema
 pullhook schema --output .vscode/pullhook.schema.json
@@ -494,6 +495,7 @@ Use `pullhook codes --codes-only` when a script or completion helper only needs 
 Use `pullhook codes --kinds-only` when a script needs the distinct code kinds.
 Use `pullhook codes --surfaces-only` when a script needs the distinct code surfaces.
 Use `pullhook codes --descriptions-only` when a script or command palette only needs code descriptions.
+Use `pullhook codes --markdown` to generate a compact status-code reference table for docs or automation notes.
 
 Use `pullhook rules` to list configured rule and parallel group names before targeting a large config.
 `rules --json` includes top-level `status`, stable `code`, `error`, `filters`, and `searchFields` fields like the

@@ -2329,6 +2329,57 @@ fn codes_search_filter_composes_with_descriptions_only() {
 }
 
 #[test]
+fn codes_markdown_prints_filtered_status_code_table() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["codes", "--surface", "schema", "--markdown"]);
+
+	assert!(
+		output.status.success(),
+		"codes --surface schema --markdown should succeed"
+	);
+	let stdout = stdout_text(&output);
+	let lines = stdout.lines().collect::<Vec<_>>();
+	assert_eq!(lines.first().copied(), Some("| Code | Kind | Surface | Description |"));
+	assert!(
+		lines.contains(
+			&"| `schema_out_of_date` | `error` | `schema --check` | The checked schema output file is stale. |"
+		),
+		"schema markdown table should include stale schema code"
+	);
+	assert!(
+		!stdout.contains("completion_out_of_date"),
+		"surface filter should exclude completion codes"
+	);
+	let stderr = stderr_text(&output);
+	assert!(stderr.trim().is_empty(), "codes --markdown should not write stderr");
+}
+
+#[test]
+fn codes_markdown_conflicts_with_other_output_modes() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+	let conflicting_modes: &[&[&str]] = &[
+		&["codes", "--markdown", "--json"],
+		&["codes", "--markdown", "--codes-only"],
+		&["codes", "--markdown", "--descriptions-only"],
+		&["codes", "--markdown", "--kinds-only"],
+		&["codes", "--markdown", "--surfaces-only"],
+	];
+
+	for args in conflicting_modes {
+		let output = run_pullhook(temp.path(), args);
+
+		assert!(
+			!output.status.success(),
+			"codes --markdown should conflict for args {args:?}"
+		);
+		let stderr = stderr_text(&output);
+		assert!(stderr.contains("cannot be used with"));
+		assert!(stderr.contains("--markdown"));
+	}
+}
+
+#[test]
 fn codes_only_conflicts_with_json() {
 	let temp = tempfile::tempdir().expect("create temp dir");
 
@@ -2342,6 +2393,17 @@ fn codes_only_conflicts_with_json() {
 	assert!(stderr.contains("cannot be used with"));
 	assert!(stderr.contains("--codes-only"));
 	assert!(stderr.contains("--json"));
+
+	let markdown_output = run_pullhook(temp.path(), &["codes", "--codes-only", "--markdown"]);
+
+	assert!(
+		!markdown_output.status.success(),
+		"codes --codes-only should conflict with --markdown"
+	);
+	let markdown_stderr = stderr_text(&markdown_output);
+	assert!(markdown_stderr.contains("cannot be used with"));
+	assert!(markdown_stderr.contains("--codes-only"));
+	assert!(markdown_stderr.contains("--markdown"));
 }
 
 #[test]
@@ -2349,6 +2411,7 @@ fn codes_descriptions_only_conflicts_with_other_output_modes() {
 	let temp = tempfile::tempdir().expect("create temp dir");
 	let conflicting_modes: &[&[&str]] = &[
 		&["codes", "--descriptions-only", "--json"],
+		&["codes", "--descriptions-only", "--markdown"],
 		&["codes", "--descriptions-only", "--codes-only"],
 		&["codes", "--descriptions-only", "--kinds-only"],
 		&["codes", "--descriptions-only", "--surfaces-only"],
@@ -2381,6 +2444,17 @@ fn codes_kinds_only_conflicts_with_json() {
 	assert!(stderr.contains("cannot be used with"));
 	assert!(stderr.contains("--kinds-only"));
 	assert!(stderr.contains("--json"));
+
+	let markdown_output = run_pullhook(temp.path(), &["codes", "--kinds-only", "--markdown"]);
+
+	assert!(
+		!markdown_output.status.success(),
+		"codes --kinds-only should conflict with --markdown"
+	);
+	let markdown_stderr = stderr_text(&markdown_output);
+	assert!(markdown_stderr.contains("cannot be used with"));
+	assert!(markdown_stderr.contains("--kinds-only"));
+	assert!(markdown_stderr.contains("--markdown"));
 }
 
 #[test]
@@ -2397,6 +2471,17 @@ fn codes_surfaces_only_conflicts_with_json() {
 	assert!(stderr.contains("cannot be used with"));
 	assert!(stderr.contains("--surfaces-only"));
 	assert!(stderr.contains("--json"));
+
+	let markdown_output = run_pullhook(temp.path(), &["codes", "--surfaces-only", "--markdown"]);
+
+	assert!(
+		!markdown_output.status.success(),
+		"codes --surfaces-only should conflict with --markdown"
+	);
+	let markdown_stderr = stderr_text(&markdown_output);
+	assert!(markdown_stderr.contains("cannot be used with"));
+	assert!(markdown_stderr.contains("--surfaces-only"));
+	assert!(markdown_stderr.contains("--markdown"));
 }
 
 #[test]
@@ -5261,6 +5346,7 @@ fn utility_help_groups_options_by_task() {
 	assert!(codes_stdout.contains("Filter options:"));
 	assert!(codes_stdout.contains("Output options:"));
 	assert!(codes_stdout.contains("Print JSON with filters and searchFields metadata"));
+	assert!(codes_stdout.contains("Print a Markdown status-code reference table"));
 	assert!(codes_stdout.contains("--count-only"));
 	assert!(codes_stdout.contains("pullhook codes --surface run"));
 	assert!(codes_stdout.contains("pullhook codes --search config"));
@@ -5268,6 +5354,7 @@ fn utility_help_groups_options_by_task() {
 	assert!(codes_stdout.contains("pullhook codes --surfaces-only"));
 	assert!(codes_stdout.contains("pullhook codes --search config --descriptions-only"));
 	assert!(codes_stdout.contains("pullhook codes --kind error --codes-only"));
+	assert!(codes_stdout.contains("pullhook codes --markdown"));
 }
 
 #[test]

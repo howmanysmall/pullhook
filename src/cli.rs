@@ -211,6 +211,7 @@ Examples:
   pullhook codes --surfaces-only
   pullhook codes --search config --descriptions-only
   pullhook codes --kind error --codes-only
+  pullhook codes --markdown
   pullhook codes --json";
 
 const COMMANDS_AFTER_HELP: &str = "\
@@ -1664,10 +1665,19 @@ pub struct CodesArgs {
 	#[arg(
 		long = "json",
 		default_value_t = false,
-		conflicts_with_all = ["count_only", "codes_only", "surfaces_only", "kinds_only", "descriptions_only"],
+		conflicts_with_all = ["markdown", "count_only", "codes_only", "surfaces_only", "kinds_only", "descriptions_only"],
 		help_heading = "Output options"
 	)]
 	pub json: bool,
+
+	/// Print a Markdown status-code reference table.
+	#[arg(
+		long = "markdown",
+		default_value_t = false,
+		conflicts_with_all = ["json", "count_only", "codes_only", "surfaces_only", "kinds_only", "descriptions_only"],
+		help_heading = "Output options"
+	)]
+	pub markdown: bool,
 
 	#[command(flatten)]
 	pub output: CodesLineOutputArgs,
@@ -1690,7 +1700,7 @@ pub struct CodesValueOutputArgs {
 	#[arg(
 		long = "count-only",
 		default_value_t = false,
-		conflicts_with_all = ["json", "codes_only", "surfaces_only", "kinds_only", "descriptions_only"],
+		conflicts_with_all = ["json", "markdown", "codes_only", "surfaces_only", "kinds_only", "descriptions_only"],
 		help_heading = "Output options"
 	)]
 	pub count_only: bool,
@@ -1699,7 +1709,7 @@ pub struct CodesValueOutputArgs {
 	#[arg(
 		long = "codes-only",
 		default_value_t = false,
-		conflicts_with_all = ["json", "count_only", "surfaces_only", "kinds_only", "descriptions_only"],
+		conflicts_with_all = ["json", "markdown", "count_only", "surfaces_only", "kinds_only", "descriptions_only"],
 		help_heading = "Output options"
 	)]
 	pub codes_only: bool,
@@ -1708,7 +1718,7 @@ pub struct CodesValueOutputArgs {
 	#[arg(
 		long = "descriptions-only",
 		default_value_t = false,
-		conflicts_with_all = ["json", "count_only", "codes_only", "kinds_only", "surfaces_only"],
+		conflicts_with_all = ["json", "markdown", "count_only", "codes_only", "kinds_only", "surfaces_only"],
 		help_heading = "Output options"
 	)]
 	pub descriptions_only: bool,
@@ -1721,7 +1731,7 @@ pub struct CodesFacetOutputArgs {
 	#[arg(
 		long = "kinds-only",
 		default_value_t = false,
-		conflicts_with_all = ["json", "count_only", "codes_only", "surfaces_only", "descriptions_only"],
+		conflicts_with_all = ["json", "markdown", "count_only", "codes_only", "surfaces_only", "descriptions_only"],
 		help_heading = "Output options"
 	)]
 	pub kinds_only: bool,
@@ -1730,7 +1740,7 @@ pub struct CodesFacetOutputArgs {
 	#[arg(
 		long = "surfaces-only",
 		default_value_t = false,
-		conflicts_with_all = ["json", "count_only", "codes_only", "kinds_only", "descriptions_only"],
+		conflicts_with_all = ["json", "markdown", "count_only", "codes_only", "kinds_only", "descriptions_only"],
 		help_heading = "Output options"
 	)]
 	pub surfaces_only: bool,

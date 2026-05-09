@@ -1879,6 +1879,11 @@ fn codes_command(args: &CodesArgs) -> Result<()> {
 		return Ok(());
 	}
 
+	if args.markdown {
+		render_codes_markdown(&codes);
+		return Ok(());
+	}
+
 	if args.output.values.count_only {
 		println!("{}", codes.len());
 		return Ok(());
@@ -1928,6 +1933,20 @@ fn codes_command(args: &CodesArgs) -> Result<()> {
 		println!("{} [{}] {}", info.code, info.surface, info.description);
 	}
 	Ok(())
+}
+
+fn render_codes_markdown(codes: &[JsonCodeInfo]) {
+	println!("| Code | Kind | Surface | Description |");
+	println!("| --- | --- | --- | --- |");
+	for info in codes {
+		println!(
+			"| `{}` | `{}` | `{}` | {} |",
+			markdown_table_escape(info.code),
+			markdown_table_escape(info.kind),
+			markdown_table_escape(info.surface),
+			markdown_table_escape(info.description)
+		);
+	}
 }
 
 fn filtered_json_code_infos(kind: Option<CodeKind>, surface: Option<&str>, search: Option<&str>) -> Vec<JsonCodeInfo> {
