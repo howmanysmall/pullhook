@@ -349,11 +349,13 @@ fn run_help_lists_json_examples() {
 	assert!(stdout.contains("pullhook run --quiet"));
 	assert!(stdout.contains("pullhook run --summary-only"));
 	assert!(stdout.contains("pullhook run --commands-only"));
+	assert!(stdout.contains("pullhook run --matched-files-only"));
 	assert!(stdout.contains("pullhook run --config config/pullhook.custom.json --all-matches"));
 	assert!(stdout.contains("--no-color"));
 	assert!(stdout.contains("--quiet"));
 	assert!(stdout.contains("--summary-only"));
 	assert!(stdout.contains("--commands-only"));
+	assert!(stdout.contains("--matched-files-only"));
 }
 
 #[test]
@@ -436,6 +438,17 @@ fn run_commands_only_conflicts_with_other_output_modes() {
 	assert!(quiet_stderr.contains("cannot be used with"));
 	assert!(quiet_stderr.contains("--commands-only"));
 	assert!(quiet_stderr.contains("--quiet"));
+
+	let matched_files_output = run_pullhook(temp.path(), &["run", "--commands-only", "--matched-files-only"]);
+
+	assert!(
+		!matched_files_output.status.success(),
+		"run --commands-only should conflict with --matched-files-only"
+	);
+	let matched_files_stderr = stderr_text(&matched_files_output);
+	assert!(matched_files_stderr.contains("cannot be used with"));
+	assert!(matched_files_stderr.contains("--commands-only"));
+	assert!(matched_files_stderr.contains("--matched-files-only"));
 }
 
 #[test]
@@ -474,6 +487,40 @@ fn run_summary_only_conflicts_with_other_output_modes() {
 	assert!(commands_stderr.contains("cannot be used with"));
 	assert!(commands_stderr.contains("--summary-only"));
 	assert!(commands_stderr.contains("--commands-only"));
+
+	let matched_files_output = run_pullhook(temp.path(), &["run", "--summary-only", "--matched-files-only"]);
+
+	assert!(
+		!matched_files_output.status.success(),
+		"run --summary-only should conflict with --matched-files-only"
+	);
+	let matched_files_stderr = stderr_text(&matched_files_output);
+	assert!(matched_files_stderr.contains("cannot be used with"));
+	assert!(matched_files_stderr.contains("--summary-only"));
+	assert!(matched_files_stderr.contains("--matched-files-only"));
+}
+
+#[test]
+fn run_matched_files_only_conflicts_with_other_output_modes() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+	let conflicting_modes: &[&[&str]] = &[
+		&["run", "--matched-files-only", "--json"],
+		&["run", "--matched-files-only", "--quiet"],
+		&["run", "--matched-files-only", "--summary-only"],
+		&["run", "--matched-files-only", "--commands-only"],
+	];
+
+	for args in conflicting_modes {
+		let output = run_pullhook(temp.path(), args);
+
+		assert!(
+			!output.status.success(),
+			"run --matched-files-only should conflict for args {args:?}"
+		);
+		let stderr = stderr_text(&output);
+		assert!(stderr.contains("cannot be used with"));
+		assert!(stderr.contains("--matched-files-only"));
+	}
 }
 
 #[test]
@@ -2131,6 +2178,59 @@ fn run_commands_only_reports_planned_commands_without_execution() {
 	);
 	let stderr = stderr_text(&output);
 	assert!(stderr.trim().is_empty(), "run --commands-only should not write stderr");
+}
+
+#[test]
+fn run_matched_files_only_reports_unique_matched_files_without_execution() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_file(
+		repo_root,
+		Path::new("pullhook.json"),
+		r#"{
+  "rules": [
+    {
+      "name": "write package a",
+      "changed": "packages/a/package-lock.json",
+      "run": "touch marker.txt"
+    },
+    {
+      "name": "write all packages",
+      "changed": "packages/*/package-lock.json",
+      "run": "touch other-marker.txt"
+    },
+    {
+      "name": "skip markdown",
+      "changed": "**/*.md",
+      "run": "touch skipped.txt"
+    }
+  ]
+}
+"#,
+	);
+
+	let output = run_pullhook(repo_root, &["run", "--matched-files-only"]);
+
+	assert!(output.status.success(), "run --matched-files-only should succeed");
+	let stdout = stdout_text(&output);
+	assert_eq!(stdout, "packages/a/package-lock.json\npackages/b/package-lock.json\n");
+	assert!(
+		!repo_root.join("marker.txt").exists(),
+		"matched-files-only should not execute planned commands"
+	);
+	assert!(
+		!repo_root.join("other-marker.txt").exists(),
+		"matched-files-only should not execute planned commands"
+	);
+	assert!(
+		!repo_root.join("skipped.txt").exists(),
+		"matched-files-only should not execute skipped commands"
+	);
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"run --matched-files-only should not write stderr"
+	);
 }
 
 #[test]

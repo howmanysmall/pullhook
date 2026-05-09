@@ -129,6 +129,7 @@ pullhook explain --commands-only
 pullhook explain --matched-files-only
 pullhook run --summary-only
 pullhook run --commands-only
+pullhook run --matched-files-only
 pullhook run --changed-file packages/a/package-lock.json --dry-run
 git diff --name-only HEAD~1 | pullhook run --changed-files-stdin --dry-run
 pullhook run --rule lint --dry-run
@@ -283,6 +284,7 @@ Use `explain --commands-only` when another script should receive only the planne
 Use `explain --matched-files-only` when a script needs the matched changed-file paths without parsing JSON.
 Use `run --summary-only` for the same clean plan counts from the execution subcommand; it exits before running anything.
 Use `run --commands-only` for the same clean command list from the execution subcommand; it exits before running anything.
+Use `run --matched-files-only` for the same clean matched-file list from the execution subcommand; it exits before running anything.
 `run --dry-run --json` emits the same plan plus `plannedCommands`, which is handy for CI or editor integrations.
 Use `run --quiet` when successful text output would be noise; failures still print the failed task, any `failText`,
 and the final summary.

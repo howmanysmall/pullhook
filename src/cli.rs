@@ -34,6 +34,7 @@ Examples:
   pullhook run --quiet
   pullhook run --summary-only
   pullhook run --commands-only
+  pullhook run --matched-files-only
   pullhook run --changed-file packages/a/package-lock.json --dry-run
   pullhook run --changed-files-file .pullhook-changed --dry-run
   git diff --name-only HEAD~1 | pullhook run --changed-files-stdin --dry-run
@@ -261,12 +262,28 @@ pub struct ConfigRunArgs {
 	pub quiet: bool,
 
 	/// Print only changed-file and planned-command counts and exit without executing.
-	#[arg(long = "summary-only", default_value_t = false, conflicts_with_all = ["json", "quiet", "commands_only"])]
+	#[arg(
+		long = "summary-only",
+		default_value_t = false,
+		conflicts_with_all = ["json", "quiet", "commands_only", "matched_files_only"]
+	)]
 	pub summary_only: bool,
 
 	/// Print only planned commands and exit without executing.
-	#[arg(long = "commands-only", default_value_t = false, conflicts_with_all = ["json", "quiet"])]
+	#[arg(
+		long = "commands-only",
+		default_value_t = false,
+		conflicts_with_all = ["json", "quiet", "matched_files_only"]
+	)]
 	pub commands_only: bool,
+
+	/// Print only matched changed files and exit without executing.
+	#[arg(
+		long = "matched-files-only",
+		default_value_t = false,
+		conflicts_with_all = ["json", "quiet", "summary_only", "commands_only"]
+	)]
+	pub matched_files_only: bool,
 
 	/// Show skipped rules as well as matched rules.
 	#[arg(long = "all-matches", default_value_t = false)]
