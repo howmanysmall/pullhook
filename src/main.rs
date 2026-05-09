@@ -2198,6 +2198,13 @@ fn rules_command(args: &RulesArgs) -> Result<()> {
 		return Ok(());
 	}
 
+	if args.fail_text_only {
+		for fail_text in collect_config_fail_text_for_kind(&config, args.kind) {
+			println!("{fail_text}");
+		}
+		return Ok(());
+	}
+
 	renderer.render_message_stage(&format!("config: {}", config.path.display()));
 	renderer.render_message_stage(&format!(
 		"entries: {} | rules: {} | parallel groups: {}",
@@ -4165,6 +4172,26 @@ fn collect_config_rule_exclude_patterns_for_kind(config: &Config, kind: RulesKin
 	patterns
 }
 
+fn collect_config_fail_text_for_kind(config: &Config, kind: RulesKind) -> Vec<&str> {
+	let mut fail_text = Vec::new();
+	for entry in &config.entries {
+		match entry {
+			Entry::Rule(rule) => collect_config_rule_fail_text_for_kind(rule, kind, &mut fail_text),
+			Entry::Group(group) => {
+				if (kind == RulesKind::All || kind == RulesKind::Group)
+					&& let Some(group_fail_text) = group.fail_text.as_ref()
+				{
+					fail_text.push(group_fail_text.as_str());
+				}
+				for rule in &group.rules {
+					collect_config_rule_fail_text_for_kind(rule, kind, &mut fail_text);
+				}
+			}
+		}
+	}
+	fail_text
+}
+
 fn collect_config_rule_patterns_for_rule_kind<'a>(
 	rule: &'a config::Rule,
 	kind: RulesKind,
@@ -4182,6 +4209,14 @@ fn collect_config_rule_exclude_patterns_for_rule_kind<'a>(
 ) {
 	if rules_kind_matches_rule(kind, rule) {
 		patterns.extend(rule.exclude.iter().map(config::Pattern::as_str));
+	}
+}
+
+fn collect_config_rule_fail_text_for_kind<'a>(rule: &'a config::Rule, kind: RulesKind, fail_text: &mut Vec<&'a str>) {
+	if rules_kind_matches_rule(kind, rule)
+		&& let Some(rule_fail_text) = rule.fail_text.as_ref()
+	{
+		fail_text.push(rule_fail_text.as_str());
 	}
 }
 

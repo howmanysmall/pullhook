@@ -110,6 +110,8 @@ Examples:
   pullhook rules --rule lint --patterns-only
   pullhook rules --exclude-patterns-only
   pullhook rules --rule lint --exclude-patterns-only
+  pullhook rules --fail-text-only
+  pullhook rules --rule lint --fail-text-only
   pullhook rules --json
   pullhook rules --rule lint --json
   pullhook rules --config config/pullhook.custom.json";
@@ -901,7 +903,7 @@ pub struct RulesArgs {
 	#[arg(
 		long = "names-only",
 		default_value_t = false,
-		conflicts_with_all = ["json", "commands_only", "patterns_only", "exclude_patterns_only"],
+		conflicts_with_all = ["json", "commands_only", "patterns_only", "exclude_patterns_only", "fail_text_only"],
 		help_heading = "Output options"
 	)]
 	pub names_only: bool,
@@ -910,7 +912,7 @@ pub struct RulesArgs {
 	#[arg(
 		long = "commands-only",
 		default_value_t = false,
-		conflicts_with_all = ["json", "names_only", "patterns_only", "exclude_patterns_only"],
+		conflicts_with_all = ["json", "names_only", "patterns_only", "exclude_patterns_only", "fail_text_only"],
 		help_heading = "Output options"
 	)]
 	pub commands_only: bool,
@@ -919,7 +921,7 @@ pub struct RulesArgs {
 	#[arg(
 		long = "patterns-only",
 		default_value_t = false,
-		conflicts_with_all = ["json", "names_only", "commands_only", "exclude_patterns_only"],
+		conflicts_with_all = ["json", "names_only", "commands_only", "exclude_patterns_only", "fail_text_only"],
 		help_heading = "Output options"
 	)]
 	pub patterns_only: bool,
@@ -928,10 +930,19 @@ pub struct RulesArgs {
 	#[arg(
 		long = "exclude-patterns-only",
 		default_value_t = false,
-		conflicts_with_all = ["json", "names_only", "commands_only", "patterns_only"],
+		conflicts_with_all = ["json", "names_only", "commands_only", "patterns_only", "fail_text_only"],
 		help_heading = "Output options"
 	)]
 	pub exclude_patterns_only: bool,
+
+	/// Print only configured failText templates, one per line.
+	#[arg(
+		long = "fail-text-only",
+		default_value_t = false,
+		conflicts_with_all = ["json", "names_only", "commands_only", "patterns_only", "exclude_patterns_only"],
+		help_heading = "Output options"
+	)]
+	pub fail_text_only: bool,
 
 	/// Limit inventory to all entries, leaf rules, groups, run rules, or install rules.
 	#[arg(

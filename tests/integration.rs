@@ -3150,6 +3150,8 @@ fn rules_help_lists_script_friendly_output_modes() {
 	assert!(stdout.contains("pullhook rules --patterns-only"));
 	assert!(stdout.contains("pullhook rules --exclude-patterns-only"));
 	assert!(stdout.contains("pullhook rules --rule lint --exclude-patterns-only"));
+	assert!(stdout.contains("pullhook rules --fail-text-only"));
+	assert!(stdout.contains("pullhook rules --rule lint --fail-text-only"));
 	assert!(stdout.contains("pullhook rules --rule lint --json"));
 	assert!(stdout.contains("Input options:"));
 	assert!(stdout.contains("Output options:"));
@@ -3745,6 +3747,7 @@ fn rules_patterns_only_conflicts_with_other_output_modes() {
 		&["rules", "--patterns-only", "--names-only"],
 		&["rules", "--patterns-only", "--commands-only"],
 		&["rules", "--patterns-only", "--exclude-patterns-only"],
+		&["rules", "--patterns-only", "--fail-text-only"],
 	];
 
 	for args in conflicting_modes {
@@ -3768,6 +3771,7 @@ fn rules_exclude_patterns_only_conflicts_with_other_output_modes() {
 		&["rules", "--exclude-patterns-only", "--names-only"],
 		&["rules", "--exclude-patterns-only", "--commands-only"],
 		&["rules", "--exclude-patterns-only", "--patterns-only"],
+		&["rules", "--exclude-patterns-only", "--fail-text-only"],
 	];
 
 	for args in conflicting_modes {
@@ -3780,6 +3784,30 @@ fn rules_exclude_patterns_only_conflicts_with_other_output_modes() {
 		let stderr = stderr_text(&output);
 		assert!(stderr.contains("cannot be used with"));
 		assert!(stderr.contains("--exclude-patterns-only"));
+	}
+}
+
+#[test]
+fn rules_fail_text_only_conflicts_with_other_output_modes() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+	let conflicting_modes: &[&[&str]] = &[
+		&["rules", "--fail-text-only", "--json"],
+		&["rules", "--fail-text-only", "--names-only"],
+		&["rules", "--fail-text-only", "--commands-only"],
+		&["rules", "--fail-text-only", "--patterns-only"],
+		&["rules", "--fail-text-only", "--exclude-patterns-only"],
+	];
+
+	for args in conflicting_modes {
+		let output = run_pullhook(temp.path(), args);
+
+		assert!(
+			!output.status.success(),
+			"rules --fail-text-only should conflict for args {args:?}"
+		);
+		let stderr = stderr_text(&output);
+		assert!(stderr.contains("cannot be used with"));
+		assert!(stderr.contains("--fail-text-only"));
 	}
 }
 
@@ -5900,6 +5928,156 @@ fn rules_exclude_patterns_only_respects_rule_selector_filter() {
 	assert!(
 		stderr.trim().is_empty(),
 		"rules --rule test --exclude-patterns-only should not write stderr"
+	);
+}
+
+#[test]
+fn rules_fail_text_only_prints_configured_templates() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_file(
+		repo_root,
+		Path::new("pullhook.json"),
+		r#"{
+  "rules": [
+    {
+      "name": "install dependencies",
+      "install": true
+    },
+    {
+      "name": "format",
+      "changed": "packages/a/package-lock.json",
+      "failText": "{rule} format failed",
+      "run": "cargo fmt --all"
+    },
+    {
+      "name": "checks",
+      "failText": "{rule} group failed",
+      "parallel": [
+        {
+          "name": "lint",
+          "changed": "packages/b/package-lock.json",
+          "failText": "{red.bold {rule} failed}",
+          "run": "cargo clippy --all-targets"
+        },
+        {
+          "name": "test",
+          "changed": ["src/**/*.rs", "tests/**/*.rs"],
+          "failText": "{command} failed in {cwd}",
+          "run": "cargo nextest run"
+        }
+      ]
+    }
+  ]
+}
+"#,
+	);
+
+	let output = run_pullhook(repo_root, &["rules", "--fail-text-only"]);
+
+	assert!(output.status.success(), "rules --fail-text-only should succeed");
+	let stdout = stdout_text(&output);
+	assert_eq!(
+		stdout,
+		"{rule} format failed\n{rule} group failed\n{red.bold {rule} failed}\n{command} failed in {cwd}\n"
+	);
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"rules --fail-text-only should not write stderr"
+	);
+}
+
+#[test]
+fn rules_fail_text_only_respects_kind_filter() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_file(
+		repo_root,
+		Path::new("pullhook.json"),
+		r#"{
+  "rules": [
+    {
+      "name": "install dependencies",
+      "install": true,
+      "failText": "{rule} install failed"
+    },
+    {
+      "name": "format",
+      "changed": "packages/a/package-lock.json",
+      "failText": "{rule} run failed",
+      "run": "cargo fmt --all"
+    }
+  ]
+}
+"#,
+	);
+
+	let output = run_pullhook(repo_root, &["rules", "--kind", "install", "--fail-text-only"]);
+
+	assert!(
+		output.status.success(),
+		"rules --kind install --fail-text-only should succeed"
+	);
+	let stdout = stdout_text(&output);
+	assert_eq!(stdout, "{rule} install failed\n");
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"rules --kind install --fail-text-only should not write stderr"
+	);
+}
+
+#[test]
+fn rules_fail_text_only_respects_rule_selector_filter() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_file(
+		repo_root,
+		Path::new("pullhook.json"),
+		r#"{
+  "rules": [
+    {
+      "name": "format",
+      "changed": "packages/a/package-lock.json",
+      "failText": "{rule} format failed",
+      "run": "cargo fmt --all"
+    },
+    {
+      "name": "checks",
+      "failText": "{rule} group failed",
+      "parallel": [
+        {
+          "name": "lint",
+          "changed": "packages/b/package-lock.json",
+          "failText": "{rule} lint failed",
+          "run": "cargo clippy --all-targets"
+        },
+        {
+          "name": "test",
+          "changed": ["src/**/*.rs", "tests/**/*.rs"],
+          "failText": "{command} failed in {cwd}",
+          "run": "cargo nextest run"
+        }
+      ]
+    }
+  ]
+}
+"#,
+	);
+
+	let output = run_pullhook(repo_root, &["rules", "--rule", "test", "--fail-text-only"]);
+
+	assert!(
+		output.status.success(),
+		"rules --rule test --fail-text-only should succeed"
+	);
+	let stdout = stdout_text(&output);
+	assert_eq!(stdout, "{rule} group failed\n{command} failed in {cwd}\n");
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"rules --rule test --fail-text-only should not write stderr"
 	);
 }
 
