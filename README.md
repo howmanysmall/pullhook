@@ -231,6 +231,7 @@ pullhook explain --all-matches --json
 pullhook run --json
 pullhook run --dry-run --json
 pullhook run --dry-run
+pullhook run --quiet
 pullhook run
 ```
 
@@ -256,6 +257,8 @@ detection in one pass, with a short hint for each check. `explain --json` emits 
 including changed files, their source (`git`, `explicit`, or `base-missing`), matched files, commands, and
 skip reasons. `run --json` adds real execution results, captured stdout/stderr, and a final summary.
 `run --dry-run --json` emits the same plan plus `plannedCommands`, which is handy for CI or editor integrations.
+Use `run --quiet` when successful text output would be noise; failures still print the failed task, any `failText`,
+and the final summary.
 
 Legacy top-level mode also supports `--json`, including live execution results and dry-run plans.
 

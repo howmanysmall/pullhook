@@ -354,7 +354,9 @@ fn run_config_command(args: &ConfigRunArgs) -> Result<()> {
 		return Ok(());
 	}
 
-	render_config_evaluation(&config, &evaluation, args.all_matches || args.dry_run, args.dry_run);
+	if !args.quiet {
+		render_config_evaluation(&config, &evaluation, args.all_matches || args.dry_run, args.dry_run);
+	}
 
 	if args.dry_run {
 		let planned_commands = count_planned_commands(&evaluation);
@@ -368,13 +370,15 @@ fn run_config_command(args: &ConfigRunArgs) -> Result<()> {
 
 	let counts = execute_config_entries(&renderer, config.on_failure, &evaluation, &repo_root, args)?;
 	let failure_count = counts.failed + counts.interrupted;
-	renderer.render_summary_stage(Summary {
-		matched_files,
-		task_dirs: counts.task_dirs,
-		passed: counts.passed,
-		failed: counts.failed,
-		interrupted: counts.interrupted,
-	});
+	if !args.quiet || failure_count > 0 {
+		renderer.render_summary_stage(Summary {
+			matched_files,
+			task_dirs: counts.task_dirs,
+			passed: counts.passed,
+			failed: counts.failed,
+			interrupted: counts.interrupted,
+		});
+	}
 	if failure_count > 0 {
 		return Err(anyhow!("{failure_count} config rule(s) failed"));
 	}
@@ -1542,6 +1546,7 @@ fn execute_config_entries(
 					repo_root,
 					args.debug,
 					effective_render_mode(args.render, args.no_color),
+					args.quiet,
 				);
 				counts.add_state(state);
 			}
@@ -1619,9 +1624,10 @@ fn execute_config_rule(
 	repo_root: &std::path::Path,
 	debug_enabled: bool,
 	render_mode: RenderMode,
+	quiet: bool,
 ) -> runner::ResultState {
 	let result = run_config_rule_task(rule, repo_root, debug_enabled);
-	render_config_rule_result(renderer, rule, &result, repo_root, debug_enabled, render_mode);
+	render_config_rule_result(renderer, rule, &result, repo_root, debug_enabled, render_mode, quiet);
 	result.state
 }
 
@@ -1642,6 +1648,7 @@ fn execute_config_group(
 			repo_root,
 			args.debug,
 			effective_render_mode(args.render, args.no_color),
+			args.quiet,
 		);
 		counts.add_state(result.state);
 	}
@@ -1702,10 +1709,15 @@ fn render_config_rule_result(
 	repo_root: &std::path::Path,
 	debug_enabled: bool,
 	render_mode: RenderMode,
+	quiet: bool,
 ) {
+	let failed = result.state != runner::ResultState::Success;
+	if quiet && !failed {
+		return;
+	}
+
 	render_task_results(renderer, std::slice::from_ref(result), repo_root);
 	report_debug_errors(debug_enabled, std::slice::from_ref(result));
-	let failed = result.state != runner::ResultState::Success;
 	if failed {
 		render_rule_fail_text(rule, result, repo_root, render_mode);
 	}

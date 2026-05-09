@@ -316,8 +316,10 @@ fn run_help_lists_json_examples() {
 	let stdout = stdout_text(&output);
 	assert!(stdout.contains("pullhook run --dry-run"));
 	assert!(stdout.contains("pullhook run --json"));
+	assert!(stdout.contains("pullhook run --quiet"));
 	assert!(stdout.contains("pullhook run --config config/pullhook.custom.json --all-matches"));
 	assert!(stdout.contains("--no-color"));
+	assert!(stdout.contains("--quiet"));
 }
 
 #[test]
@@ -331,6 +333,19 @@ fn no_color_conflicts_with_render_mode() {
 	assert!(stderr.contains("cannot be used with"));
 	assert!(stderr.contains("--no-color"));
 	assert!(stderr.contains("--render <mode>"));
+}
+
+#[test]
+fn run_quiet_conflicts_with_json() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["run", "--quiet", "--json"]);
+
+	assert!(!output.status.success(), "--quiet should conflict with --json");
+	let stderr = stderr_text(&output);
+	assert!(stderr.contains("cannot be used with"));
+	assert!(stderr.contains("--quiet"));
+	assert!(stderr.contains("--json"));
 }
 
 #[test]
@@ -1537,6 +1552,54 @@ fn run_json_reports_failure_results() {
 	assert_eq!(executions[0]["failText"], "fail first failed");
 	assert_eq!(executions[1]["state"], "success");
 	let stderr = stderr_text(&output);
+	assert!(stderr.contains("1 config rule(s) failed"));
+}
+
+#[test]
+fn run_quiet_suppresses_successful_text_output() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_config_rule(repo_root, "write marker", "packages/a/package-lock.json", "true");
+
+	let output = run_pullhook(repo_root, &["run", "--quiet"]);
+
+	assert!(output.status.success(), "quiet run should succeed");
+	let stdout = stdout_text(&output);
+	let stderr = stderr_text(&output);
+	assert!(stdout.trim().is_empty(), "quiet successful run should not write stdout");
+	assert!(stderr.trim().is_empty(), "quiet successful run should not write stderr");
+}
+
+#[test]
+fn run_quiet_reports_failures() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_file(
+		repo_root,
+		Path::new("pullhook.json"),
+		r#"{
+  "rules": [
+    {
+      "name": "fail marker",
+      "changed": "packages/a/package-lock.json",
+      "run": "false",
+      "failText": "{rule} failed"
+    }
+  ]
+}
+"#,
+	);
+
+	let output = run_pullhook_with_env(repo_root, &["run", "--quiet"], &[("PULLHOOK_RENDER_MODE", "never")]);
+
+	assert!(!output.status.success(), "quiet run should still fail");
+	let stdout = stdout_text(&output);
+	assert!(stdout.contains("Tasks"));
+	assert!(stdout.contains("[error] failed"));
+	assert!(stdout.contains("Summary"));
+	assert!(stdout.contains("failed: 1"));
+	let stderr = stderr_text(&output);
+	assert!(stderr.contains("fail marker failed"));
 	assert!(stderr.contains("1 config rule(s) failed"));
 }
 
