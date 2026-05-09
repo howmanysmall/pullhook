@@ -292,6 +292,7 @@ pullhook managers
 pullhook managers --search pnpm
 pullhook managers --patterns-only
 pullhook managers --commands-only
+pullhook managers --watched-files-only
 pullhook managers --json
 pullhook categories
 pullhook categories --search workflow
@@ -378,6 +379,7 @@ Use `pullhook managers` to inspect package-manager detection files and install c
 Add `--search <text>` to match package-manager names, install commands, detection patterns, or watched files.
 Use `pullhook managers --patterns-only` when a script only needs install detection patterns.
 Use `pullhook managers --commands-only` when a script only needs package-manager install commands.
+Use `pullhook managers --watched-files-only` when a script only needs the deduped files that can trigger installs.
 `validate --json` emits a compact config summary for scripts and still prints structured JSON when the
 config is invalid, including `status`, stable `code`, `error`, `details`, and `validationErrors` fields. Config parse failures also include a `parseError` object with the config path and parser reason. Use `validate --quiet` when CI only needs the exit code. `doctor` checks repo discovery, config health, diff-base availability, and `--install`
 detection in one pass, with a short hint for each check. Use `doctor --strict` when CI should fail on warnings.

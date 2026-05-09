@@ -1070,6 +1070,13 @@ fn managers_command(args: &ManagersArgs) -> Result<()> {
 		return Ok(());
 	}
 
+	if args.output.watched_files_only {
+		for watched_file in watched_files_for_managers(&managers) {
+			println!("{watched_file}");
+		}
+		return Ok(());
+	}
+
 	println!("Package managers");
 	println!("lock files win over config files; multiple lock-file managers are ambiguous");
 	if let Some(search) = &args.search {
@@ -1126,6 +1133,18 @@ fn manager_info_json(package_manager: PackageManager) -> serde_json::Value {
 		"configFiles": package_manager.config_files(),
 		"watchedFiles": package_manager.watched_files(),
 	})
+}
+
+fn watched_files_for_managers(package_managers: &[PackageManager]) -> Vec<&'static str> {
+	let mut watched_files = Vec::new();
+	for package_manager in package_managers {
+		for watched_file in package_manager.watched_files() {
+			if !watched_files.contains(watched_file) {
+				watched_files.push(*watched_file);
+			}
+		}
+	}
+	watched_files
 }
 
 fn list_or_none(values: &[&str]) -> String {

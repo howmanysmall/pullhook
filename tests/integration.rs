@@ -1385,6 +1385,68 @@ fn managers_search_filter_composes_with_commands_only() {
 }
 
 #[test]
+fn managers_watched_files_only_prints_clean_deduped_files() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["managers", "--watched-files-only"]);
+
+	assert!(output.status.success(), "managers --watched-files-only should succeed");
+	let stdout = stdout_text(&output);
+	assert_eq!(
+		stdout.lines().collect::<Vec<_>>(),
+		vec![
+			"package.json",
+			"package-lock.json",
+			"npm-shrinkwrap.json",
+			"yarn.lock",
+			"pnpm-lock.yaml",
+			"bun.lock",
+			"bun.lockb",
+			"deno.json",
+			"deno.jsonc",
+			"deno.lock",
+			"vlt-lock.json",
+			"aube-lock.yaml"
+		]
+	);
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"managers --watched-files-only should not write stderr"
+	);
+}
+
+#[test]
+fn managers_search_filter_composes_with_watched_files_only() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["managers", "--search", "aube", "--watched-files-only"]);
+
+	assert!(
+		output.status.success(),
+		"managers --search aube --watched-files-only should succeed"
+	);
+	let stdout = stdout_text(&output);
+	assert_eq!(
+		stdout.lines().collect::<Vec<_>>(),
+		vec![
+			"aube-lock.yaml",
+			"bun.lock",
+			"npm-shrinkwrap.json",
+			"package.json",
+			"package-lock.json",
+			"pnpm-lock.yaml",
+			"yarn.lock"
+		]
+	);
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"managers --search aube --watched-files-only should not write stderr"
+	);
+}
+
+#[test]
 fn managers_script_outputs_conflict_with_json() {
 	let temp = tempfile::tempdir().expect("create temp dir");
 
@@ -1420,6 +1482,17 @@ fn managers_script_outputs_conflict_with_json() {
 	assert!(commands_stderr.contains("cannot be used with"));
 	assert!(commands_stderr.contains("--commands-only"));
 	assert!(commands_stderr.contains("--json"));
+
+	let watched_files_output = run_pullhook(temp.path(), &["managers", "--watched-files-only", "--json"]);
+
+	assert!(
+		!watched_files_output.status.success(),
+		"managers --watched-files-only should conflict with --json"
+	);
+	let watched_files_stderr = stderr_text(&watched_files_output);
+	assert!(watched_files_stderr.contains("cannot be used with"));
+	assert!(watched_files_stderr.contains("--watched-files-only"));
+	assert!(watched_files_stderr.contains("--json"));
 }
 
 #[test]
@@ -1428,7 +1501,10 @@ fn managers_line_outputs_conflict_with_each_other() {
 	let conflicting_modes: &[&[&str]] = &[
 		&["managers", "--commands-only", "--names-only"],
 		&["managers", "--commands-only", "--patterns-only"],
+		&["managers", "--commands-only", "--watched-files-only"],
 		&["managers", "--names-only", "--patterns-only"],
+		&["managers", "--names-only", "--watched-files-only"],
+		&["managers", "--patterns-only", "--watched-files-only"],
 	];
 
 	for args in conflicting_modes {
@@ -4125,6 +4201,7 @@ fn utility_help_groups_options_by_task() {
 	assert!(managers_stdout.contains("pullhook managers --names-only"));
 	assert!(managers_stdout.contains("pullhook managers --patterns-only"));
 	assert!(managers_stdout.contains("pullhook managers --commands-only"));
+	assert!(managers_stdout.contains("pullhook managers --watched-files-only"));
 	assert!(managers_stdout.contains("pullhook managers --json"));
 
 	let categories = run_pullhook(temp.path(), &["categories", "--help"]);
