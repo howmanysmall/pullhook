@@ -2619,7 +2619,14 @@ fn categories_example_commands_only_prints_clean_example_commands() {
 		"categories --search generate --example-commands-only should succeed"
 	);
 	let stdout = stdout_text(&output);
-	assert_eq!(stdout.lines().collect::<Vec<_>>(), vec!["pullhook init"]);
+	assert_eq!(
+		stdout.lines().collect::<Vec<_>>(),
+		vec![
+			"pullhook init",
+			"pullhook schema --output .vscode/pullhook.schema.json",
+			"pullhook completion fish --output ~/.config/fish/completions/pullhook.fish"
+		]
+	);
 	let stderr = stderr_text(&output);
 	assert!(
 		stderr.trim().is_empty(),
@@ -2643,7 +2650,14 @@ fn categories_search_filter_composes_with_example_commands_only() {
 	let stdout = stdout_text(&output);
 	assert_eq!(
 		stdout.lines().collect::<Vec<_>>(),
-		vec!["pullhook validate --quiet", "pullhook doctor --strict"]
+		vec![
+			"pullhook validate --quiet",
+			"pullhook doctor --strict",
+			"pullhook config --path-only",
+			"pullhook rules --commands-only",
+			"pullhook rules --count-only",
+			"pullhook rules --search lint --names-only"
+		]
 	);
 	let stderr = stderr_text(&output);
 	assert!(
@@ -6265,7 +6279,7 @@ fn validate_json_reports_config_parse_errors_as_json() {
 	assert!(!output.status.success(), "unparseable config should fail");
 	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse validate json");
 	assert_eq!(value["status"], "error");
-	assert_eq!(value["code"], "config_missing");
+	assert_eq!(value["code"], "config_parse");
 	assert_eq!(value["valid"], false);
 	assert!(value["path"].as_str().expect("path").ends_with("pullhook.json"));
 	assert!(
