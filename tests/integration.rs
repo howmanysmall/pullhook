@@ -640,6 +640,10 @@ fn shells_json_lists_completion_targets() {
 	assert_eq!(value["status"], "ok");
 	assert_eq!(value["code"], serde_json::Value::Null);
 	assert_eq!(value["filters"]["search"], serde_json::Value::Null);
+	assert_eq!(
+		value["searchFields"],
+		serde_json::json!(["name", "completionCommand", "description"])
+	);
 	let shells = value["shells"].as_array().expect("shells array");
 	assert!(
 		shells
@@ -883,6 +887,10 @@ fn formats_json_lists_config_formats() {
 	assert_eq!(value["status"], "ok");
 	assert_eq!(value["code"], serde_json::Value::Null);
 	assert_eq!(value["filters"]["search"], serde_json::Value::Null);
+	assert_eq!(
+		value["searchFields"],
+		serde_json::json!(["name", "defaultFile", "alternateFile", "description", "initCommand"])
+	);
 	let formats = value["formats"].as_array().expect("formats array");
 	assert!(formats.iter().any(|entry| entry["name"] == "yaml"
 		&& entry["defaultFile"] == "pullhook.yaml"
@@ -1204,6 +1212,17 @@ fn managers_json_lists_install_detection_contract() {
 	assert_eq!(value["status"], "ok");
 	assert_eq!(value["code"], serde_json::Value::Null);
 	assert_eq!(value["filters"]["search"], serde_json::Value::Null);
+	assert_eq!(
+		value["searchFields"],
+		serde_json::json!([
+			"name",
+			"installCommand",
+			"installPattern",
+			"lockFiles",
+			"configFiles",
+			"watchedFiles"
+		])
+	);
 	let managers = value["managers"].as_array().expect("managers array");
 	assert!(managers.iter().any(|entry| entry["name"] == "npm"
 		&& entry["installCommand"] == "npm install"
@@ -1898,6 +1917,10 @@ fn codes_json_lists_stable_json_codes() {
 	assert_eq!(value["filters"]["kind"], serde_json::Value::Null);
 	assert_eq!(value["filters"]["surface"], serde_json::Value::Null);
 	assert_eq!(value["filters"]["search"], serde_json::Value::Null);
+	assert_eq!(
+		value["searchFields"],
+		serde_json::json!(["code", "surface", "kind", "description"])
+	);
 	let codes = value["codes"].as_array().expect("codes array");
 	assert!(codes.iter().any(|entry| entry["code"] == "config_missing"));
 	assert!(codes.iter().any(|entry| entry["code"] == "no_rules_matched"));
@@ -2459,6 +2482,7 @@ fn categories_json_lists_command_coverage() {
 	assert_eq!(value["status"], "ok");
 	assert_eq!(value["code"], serde_json::Value::Null);
 	assert_eq!(value["filters"]["search"], serde_json::Value::Null);
+	assert_eq!(value["searchFields"], serde_json::json!(["name", "description"]));
 	let categories = value["categories"].as_array().expect("categories array");
 	assert!(
 		categories

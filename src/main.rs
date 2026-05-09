@@ -895,6 +895,7 @@ fn shells_command(args: &ShellsArgs) -> Result<()> {
 				"filters": {
 					"search": args.search.as_deref(),
 				},
+				"searchFields": ["name", "completionCommand", "description"],
 				"shells": shells,
 				"summary": {
 					"shells": shells.len(),
@@ -968,6 +969,7 @@ fn formats_command(args: &FormatsArgs) -> Result<()> {
 				"filters": {
 					"search": args.search.as_deref(),
 				},
+				"searchFields": ["name", "defaultFile", "alternateFile", "description", "initCommand"],
 				"formats": formats,
 				"discoveryOrder": config_names,
 				"summary": {
@@ -1075,6 +1077,7 @@ fn managers_command(args: &ManagersArgs) -> Result<()> {
 				"filters": {
 					"search": args.search.as_deref(),
 				},
+				"searchFields": ["name", "installCommand", "installPattern", "lockFiles", "configFiles", "watchedFiles"],
 				"managers": managers,
 				"summary": {
 					"managers": managers.len(),
@@ -1242,6 +1245,7 @@ fn categories_command(args: &CategoriesArgs) -> Result<()> {
 				"filters": {
 					"search": args.search.as_deref(),
 				},
+				"searchFields": ["name", "description"],
 				"categories": categories,
 				"summary": {
 					"categories": categories.len(),
@@ -1701,6 +1705,7 @@ fn codes_command(args: &CodesArgs) -> Result<()> {
 					"surface": args.surface.as_deref(),
 					"search": args.search.as_deref(),
 				},
+				"searchFields": ["code", "surface", "kind", "description"],
 				"codes": codes,
 				"summary": {
 					"codes": codes.len(),
