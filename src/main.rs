@@ -1216,6 +1216,8 @@ fn example_count_for_category(category: &str) -> usize {
 
 fn examples_command(args: &ExamplesArgs) -> Result<()> {
 	let examples = filtered_example_infos(args.command, args.category, args.search.as_deref());
+	let categories = collect_example_categories(&examples);
+	let category_count = categories.len();
 	if args.json {
 		println!(
 			"{}",
@@ -1227,8 +1229,10 @@ fn examples_command(args: &ExamplesArgs) -> Result<()> {
 					"category": args.category.map(CommandCategory::label),
 					"search": args.search.as_deref(),
 				},
+				"categories": categories,
 				"examples": examples,
 				"summary": {
+					"categories": category_count,
 					"examples": examples.len(),
 				},
 			}))?
@@ -1257,6 +1261,13 @@ fn examples_command(args: &ExamplesArgs) -> Result<()> {
 		return Ok(());
 	}
 
+	if args.output.categories_only {
+		for category in categories {
+			println!("{category}");
+		}
+		return Ok(());
+	}
+
 	println!("Pullhook examples");
 	if let Some(command) = args.command {
 		println!("filter: command={}", command.label());
@@ -1273,6 +1284,16 @@ fn examples_command(args: &ExamplesArgs) -> Result<()> {
 		println!("  {}", example.summary);
 	}
 	Ok(())
+}
+
+fn collect_example_categories(examples: &[ExampleInfo]) -> Vec<&'static str> {
+	let mut categories = Vec::new();
+	for example in examples {
+		if !categories.contains(&example.category) {
+			categories.push(example.category);
+		}
+	}
+	categories
 }
 
 fn filtered_example_infos(

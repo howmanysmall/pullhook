@@ -209,6 +209,7 @@ Examples:
   pullhook examples --command run --commands-only
   pullhook examples --category reference --commands-only
   pullhook examples --category reference --titles-only
+  pullhook examples --categories-only
   pullhook examples --json";
 
 /// Pullhook command line arguments.
@@ -1420,7 +1421,7 @@ pub struct ExamplesArgs {
 	#[arg(
 		long = "json",
 		default_value_t = false,
-		conflicts_with_all = ["commands_only", "titles_only", "summaries_only"],
+		conflicts_with_all = ["commands_only", "titles_only", "summaries_only", "categories_only"],
 		help_heading = "Output options"
 	)]
 	pub json: bool,
@@ -1431,12 +1432,16 @@ pub struct ExamplesArgs {
 
 /// Line-output mode arguments for `pullhook examples`.
 #[derive(Debug, Clone, Args)]
+#[expect(
+	clippy::struct_excessive_bools,
+	reason = "clap line-output flags are clearer as independent switches"
+)]
 pub struct ExamplesLineOutputArgs {
 	/// Print only example commands, one per line.
 	#[arg(
 		long = "commands-only",
 		default_value_t = false,
-		conflicts_with_all = ["json", "titles_only", "summaries_only"],
+		conflicts_with_all = ["json", "titles_only", "summaries_only", "categories_only"],
 		help_heading = "Output options"
 	)]
 	pub commands_only: bool,
@@ -1445,7 +1450,7 @@ pub struct ExamplesLineOutputArgs {
 	#[arg(
 		long = "titles-only",
 		default_value_t = false,
-		conflicts_with_all = ["json", "commands_only", "summaries_only"],
+		conflicts_with_all = ["json", "commands_only", "summaries_only", "categories_only"],
 		help_heading = "Output options"
 	)]
 	pub titles_only: bool,
@@ -1454,10 +1459,19 @@ pub struct ExamplesLineOutputArgs {
 	#[arg(
 		long = "summaries-only",
 		default_value_t = false,
-		conflicts_with_all = ["json", "commands_only", "titles_only"],
+		conflicts_with_all = ["json", "commands_only", "titles_only", "categories_only"],
 		help_heading = "Output options"
 	)]
 	pub summaries_only: bool,
+
+	/// Print only example categories, one per line.
+	#[arg(
+		long = "categories-only",
+		default_value_t = false,
+		conflicts_with_all = ["json", "commands_only", "titles_only", "summaries_only"],
+		help_heading = "Output options"
+	)]
+	pub categories_only: bool,
 }
 
 /// Commands that have workflow examples.
