@@ -706,7 +706,7 @@ fn doctor_command(args: &DoctorArgs) -> Result<()> {
 	if args.json {
 		println!(
 			"{}",
-			serde_json::to_string_pretty(&doctor_report_json(&repo_root, &checks, error))?
+			serde_json::to_string_pretty(&doctor_report_json(&repo_root, &checks, error, args.strict))?
 		);
 	} else if !args.quiet || checks.iter().any(|check| check.level != DoctorLevel::Ok) {
 		render_doctor_checks(&checks, &repo_root);
@@ -1793,13 +1793,22 @@ fn doctor_summary_json(checks: &[DoctorCheck]) -> serde_json::Value {
 		"ok": ok,
 		"warn": warn,
 		"error": error,
+		"allOk": warn == 0 && error == 0,
+		"hasWarnings": warn > 0,
+		"hasErrors": error > 0,
 	})
 }
 
-fn doctor_report_json(repo_root: &std::path::Path, checks: &[DoctorCheck], error: Option<&str>) -> serde_json::Value {
+fn doctor_report_json(
+	repo_root: &std::path::Path,
+	checks: &[DoctorCheck],
+	error: Option<&str>,
+	strict: bool,
+) -> serde_json::Value {
 	json!({
 		"status": if error.is_some() { "error" } else { "ok" },
 		"repoRoot": repo_root.display().to_string(),
+		"strict": strict,
 		"checks": checks.iter().map(doctor_check_json).collect::<Vec<_>>(),
 		"summary": doctor_summary_json(checks),
 		"error": error,
