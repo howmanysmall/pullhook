@@ -113,7 +113,9 @@ const COMPLETION_AFTER_HELP: &str = "\
 Examples:
   pullhook completion bash > ~/.local/share/bash-completion/completions/pullhook
   pullhook completion zsh > ~/.zfunc/_pullhook
-  pullhook completion fish --output ~/.config/fish/completions/pullhook.fish";
+  pullhook completion fish --output ~/.config/fish/completions/pullhook.fish
+  pullhook completion fish --check --output ~/.config/fish/completions/pullhook.fish
+  pullhook completion fish --check --output ~/.config/fish/completions/pullhook.fish --json";
 
 /// Pullhook command line arguments.
 #[derive(Debug, Clone, Parser)]
@@ -679,6 +681,14 @@ pub struct CompletionArgs {
 	/// Write completions to a file instead of stdout.
 	#[arg(long = "output", value_name = "path")]
 	pub output: Option<PathBuf>,
+
+	/// Check that the output file already matches the generated completions.
+	#[arg(long = "check", default_value_t = false, requires = "output")]
+	pub check: bool,
+
+	/// Print machine-readable check results instead of text output.
+	#[arg(long = "json", default_value_t = false, requires = "check")]
+	pub json: bool,
 }
 
 /// Supported starter config formats for `pullhook init`.
@@ -709,6 +719,13 @@ impl Cli {
 	/// Write shell completions to the provided writer.
 	pub fn write_completion<W: std::io::Write>(shell: Shell, writer: &mut W) {
 		generate(shell, &mut Self::command(), "pullhook", writer);
+	}
+
+	/// Render shell completions to a string.
+	pub fn completion_string(shell: Shell) -> String {
+		let mut output = Vec::new();
+		Self::write_completion(shell, &mut output);
+		String::from_utf8_lossy(&output).into_owned()
 	}
 }
 

@@ -149,6 +149,7 @@ pullhook completion bash > ~/.local/share/bash-completion/completions/pullhook
 pullhook completion zsh > "${fpath[1]}/_pullhook"
 pullhook completion fish > ~/.config/fish/completions/pullhook.fish
 pullhook completion fish --output ~/.config/fish/completions/pullhook.fish
+pullhook completion fish --check --output ~/.config/fish/completions/pullhook.fish
 ```
 
 Limit parallel work:

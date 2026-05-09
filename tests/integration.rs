@@ -322,6 +322,81 @@ fn completion_command_writes_output_file() {
 }
 
 #[test]
+fn completion_check_succeeds_when_output_is_current() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+	let output_path = Path::new("completions/fish/pullhook.fish");
+	let output_path_str = output_path.to_str().expect("utf-8 path");
+	let write = run_pullhook(temp.path(), &["completion", "fish", "--output", output_path_str]);
+	assert!(write.status.success(), "completion --output should seed check file");
+
+	let output = run_pullhook(
+		temp.path(),
+		&["completion", "fish", "--check", "--output", output_path_str],
+	);
+
+	assert!(
+		output.status.success(),
+		"completion --check should pass for current completion"
+	);
+	let stdout = stdout_text(&output);
+	assert!(stdout.contains("completion up to date"));
+	assert!(stdout.contains(output_path_str));
+	let stderr = stderr_text(&output);
+	assert!(stderr.trim().is_empty(), "completion --check should not write stderr");
+}
+
+#[test]
+fn completion_check_fails_when_output_is_stale() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+	let output_path = Path::new("completions/fish/pullhook.fish");
+	let output_path_str = output_path.to_str().expect("utf-8 path");
+	write_file(temp.path(), output_path, "complete -c pullhook -f\n");
+
+	let output = run_pullhook(
+		temp.path(),
+		&["completion", "fish", "--check", "--output", output_path_str],
+	);
+
+	assert!(
+		!output.status.success(),
+		"completion --check should fail for stale completion"
+	);
+	assert!(
+		stdout_text(&output).trim().is_empty(),
+		"stale completion check should not write stdout"
+	);
+	let stderr = stderr_text(&output);
+	assert!(stderr.contains("completion out of date"));
+	assert!(stderr.contains("pullhook completion fish --output completions/fish/pullhook.fish"));
+}
+
+#[test]
+fn completion_check_json_reports_match_status() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+	let output_path = Path::new("completions/fish/pullhook.fish");
+	let output_path_str = output_path.to_str().expect("utf-8 path");
+	write_file(temp.path(), output_path, "complete -c pullhook -f\n");
+
+	let output = run_pullhook(
+		temp.path(),
+		&["completion", "fish", "--check", "--output", output_path_str, "--json"],
+	);
+
+	assert!(
+		!output.status.success(),
+		"completion --check --json should fail for stale completion"
+	);
+	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse completion check json");
+	assert!(value["path"].as_str().expect("path").ends_with(output_path_str));
+	assert_eq!(value["shell"], "fish");
+	assert_eq!(value["exists"], true);
+	assert_eq!(value["matches"], false);
+	assert_eq!(value["error"], serde_json::Value::Null);
+	let stderr = stderr_text(&output);
+	assert!(stderr.contains("completion out of date"));
+}
+
+#[test]
 fn root_help_lists_common_examples() {
 	let temp = tempfile::tempdir().expect("create temp dir");
 

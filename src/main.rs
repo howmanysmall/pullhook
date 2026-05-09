@@ -13,7 +13,7 @@ use std::collections::BTreeSet;
 use std::io::{Read as _, Write as _};
 
 use anyhow::{Context, Result, anyhow};
-use clap::Parser;
+use clap::{Parser, ValueEnum};
 use rayon::prelude::*;
 use serde_json::json;
 use tracing::debug;
@@ -149,6 +149,11 @@ fn main() {
 fn completion_command(args: &CompletionArgs) -> Result<()> {
 	match &args.output {
 		Some(path) => {
+			let completion = Cli::completion_string(args.shell);
+			if args.check {
+				return check_completion_output(path, args.shell, &completion, args.json);
+			}
+
 			if let Some(parent) = path.parent()
 				&& !parent.as_os_str().is_empty()
 			{
@@ -157,7 +162,8 @@ fn completion_command(args: &CompletionArgs) -> Result<()> {
 			}
 			let mut file = std::fs::File::create(path)
 				.with_context(|| format!("failed to create completion output file `{}`", path.display()))?;
-			Cli::write_completion(args.shell, &mut file);
+			file.write_all(completion.as_bytes())
+				.with_context(|| format!("failed to write completion output file `{}`", path.display()))?;
 			file.flush()
 				.with_context(|| format!("failed to flush completion output file `{}`", path.display()))?;
 		}
@@ -165,6 +171,59 @@ fn completion_command(args: &CompletionArgs) -> Result<()> {
 	}
 
 	Ok(())
+}
+
+fn check_completion_output(
+	path: &std::path::Path,
+	shell: clap_complete::Shell,
+	expected_completion: &str,
+	json_output: bool,
+) -> Result<()> {
+	let shell_label = completion_shell_label(shell);
+	let existing_completion = match std::fs::read_to_string(path) {
+		Ok(completion) => completion,
+		Err(error) => {
+			if json_output {
+				println!(
+					"{}",
+					serde_json::to_string_pretty(&generated_file_check_json(
+						path,
+						Some(&shell_label),
+						false,
+						false,
+						Some(&format!("failed to read completion file: {error}")),
+					))?
+				);
+			}
+			return Err(anyhow!("failed to read completion file `{}`: {error}", path.display()));
+		}
+	};
+	let matches = existing_completion == expected_completion;
+	if json_output {
+		println!(
+			"{}",
+			serde_json::to_string_pretty(&generated_file_check_json(
+				path,
+				Some(&shell_label),
+				true,
+				matches,
+				None,
+			))?
+		);
+	}
+	if matches {
+		if !json_output {
+			println!("completion up to date: {}", path.display());
+		}
+		return Ok(());
+	}
+
+	Err(anyhow!(
+		"completion out of date: {} (rerun `pullhook completion {} --output {}`)",
+		path.display(),
+		shell_label,
+		path.display()
+	))
 }
 
 fn run_legacy(cli: &RunArgs) -> Result<()> {
@@ -1542,6 +1601,28 @@ fn schema_check_json(path: &std::path::Path, exists: bool, matches: bool, error:
 		"matches": matches,
 		"error": error,
 	})
+}
+
+fn generated_file_check_json(
+	path: &std::path::Path,
+	shell: Option<&str>,
+	exists: bool,
+	matches: bool,
+	error: Option<&str>,
+) -> serde_json::Value {
+	json!({
+		"path": path.display().to_string(),
+		"shell": shell,
+		"exists": exists,
+		"matches": matches,
+		"error": error,
+	})
+}
+
+fn completion_shell_label(shell: clap_complete::Shell) -> String {
+	shell
+		.to_possible_value()
+		.map_or_else(|| "unknown".to_owned(), |value| value.get_name().to_owned())
 }
 
 fn config_rules_json(config: &Config, kind: RulesKind) -> serde_json::Value {
