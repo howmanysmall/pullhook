@@ -200,6 +200,7 @@ pullhook init --format yaml
 pullhook init --output config/pullhook.custom.json
 pullhook init --dry-run --path-only
 pullhook init --dry-run --format-only
+pullhook init --dry-run --action-only
 pullhook init --dry-run --json
 pullhook init --format jsonc --stdout
 pullhook init --force
@@ -209,7 +210,7 @@ pullhook init --force
 from `pullhook.json` to `pullhook.yaml`.
 Use `init --dry-run` to preview the target path and format without writing a config. Add `--json` when setup
 scripts need the same plan as structured data with top-level `status`, stable `code`, `error`, and `details` fields.
-Use `init --dry-run --path-only` or `--format-only` when a script only needs one field from that plan.
+Use `init --dry-run --path-only`, `--format-only`, or `--action-only` when a script only needs one field from that plan.
 Use `--output <path>` when you want to scaffold a custom config path for later use with `--config <path>`;
 the output extension chooses the file format unless you also pass a matching `--format`.
 

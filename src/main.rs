@@ -2604,6 +2604,8 @@ fn init_config_command(args: &InitArgs) -> Result<()> {
 			println!("{}", path.display());
 		} else if args.format_only {
 			println!("{}", format.label());
+		} else if args.action_only {
+			println!("{}", if exists { "overwrite" } else { "create" });
 		} else if args.json {
 			println!(
 				"{}",

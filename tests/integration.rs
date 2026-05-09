@@ -4382,6 +4382,7 @@ fn init_stdout_conflicts_with_plan_output_modes() {
 		&["init", "--stdout", "--json"],
 		&["init", "--stdout", "--dry-run", "--path-only"],
 		&["init", "--stdout", "--dry-run", "--format-only"],
+		&["init", "--stdout", "--dry-run", "--action-only"],
 	];
 
 	for args in conflicting_modes {
@@ -4400,6 +4401,7 @@ fn init_plan_line_outputs_require_dry_run_and_conflict() {
 	let cases: &[(&[&str], &[&str])] = &[
 		(&["init", "--path-only"], &["--path-only", "--dry-run"]),
 		(&["init", "--format-only"], &["--format-only", "--dry-run"]),
+		(&["init", "--action-only"], &["--action-only", "--dry-run"]),
 		(
 			&["init", "--dry-run", "--path-only", "--json"],
 			&["--path-only", "--json"],
@@ -4409,8 +4411,20 @@ fn init_plan_line_outputs_require_dry_run_and_conflict() {
 			&["--format-only", "--json"],
 		),
 		(
+			&["init", "--dry-run", "--action-only", "--json"],
+			&["--action-only", "--json"],
+		),
+		(
 			&["init", "--dry-run", "--path-only", "--format-only"],
 			&["--path-only", "--format-only"],
+		),
+		(
+			&["init", "--dry-run", "--path-only", "--action-only"],
+			&["--path-only", "--action-only"],
+		),
+		(
+			&["init", "--dry-run", "--format-only", "--action-only"],
+			&["--format-only", "--action-only"],
 		),
 	];
 
@@ -4576,6 +4590,7 @@ fn init_help_lists_generation_examples() {
 	assert!(stdout.contains("pullhook init --output config/pullhook.custom.json"));
 	assert!(stdout.contains("pullhook init --dry-run --path-only"));
 	assert!(stdout.contains("pullhook init --dry-run --format-only"));
+	assert!(stdout.contains("pullhook init --dry-run --action-only"));
 	assert!(stdout.contains("pullhook init --dry-run --json"));
 	assert!(stdout.contains("Generation options:"));
 	assert!(stdout.contains("Output options:"));
@@ -4970,6 +4985,47 @@ fn init_dry_run_format_only_prints_clean_format_without_writing_file() {
 	assert!(
 		stderr.trim().is_empty(),
 		"init --dry-run --format-only should not write stderr"
+	);
+}
+
+#[test]
+fn init_dry_run_action_only_prints_create_without_writing_file() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+
+	let output = run_pullhook(repo_root, &["init", "--dry-run", "--action-only"]);
+
+	assert!(output.status.success(), "init --dry-run --action-only should succeed");
+	let stdout = stdout_text(&output);
+	assert_eq!(stdout.lines().collect::<Vec<_>>(), vec!["create"]);
+	assert!(!predicate::path::is_file().eval(&repo_root.join("pullhook.json")));
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"init --dry-run --action-only should not write stderr"
+	);
+}
+
+#[test]
+fn init_dry_run_action_only_prints_overwrite_with_force() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_file(repo_root, Path::new("pullhook.json"), "{\"rules\":[]}\n");
+
+	let output = run_pullhook(repo_root, &["init", "--dry-run", "--force", "--action-only"]);
+
+	assert!(
+		output.status.success(),
+		"init --dry-run --force --action-only should succeed"
+	);
+	let stdout = stdout_text(&output);
+	assert_eq!(stdout.lines().collect::<Vec<_>>(), vec!["overwrite"]);
+	let config = fs::read_to_string(repo_root.join("pullhook.json")).expect("read config");
+	assert_eq!(config, "{\"rules\":[]}\n");
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"init --dry-run --force --action-only should not write stderr"
 	);
 }
 
