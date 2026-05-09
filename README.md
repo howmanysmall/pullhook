@@ -132,6 +132,8 @@ pullhook --pattern "**/*.rs" --command "cargo test" --dry-run
 pullhook --pattern "**/*.rs" --command "cargo test" --dry-run --json
 pullhook rules
 pullhook rules --kind install
+pullhook rules --search lint
+pullhook rules --search lint --count-only
 pullhook rules --count-only
 pullhook rules --rule lint --json
 pullhook rules --commands-only
@@ -501,6 +503,7 @@ Use `pullhook rules --patterns-only` when a script needs the configured `changed
 Use `pullhook rules --exclude-patterns-only` when a script needs configured `exclude` globs without evaluating changed files.
 Use `pullhook rules --fail-text-only` when a script needs configured `failText` templates without executing rules.
 Combine these line-output modes with `--rule <name>` to print values for one rule or parallel group.
+Use `pullhook rules --search <text>` to narrow inventory by selector name, kind, command, patterns, or fail text.
 Use `pullhook rules --kind install`, `--kind run`, or `--kind group` to narrow inventory output.
 Use `--rule <name>` with `rules`, `run`, or `explain` to focus on specific rule names or parallel groups in large configs.
 Repeat it to target more than one selector, for example `pullhook run --rule lint --rule typecheck`.

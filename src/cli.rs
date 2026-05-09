@@ -109,6 +109,8 @@ const RULES_AFTER_HELP: &str = "\
 Examples:
   pullhook rules
   pullhook rules --kind install
+  pullhook rules --search lint
+  pullhook rules --search lint --count-only
   pullhook rules --count-only
   pullhook rules --names-only
   pullhook rules --commands-only
@@ -1157,6 +1159,10 @@ pub struct RulesArgs {
 	/// Limit inventory to one or more named rules or parallel groups.
 	#[arg(long = "rule", value_name = "name", help_heading = "Selection options")]
 	pub rules: Vec<String>,
+
+	/// Only list rules or groups whose inventory fields contain this text.
+	#[arg(long = "search", value_name = "text", help_heading = "Selection options")]
+	pub search: Option<String>,
 
 	/// Enable debug logging.
 	#[arg(

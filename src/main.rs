@@ -2584,11 +2584,17 @@ fn rules_command(args: &RulesArgs) -> Result<()> {
 	let renderer = Renderer::new(effective_render_mode(args.render, args.no_color));
 	let (_, _, config) = load_config_from_cwd_for_output(args.debug, args.config.as_deref(), args.json)?;
 	let config = filter_config_rules_for_output(config, &args.rules, args.json)?;
+	let config = filter_config_rules_by_search(config, args.search.as_deref());
 
 	if args.json {
 		println!(
 			"{}",
-			serde_json::to_string_pretty(&config_rules_json(&config, args.kind, &args.rules))?
+			serde_json::to_string_pretty(&config_rules_json(
+				&config,
+				args.kind,
+				&args.rules,
+				args.search.as_deref()
+			))?
 		);
 		return Ok(());
 	}
@@ -2596,13 +2602,13 @@ fn rules_command(args: &RulesArgs) -> Result<()> {
 	if args.count_only {
 		println!(
 			"{}",
-			collect_rules_output_selectors(&config, args.kind, &args.rules).len()
+			collect_rules_output_selectors(&config, args.kind, &args.rules, args.search.as_deref()).len()
 		);
 		return Ok(());
 	}
 
 	if args.names_only {
-		for selector in collect_rules_output_selectors(&config, args.kind, &args.rules) {
+		for selector in collect_rules_output_selectors(&config, args.kind, &args.rules, args.search.as_deref()) {
 			println!("{selector}");
 		}
 		return Ok(());
@@ -2717,6 +2723,75 @@ fn filter_config_entries_by_selectors(entries: &[Entry], requested: &BTreeSet<&s
 			}
 		})
 		.collect()
+}
+
+fn filter_config_rules_by_search(mut config: Config, search: Option<&str>) -> Config {
+	let Some(search) = search.map(str::to_ascii_lowercase) else {
+		return config;
+	};
+
+	config.entries = filter_config_entries_by_search(&config.entries, &search);
+	config
+}
+
+fn filter_config_entries_by_search(entries: &[Entry], search: &str) -> Vec<Entry> {
+	entries
+		.iter()
+		.filter_map(|entry| match entry {
+			Entry::Rule(rule) if config_rule_matches_search(rule, search) => Some(Entry::Rule(rule.clone())),
+			Entry::Rule(_) => None,
+			Entry::Group(group) if config_group_matches_search(group, search) => Some(Entry::Group(group.clone())),
+			Entry::Group(group) => {
+				let rules = group
+					.rules
+					.iter()
+					.filter(|rule| config_rule_matches_search(rule, search))
+					.cloned()
+					.collect::<Vec<_>>();
+				(!rules.is_empty()).then(|| {
+					Entry::Group(config::Group {
+						name: group.name.clone(),
+						jobs: group.jobs,
+						rules,
+						fail_text: group.fail_text.clone(),
+					})
+				})
+			}
+		})
+		.collect()
+}
+
+fn config_group_matches_search(group: &config::Group, search: &str) -> bool {
+	text_matches_search(&group.name, search)
+		|| group
+			.fail_text
+			.as_ref()
+			.is_some_and(|fail_text| text_matches_search(fail_text.as_str(), search))
+}
+
+fn config_rule_matches_search(rule: &config::Rule, search: &str) -> bool {
+	text_matches_search(&rule.name, search)
+		|| text_matches_search(config_rule_kind_label(rule), search)
+		|| rule
+			.run
+			.as_ref()
+			.is_some_and(|command| text_matches_search(command, search))
+		|| rule
+			.changed
+			.iter()
+			.any(|pattern| text_matches_search(pattern.as_str(), search))
+		|| rule
+			.exclude
+			.iter()
+			.any(|pattern| text_matches_search(pattern.as_str(), search))
+		|| rule
+			.fail_text
+			.as_ref()
+			.is_some_and(|fail_text| text_matches_search(fail_text.as_str(), search))
+}
+
+fn text_matches_search(value: &str, search: &str) -> bool {
+	value.to_ascii_lowercase().contains(search)
 }
 
 fn schema_command(args: &SchemaArgs) -> Result<()> {
@@ -4211,8 +4286,13 @@ fn completion_shell_label(shell: clap_complete::Shell) -> String {
 		.map_or_else(|| "unknown".to_owned(), |value| value.get_name().to_owned())
 }
 
-fn config_rules_json(config: &Config, kind: RulesKind, selectors: &[String]) -> serde_json::Value {
-	let selectors = collect_rules_output_selectors(config, kind, selectors);
+fn config_rules_json(
+	config: &Config,
+	kind: RulesKind,
+	selectors: &[String],
+	search: Option<&str>,
+) -> serde_json::Value {
+	let selectors = collect_rules_output_selectors(config, kind, selectors, search);
 	let commands = collect_config_rule_commands_for_kind(config, kind);
 	let patterns = collect_config_rule_patterns_for_kind(config, kind);
 	let exclude_patterns = collect_config_rule_exclude_patterns_for_kind(config, kind);
@@ -4238,6 +4318,12 @@ fn config_rules_json(config: &Config, kind: RulesKind, selectors: &[String]) -> 
 		"path": config.path.display().to_string(),
 		"onFailure": on_failure_label(config.on_failure),
 		"kind": rules_kind_label(kind),
+		"filters": {
+			"kind": rules_kind_label(kind),
+			"rules": selectors,
+			"search": search,
+		},
+		"searchFields": ["name", "kind", "command", "changed", "exclude", "failText"],
 		"selectors": selectors,
 		"commands": commands,
 		"patterns": patterns,
@@ -4259,9 +4345,17 @@ fn config_rules_json(config: &Config, kind: RulesKind, selectors: &[String]) -> 
 	})
 }
 
-fn collect_rules_output_selectors(config: &Config, kind: RulesKind, selectors: &[String]) -> Vec<String> {
+fn collect_rules_output_selectors(
+	config: &Config,
+	kind: RulesKind,
+	selectors: &[String],
+	search: Option<&str>,
+) -> Vec<String> {
 	if selectors.is_empty() {
-		return collect_rule_selectors_for_kind(config, kind);
+		return search.map_or_else(
+			|| collect_rule_selectors_for_kind(config, kind),
+			|search| collect_rule_selectors_for_kind_and_search(config, kind, search),
+		);
 	}
 
 	let available = collect_rule_selectors_for_kind(config, kind)
@@ -4568,6 +4662,31 @@ fn collect_rule_selectors_for_kind(config: &Config, kind: RulesKind) -> Vec<Stri
 	selectors.into_iter().collect()
 }
 
+fn collect_rule_selectors_for_kind_and_search(config: &Config, kind: RulesKind, search: &str) -> Vec<String> {
+	let search = search.to_ascii_lowercase();
+	let mut selectors = BTreeSet::new();
+	for entry in &config.entries {
+		match entry {
+			Entry::Rule(rule) => {
+				if rules_kind_matches_rule(kind, rule) && config_rule_matches_search(rule, &search) {
+					selectors.insert(rule.name.clone());
+				}
+			}
+			Entry::Group(group) => {
+				if (kind == RulesKind::All || kind == RulesKind::Group) && config_group_matches_search(group, &search) {
+					selectors.insert(group.name.clone());
+				}
+				for rule in &group.rules {
+					if rules_kind_matches_rule(kind, rule) && config_rule_matches_search(rule, &search) {
+						selectors.insert(rule.name.clone());
+					}
+				}
+			}
+		}
+	}
+	selectors.into_iter().collect()
+}
+
 fn collect_config_selectors(config: &Config) -> Vec<String> {
 	collect_rule_selectors_for_kind(config, RulesKind::All)
 }
@@ -4774,6 +4893,10 @@ const fn rules_kind_matches_rule(kind: RulesKind, rule: &config::Rule) -> bool {
 		RulesKind::Run => !rule.install,
 		RulesKind::Install => rule.install,
 	}
+}
+
+const fn config_rule_kind_label(rule: &config::Rule) -> &'static str {
+	if rule.install { "install" } else { "run" }
 }
 
 const fn rules_kind_label(kind: RulesKind) -> &'static str {

@@ -4175,6 +4175,8 @@ fn rules_help_lists_script_friendly_output_modes() {
 
 	assert!(output.status.success(), "rules help should succeed");
 	let stdout = stdout_text(&output);
+	assert!(stdout.contains("pullhook rules --search lint"));
+	assert!(stdout.contains("pullhook rules --search lint --count-only"));
 	assert!(stdout.contains("pullhook rules --count-only"));
 	assert!(stdout.contains("pullhook rules --names-only"));
 	assert!(stdout.contains("pullhook rules --commands-only"));
@@ -4188,6 +4190,7 @@ fn rules_help_lists_script_friendly_output_modes() {
 	assert!(stdout.contains("Output options:"));
 	assert!(stdout.contains("Selection options:"));
 	assert!(stdout.contains("Display options:"));
+	assert!(stdout.contains("--search <text>"));
 	assert!(stdout.contains("--count-only"));
 	assert!(stdout.contains("--commands-only"));
 	assert!(stdout.contains("--patterns-only"));
@@ -6756,6 +6759,16 @@ fn rules_json_reports_rule_inventory() {
 	assert_eq!(value["status"], "ok");
 	assert_eq!(value["code"], serde_json::Value::Null);
 	assert_eq!(value["error"], serde_json::Value::Null);
+	assert_eq!(value["filters"]["kind"], "all");
+	assert_eq!(
+		value["filters"]["rules"],
+		serde_json::json!(["checks", "install dependencies", "lint"])
+	);
+	assert_eq!(value["filters"]["search"], serde_json::Value::Null);
+	assert_eq!(
+		value["searchFields"],
+		serde_json::json!(["name", "kind", "command", "changed", "exclude", "failText"])
+	);
 	assert_eq!(value["rules"], 2);
 	assert_eq!(value["parallelGroups"], 1);
 	assert_eq!(value["summary"]["entries"], 2);
@@ -6802,6 +6815,69 @@ fn rules_json_reports_rule_inventory() {
 		serde_json::json!(["packages/a/generated/**"])
 	);
 	assert_eq!(entries[1]["rules"][0]["failText"], "{red.bold {rule} failed}");
+}
+
+#[test]
+fn rules_json_filters_inventory_by_search() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_file(
+		repo_root,
+		Path::new("pullhook.json"),
+		r#"{
+  "rules": [
+    {
+      "name": "install dependencies",
+      "install": true,
+      "failText": "{rule} install failed"
+    },
+    {
+      "name": "checks",
+      "failText": "{rule} group failed",
+      "parallel": [
+        {
+          "name": "lint",
+          "changed": "packages/a/package-lock.json",
+          "exclude": "packages/a/generated/**",
+          "failText": "{red.bold {rule} failed}",
+          "run": "cargo test -p lint"
+        },
+        {
+          "name": "typecheck",
+          "changed": "packages/b/package-lock.json",
+          "run": "cargo test -p typecheck"
+        }
+      ]
+    }
+  ]
+}
+"#,
+	);
+
+	let output = run_pullhook(repo_root, &["rules", "--search", "generated", "--json"]);
+
+	assert!(
+		output.status.success(),
+		"rules --search generated --json should succeed"
+	);
+	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse searched rules json");
+	assert_eq!(value["filters"]["search"], "generated");
+	assert_eq!(value["selectors"], serde_json::json!(["lint"]));
+	assert_eq!(value["summary"]["entries"], 1);
+	assert_eq!(value["summary"]["rules"], 1);
+	assert_eq!(value["summary"]["parallelGroups"], 1);
+	assert_eq!(value["summary"]["selectors"], 1);
+	assert_eq!(value["commands"], serde_json::json!(["cargo test -p lint"]));
+	let entries = value["entries"].as_array().expect("entries array");
+	assert_eq!(entries.len(), 1);
+	assert_eq!(entries[0]["type"], "group");
+	assert_eq!(entries[0]["name"], "checks");
+	assert_eq!(entries[0]["rules"][0]["name"], "lint");
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"rules --search generated --json should not write stderr"
+	);
 }
 
 #[test]
@@ -7064,6 +7140,53 @@ fn rules_names_only_respects_rule_selector_filter() {
 }
 
 #[test]
+fn rules_names_only_filters_by_search() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_file(
+		repo_root,
+		Path::new("pullhook.json"),
+		r#"{
+  "rules": [
+    {
+      "name": "install dependencies",
+      "install": true
+    },
+    {
+      "name": "checks",
+      "parallel": [
+        {
+          "name": "lint",
+          "changed": "packages/a/package-lock.json",
+          "run": "cargo test -p lint"
+        },
+        {
+          "name": "typecheck",
+          "changed": "packages/a/package-lock.json",
+          "run": "cargo test -p typecheck"
+        }
+      ]
+    }
+  ]
+}
+"#,
+	);
+
+	let output = run_pullhook(repo_root, &["rules", "--search", "type", "--names-only"]);
+
+	assert!(
+		output.status.success(),
+		"rules --search type --names-only should succeed"
+	);
+	assert_eq!(stdout_text(&output), "typecheck\n");
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"rules --search type --names-only should not write stderr"
+	);
+}
+
+#[test]
 fn rules_count_only_prints_matching_selector_count() {
 	let temp = setup_repo_with_merge();
 	let repo_root = temp.path();
@@ -7127,6 +7250,19 @@ fn rules_count_only_prints_matching_selector_count() {
 	assert!(
 		stderr.trim().is_empty(),
 		"rules --rule lint --count-only should not write stderr"
+	);
+
+	let search_output = run_pullhook(repo_root, &["rules", "--search", "cargo", "--count-only"]);
+
+	assert!(
+		search_output.status.success(),
+		"rules --search cargo --count-only should succeed"
+	);
+	assert_eq!(stdout_text(&search_output), "2\n");
+	let stderr = stderr_text(&search_output);
+	assert!(
+		stderr.trim().is_empty(),
+		"rules --search cargo --count-only should not write stderr"
 	);
 }
 
