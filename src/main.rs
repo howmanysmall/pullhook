@@ -1309,6 +1309,13 @@ fn examples_command(args: &ExamplesArgs) -> Result<()> {
 		return Ok(());
 	}
 
+	if args.output.command_names_only {
+		for command_name in collect_example_command_names(&examples) {
+			println!("{command_name}");
+		}
+		return Ok(());
+	}
+
 	if args.output.titles_only {
 		for example in examples {
 			println!("{}", example.title);
@@ -1346,6 +1353,16 @@ fn examples_command(args: &ExamplesArgs) -> Result<()> {
 		println!("  {}", example.summary);
 	}
 	Ok(())
+}
+
+fn collect_example_command_names(examples: &[ExampleInfo]) -> Vec<&'static str> {
+	let mut command_names = Vec::new();
+	for example in examples {
+		if !command_names.contains(&example.command_name) {
+			command_names.push(example.command_name);
+		}
+	}
+	command_names
 }
 
 fn collect_example_categories(examples: &[ExampleInfo]) -> Vec<&'static str> {

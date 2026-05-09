@@ -2836,6 +2836,60 @@ fn examples_category_commands_only_prints_clean_commands() {
 }
 
 #[test]
+fn examples_command_names_only_prints_clean_command_names() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["examples", "--command-names-only"]);
+
+	assert!(output.status.success(), "examples --command-names-only should succeed");
+	let stdout = stdout_text(&output);
+	assert_eq!(
+		stdout.lines().collect::<Vec<_>>(),
+		vec![
+			"init",
+			"explain",
+			"run",
+			"validate",
+			"doctor",
+			"legacy",
+			"commands",
+			"shells",
+			"formats",
+			"managers",
+			"categories",
+			"codes"
+		]
+	);
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"examples --command-names-only should not write stderr"
+	);
+}
+
+#[test]
+fn examples_search_filter_composes_with_command_names_only() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(
+		temp.path(),
+		&["examples", "--search", "install", "--command-names-only"],
+	);
+
+	assert!(
+		output.status.success(),
+		"examples --search install --command-names-only should succeed"
+	);
+	let stdout = stdout_text(&output);
+	assert_eq!(stdout.lines().collect::<Vec<_>>(), vec!["legacy", "managers"]);
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"filtered examples --command-names-only should not write stderr"
+	);
+}
+
+#[test]
 fn examples_titles_only_prints_clean_titles() {
 	let temp = tempfile::tempdir().expect("create temp dir");
 
@@ -2976,11 +3030,36 @@ fn examples_commands_only_conflicts_with_json() {
 }
 
 #[test]
+fn examples_command_names_only_conflicts_with_other_output_modes() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+	let conflicting_modes: &[&[&str]] = &[
+		&["examples", "--command-names-only", "--json"],
+		&["examples", "--command-names-only", "--commands-only"],
+		&["examples", "--command-names-only", "--titles-only"],
+		&["examples", "--command-names-only", "--summaries-only"],
+		&["examples", "--command-names-only", "--categories-only"],
+	];
+
+	for args in conflicting_modes {
+		let output = run_pullhook(temp.path(), args);
+
+		assert!(
+			!output.status.success(),
+			"examples --command-names-only should conflict for args {args:?}"
+		);
+		let stderr = stderr_text(&output);
+		assert!(stderr.contains("cannot be used with"));
+		assert!(stderr.contains("--command-names-only"));
+	}
+}
+
+#[test]
 fn examples_titles_only_conflicts_with_other_output_modes() {
 	let temp = tempfile::tempdir().expect("create temp dir");
 	let conflicting_modes: &[&[&str]] = &[
 		&["examples", "--titles-only", "--json"],
 		&["examples", "--titles-only", "--commands-only"],
+		&["examples", "--titles-only", "--command-names-only"],
 		&["examples", "--titles-only", "--categories-only"],
 	];
 
@@ -3003,6 +3082,7 @@ fn examples_summaries_only_conflicts_with_other_output_modes() {
 	let conflicting_modes: &[&[&str]] = &[
 		&["examples", "--summaries-only", "--json"],
 		&["examples", "--summaries-only", "--commands-only"],
+		&["examples", "--summaries-only", "--command-names-only"],
 		&["examples", "--summaries-only", "--titles-only"],
 		&["examples", "--summaries-only", "--categories-only"],
 	];
@@ -3026,6 +3106,7 @@ fn examples_categories_only_conflicts_with_other_output_modes() {
 	let conflicting_modes: &[&[&str]] = &[
 		&["examples", "--categories-only", "--json"],
 		&["examples", "--categories-only", "--commands-only"],
+		&["examples", "--categories-only", "--command-names-only"],
 		&["examples", "--categories-only", "--titles-only"],
 		&["examples", "--categories-only", "--summaries-only"],
 	];
@@ -4344,6 +4425,7 @@ fn utility_help_groups_options_by_task() {
 	assert!(examples_stdout.contains("pullhook examples --command run --commands-only"));
 	assert!(examples_stdout.contains("pullhook examples --category reference --commands-only"));
 	assert!(examples_stdout.contains("pullhook examples --category reference --titles-only"));
+	assert!(examples_stdout.contains("pullhook examples --command-names-only"));
 	assert!(examples_stdout.contains("pullhook examples --categories-only"));
 	assert!(examples_stdout.contains("pullhook examples --json"));
 

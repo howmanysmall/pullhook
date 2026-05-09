@@ -309,6 +309,7 @@ pullhook examples --search install
 pullhook examples --search install --summaries-only
 pullhook examples --command run
 pullhook examples --command run --commands-only
+pullhook examples --command-names-only
 pullhook examples --categories-only
 pullhook examples --json
 pullhook commands
@@ -429,6 +430,7 @@ or `--command legacy` to focus the example list.
 Use `pullhook examples --category reference` to narrow examples by command category.
 Add `--search <text>` to match example titles, commands, categories, or summaries case-insensitively.
 Use `pullhook examples --commands-only` when a script or completion helper only needs example command lines.
+Use `pullhook examples --command-names-only` when a script only needs the commands covered by matching examples.
 Use `pullhook examples --titles-only` when a script or completion helper only needs example titles.
 Use `pullhook examples --summaries-only` when a script or command palette only needs short descriptions.
 Use `pullhook examples --categories-only` when a script only needs the matching example categories.

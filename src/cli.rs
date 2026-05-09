@@ -214,6 +214,7 @@ Examples:
   pullhook examples --command run --commands-only
   pullhook examples --category reference --commands-only
   pullhook examples --category reference --titles-only
+  pullhook examples --command-names-only
   pullhook examples --categories-only
   pullhook examples --json";
 
@@ -1532,7 +1533,13 @@ pub struct ExamplesArgs {
 	#[arg(
 		long = "json",
 		default_value_t = false,
-		conflicts_with_all = ["commands_only", "titles_only", "summaries_only", "categories_only"],
+		conflicts_with_all = [
+			"commands_only",
+			"command_names_only",
+			"titles_only",
+			"summaries_only",
+			"categories_only"
+		],
 		help_heading = "Output options"
 	)]
 	pub json: bool,
@@ -1552,16 +1559,25 @@ pub struct ExamplesLineOutputArgs {
 	#[arg(
 		long = "commands-only",
 		default_value_t = false,
-		conflicts_with_all = ["json", "titles_only", "summaries_only", "categories_only"],
+		conflicts_with_all = ["json", "command_names_only", "titles_only", "summaries_only", "categories_only"],
 		help_heading = "Output options"
 	)]
 	pub commands_only: bool,
+
+	/// Print only example command names, one per line.
+	#[arg(
+		long = "command-names-only",
+		default_value_t = false,
+		conflicts_with_all = ["json", "commands_only", "titles_only", "summaries_only", "categories_only"],
+		help_heading = "Output options"
+	)]
+	pub command_names_only: bool,
 
 	/// Print only example titles, one per line.
 	#[arg(
 		long = "titles-only",
 		default_value_t = false,
-		conflicts_with_all = ["json", "commands_only", "summaries_only", "categories_only"],
+		conflicts_with_all = ["json", "commands_only", "command_names_only", "summaries_only", "categories_only"],
 		help_heading = "Output options"
 	)]
 	pub titles_only: bool,
@@ -1570,7 +1586,7 @@ pub struct ExamplesLineOutputArgs {
 	#[arg(
 		long = "summaries-only",
 		default_value_t = false,
-		conflicts_with_all = ["json", "commands_only", "titles_only", "categories_only"],
+		conflicts_with_all = ["json", "commands_only", "command_names_only", "titles_only", "categories_only"],
 		help_heading = "Output options"
 	)]
 	pub summaries_only: bool,
@@ -1579,7 +1595,7 @@ pub struct ExamplesLineOutputArgs {
 	#[arg(
 		long = "categories-only",
 		default_value_t = false,
-		conflicts_with_all = ["json", "commands_only", "titles_only", "summaries_only"],
+		conflicts_with_all = ["json", "commands_only", "command_names_only", "titles_only", "summaries_only"],
 		help_heading = "Output options"
 	)]
 	pub categories_only: bool,
