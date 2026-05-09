@@ -351,6 +351,7 @@ fn run_help_lists_json_examples() {
 	assert!(stdout.contains("pullhook run --commands-only"));
 	assert!(stdout.contains("pullhook run --changed-files-only"));
 	assert!(stdout.contains("pullhook run --matched-files-only"));
+	assert!(stdout.contains("pullhook run --matched-rules-only"));
 	assert!(stdout.contains("pullhook run --config config/pullhook.custom.json --all-matches"));
 	assert!(stdout.contains("--no-color"));
 	assert!(stdout.contains("--quiet"));
@@ -358,6 +359,7 @@ fn run_help_lists_json_examples() {
 	assert!(stdout.contains("--commands-only"));
 	assert!(stdout.contains("--changed-files-only"));
 	assert!(stdout.contains("--matched-files-only"));
+	assert!(stdout.contains("--matched-rules-only"));
 }
 
 #[test]
@@ -385,10 +387,12 @@ fn explain_help_lists_summary_only_example() {
 	assert!(stdout.contains("pullhook explain --commands-only"));
 	assert!(stdout.contains("pullhook explain --changed-files-only"));
 	assert!(stdout.contains("pullhook explain --matched-files-only"));
+	assert!(stdout.contains("pullhook explain --matched-rules-only"));
 	assert!(stdout.contains("--summary-only"));
 	assert!(stdout.contains("--commands-only"));
 	assert!(stdout.contains("--changed-files-only"));
 	assert!(stdout.contains("--matched-files-only"));
+	assert!(stdout.contains("--matched-rules-only"));
 }
 
 #[test]
@@ -464,6 +468,17 @@ fn run_commands_only_conflicts_with_other_output_modes() {
 	assert!(matched_files_stderr.contains("cannot be used with"));
 	assert!(matched_files_stderr.contains("--commands-only"));
 	assert!(matched_files_stderr.contains("--matched-files-only"));
+
+	let matched_rules_output = run_pullhook(temp.path(), &["run", "--commands-only", "--matched-rules-only"]);
+
+	assert!(
+		!matched_rules_output.status.success(),
+		"run --commands-only should conflict with --matched-rules-only"
+	);
+	let matched_rules_stderr = stderr_text(&matched_rules_output);
+	assert!(matched_rules_stderr.contains("cannot be used with"));
+	assert!(matched_rules_stderr.contains("--commands-only"));
+	assert!(matched_rules_stderr.contains("--matched-rules-only"));
 }
 
 #[test]
@@ -524,6 +539,17 @@ fn run_summary_only_conflicts_with_other_output_modes() {
 	assert!(matched_files_stderr.contains("cannot be used with"));
 	assert!(matched_files_stderr.contains("--summary-only"));
 	assert!(matched_files_stderr.contains("--matched-files-only"));
+
+	let matched_rules_output = run_pullhook(temp.path(), &["run", "--summary-only", "--matched-rules-only"]);
+
+	assert!(
+		!matched_rules_output.status.success(),
+		"run --summary-only should conflict with --matched-rules-only"
+	);
+	let matched_rules_stderr = stderr_text(&matched_rules_output);
+	assert!(matched_rules_stderr.contains("cannot be used with"));
+	assert!(matched_rules_stderr.contains("--summary-only"));
+	assert!(matched_rules_stderr.contains("--matched-rules-only"));
 }
 
 #[test]
@@ -535,6 +561,7 @@ fn run_changed_files_only_conflicts_with_other_output_modes() {
 		&["run", "--changed-files-only", "--summary-only"],
 		&["run", "--changed-files-only", "--commands-only"],
 		&["run", "--changed-files-only", "--matched-files-only"],
+		&["run", "--changed-files-only", "--matched-rules-only"],
 	];
 
 	for args in conflicting_modes {
@@ -559,6 +586,7 @@ fn run_matched_files_only_conflicts_with_other_output_modes() {
 		&["run", "--matched-files-only", "--summary-only"],
 		&["run", "--matched-files-only", "--commands-only"],
 		&["run", "--matched-files-only", "--changed-files-only"],
+		&["run", "--matched-files-only", "--matched-rules-only"],
 	];
 
 	for args in conflicting_modes {
@@ -575,6 +603,31 @@ fn run_matched_files_only_conflicts_with_other_output_modes() {
 }
 
 #[test]
+fn run_matched_rules_only_conflicts_with_other_output_modes() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+	let conflicting_modes: &[&[&str]] = &[
+		&["run", "--matched-rules-only", "--json"],
+		&["run", "--matched-rules-only", "--quiet"],
+		&["run", "--matched-rules-only", "--summary-only"],
+		&["run", "--matched-rules-only", "--commands-only"],
+		&["run", "--matched-rules-only", "--changed-files-only"],
+		&["run", "--matched-rules-only", "--matched-files-only"],
+	];
+
+	for args in conflicting_modes {
+		let output = run_pullhook(temp.path(), args);
+
+		assert!(
+			!output.status.success(),
+			"run --matched-rules-only should conflict for args {args:?}"
+		);
+		let stderr = stderr_text(&output);
+		assert!(stderr.contains("cannot be used with"));
+		assert!(stderr.contains("--matched-rules-only"));
+	}
+}
+
+#[test]
 fn explain_summary_only_conflicts_with_json() {
 	let temp = tempfile::tempdir().expect("create temp dir");
 	let conflicting_modes: &[&[&str]] = &[
@@ -582,6 +635,7 @@ fn explain_summary_only_conflicts_with_json() {
 		&["explain", "--summary-only", "--commands-only"],
 		&["explain", "--summary-only", "--changed-files-only"],
 		&["explain", "--summary-only", "--matched-files-only"],
+		&["explain", "--summary-only", "--matched-rules-only"],
 	];
 
 	for args in conflicting_modes {
@@ -644,6 +698,17 @@ fn explain_commands_only_conflicts_with_other_output_modes() {
 	assert!(matched_files_stderr.contains("cannot be used with"));
 	assert!(matched_files_stderr.contains("--commands-only"));
 	assert!(matched_files_stderr.contains("--matched-files-only"));
+
+	let matched_rules_output = run_pullhook(temp.path(), &["explain", "--commands-only", "--matched-rules-only"]);
+
+	assert!(
+		!matched_rules_output.status.success(),
+		"explain --commands-only should conflict with --matched-rules-only"
+	);
+	let matched_rules_stderr = stderr_text(&matched_rules_output);
+	assert!(matched_rules_stderr.contains("cannot be used with"));
+	assert!(matched_rules_stderr.contains("--commands-only"));
+	assert!(matched_rules_stderr.contains("--matched-rules-only"));
 }
 
 #[test]
@@ -654,6 +719,7 @@ fn explain_changed_files_only_conflicts_with_other_output_modes() {
 		&["explain", "--changed-files-only", "--summary-only"],
 		&["explain", "--changed-files-only", "--commands-only"],
 		&["explain", "--changed-files-only", "--matched-files-only"],
+		&["explain", "--changed-files-only", "--matched-rules-only"],
 	];
 
 	for args in conflicting_modes {
@@ -678,6 +744,7 @@ fn explain_matched_files_only_conflicts_with_other_output_modes() {
 		&["explain", "--matched-files-only", "--summary-only"],
 		&["explain", "--matched-files-only", "--commands-only"],
 		&["explain", "--matched-files-only", "--changed-files-only"],
+		&["explain", "--matched-files-only", "--matched-rules-only"],
 	];
 
 	for args in conflicting_modes {
@@ -691,6 +758,31 @@ fn explain_matched_files_only_conflicts_with_other_output_modes() {
 		let stderr = stderr_text(&output);
 		assert!(stderr.contains("cannot be used with"));
 		assert!(stderr.contains("--matched-files-only"));
+	}
+}
+
+#[test]
+fn explain_matched_rules_only_conflicts_with_other_output_modes() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+	let conflicting_modes: &[&[&str]] = &[
+		&["explain", "--matched-rules-only", "--json"],
+		&["explain", "--matched-rules-only", "--summary-only"],
+		&["explain", "--matched-rules-only", "--commands-only"],
+		&["explain", "--matched-rules-only", "--changed-files-only"],
+		&["explain", "--matched-rules-only", "--matched-files-only"],
+	];
+
+	for args in conflicting_modes {
+		let output = run_pullhook(temp.path(), args);
+
+		assert!(
+			!output.status.success(),
+			"`pullhook {}` should reject mixed output modes",
+			args.join(" ")
+		);
+		let stderr = stderr_text(&output);
+		assert!(stderr.contains("cannot be used with"));
+		assert!(stderr.contains("--matched-rules-only"));
 	}
 }
 
@@ -2104,6 +2196,47 @@ fn explain_matched_files_only_reports_unique_matched_files() {
 }
 
 #[test]
+fn explain_matched_rules_only_reports_matching_rule_names() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_file(
+		repo_root,
+		Path::new("pullhook.json"),
+		r#"{
+  "rules": [
+    {
+      "name": "package a",
+      "changed": "packages/a/package-lock.json",
+      "run": "cargo test -p package-a"
+    },
+    {
+      "name": "all packages",
+      "changed": "packages/*/package-lock.json",
+      "run": "cargo test --workspace"
+    },
+    {
+      "name": "skip markdown",
+      "changed": "**/*.md",
+      "run": "cargo test"
+    }
+  ]
+}
+"#,
+	);
+
+	let output = run_pullhook(repo_root, &["explain", "--matched-rules-only"]);
+
+	assert!(output.status.success(), "explain --matched-rules-only should succeed");
+	let stdout = stdout_text(&output);
+	assert_eq!(stdout, "package a\nall packages\n");
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"explain --matched-rules-only should not write stderr"
+	);
+}
+
+#[test]
 fn explain_json_filters_to_requested_rule() {
 	let temp = setup_repo_with_merge();
 	let repo_root = temp.path();
@@ -2385,6 +2518,59 @@ fn run_matched_files_only_reports_unique_matched_files_without_execution() {
 	assert!(
 		stderr.trim().is_empty(),
 		"run --matched-files-only should not write stderr"
+	);
+}
+
+#[test]
+fn run_matched_rules_only_reports_matching_rule_names_without_execution() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_file(
+		repo_root,
+		Path::new("pullhook.json"),
+		r#"{
+  "rules": [
+    {
+      "name": "write package a",
+      "changed": "packages/a/package-lock.json",
+      "run": "touch marker.txt"
+    },
+    {
+      "name": "write all packages",
+      "changed": "packages/*/package-lock.json",
+      "run": "touch other-marker.txt"
+    },
+    {
+      "name": "skip markdown",
+      "changed": "**/*.md",
+      "run": "touch skipped.txt"
+    }
+  ]
+}
+"#,
+	);
+
+	let output = run_pullhook(repo_root, &["run", "--matched-rules-only"]);
+
+	assert!(output.status.success(), "run --matched-rules-only should succeed");
+	let stdout = stdout_text(&output);
+	assert_eq!(stdout, "write package a\nwrite all packages\n");
+	assert!(
+		!repo_root.join("marker.txt").exists(),
+		"matched-rules-only should not execute planned commands"
+	);
+	assert!(
+		!repo_root.join("other-marker.txt").exists(),
+		"matched-rules-only should not execute planned commands"
+	);
+	assert!(
+		!repo_root.join("skipped.txt").exists(),
+		"matched-rules-only should not execute skipped commands"
+	);
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"run --matched-rules-only should not write stderr"
 	);
 }
 

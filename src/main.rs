@@ -436,6 +436,11 @@ fn render_config_run_planning_only_output(
 		return true;
 	}
 
+	if args.matched_rules_only {
+		render_config_evaluation_matched_rules(evaluation);
+		return true;
+	}
+
 	false
 }
 
@@ -493,6 +498,11 @@ fn explain_config_command(args: &ExplainArgs) -> Result<()> {
 
 	if args.matched_files_only {
 		render_config_evaluation_matched_files(&evaluation);
+		return Ok(());
+	}
+
+	if args.matched_rules_only {
+		render_config_evaluation_matched_rules(&evaluation);
 		return Ok(());
 	}
 
@@ -1180,6 +1190,12 @@ fn render_config_evaluation_matched_files(evaluation: &[EvaluatedEntry]) {
 	render_path_list(collect_matched_files(evaluation));
 }
 
+fn render_config_evaluation_matched_rules(evaluation: &[EvaluatedEntry]) {
+	for rule_name in collect_matched_rules(evaluation) {
+		println!("{rule_name}");
+	}
+}
+
 fn render_path_list(paths: impl IntoIterator<Item = impl AsRef<std::path::Path>>) {
 	for path in paths {
 		println!("{}", path.as_ref().display());
@@ -1816,6 +1832,29 @@ fn collect_rule_command<'a>(rule: &'a EvaluatedRule, commands: &mut Vec<&'a str>
 		&& let Some(command) = &rule.command
 	{
 		commands.push(command);
+	}
+}
+
+fn collect_matched_rules(evaluation: &[EvaluatedEntry]) -> Vec<&str> {
+	let mut rule_names = Vec::new();
+
+	for entry in evaluation {
+		match entry {
+			EvaluatedEntry::Rule(rule) => collect_matched_rule(rule, &mut rule_names),
+			EvaluatedEntry::Group(group) => {
+				for rule in &group.rules {
+					collect_matched_rule(rule, &mut rule_names);
+				}
+			}
+		}
+	}
+
+	rule_names
+}
+
+fn collect_matched_rule<'a>(rule: &'a EvaluatedRule, rule_names: &mut Vec<&'a str>) {
+	if rule.should_run() {
+		rule_names.push(rule.rule.name.as_str());
 	}
 }
 
