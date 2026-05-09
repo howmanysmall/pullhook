@@ -1385,6 +1385,92 @@ fn managers_search_filter_composes_with_commands_only() {
 }
 
 #[test]
+fn managers_lock_files_only_prints_clean_deduped_files() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["managers", "--lock-files-only"]);
+
+	assert!(output.status.success(), "managers --lock-files-only should succeed");
+	let stdout = stdout_text(&output);
+	assert_eq!(
+		stdout.lines().collect::<Vec<_>>(),
+		vec![
+			"package-lock.json",
+			"npm-shrinkwrap.json",
+			"yarn.lock",
+			"pnpm-lock.yaml",
+			"bun.lock",
+			"bun.lockb",
+			"deno.lock",
+			"vlt-lock.json",
+			"aube-lock.yaml"
+		]
+	);
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"managers --lock-files-only should not write stderr"
+	);
+}
+
+#[test]
+fn managers_search_filter_composes_with_lock_files_only() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["managers", "--search", "aube", "--lock-files-only"]);
+
+	assert!(
+		output.status.success(),
+		"managers --search aube --lock-files-only should succeed"
+	);
+	let stdout = stdout_text(&output);
+	assert_eq!(stdout.lines().collect::<Vec<_>>(), vec!["aube-lock.yaml"]);
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"managers --search aube --lock-files-only should not write stderr"
+	);
+}
+
+#[test]
+fn managers_config_files_only_prints_clean_deduped_files() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["managers", "--config-files-only"]);
+
+	assert!(output.status.success(), "managers --config-files-only should succeed");
+	let stdout = stdout_text(&output);
+	assert_eq!(
+		stdout.lines().collect::<Vec<_>>(),
+		vec!["package.json", "deno.json", "deno.jsonc"]
+	);
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"managers --config-files-only should not write stderr"
+	);
+}
+
+#[test]
+fn managers_search_filter_composes_with_config_files_only() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["managers", "--search", "deno", "--config-files-only"]);
+
+	assert!(
+		output.status.success(),
+		"managers --search deno --config-files-only should succeed"
+	);
+	let stdout = stdout_text(&output);
+	assert_eq!(stdout.lines().collect::<Vec<_>>(), vec!["deno.json", "deno.jsonc"]);
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"managers --search deno --config-files-only should not write stderr"
+	);
+}
+
+#[test]
 fn managers_watched_files_only_prints_clean_deduped_files() {
 	let temp = tempfile::tempdir().expect("create temp dir");
 
@@ -1493,6 +1579,28 @@ fn managers_script_outputs_conflict_with_json() {
 	assert!(watched_files_stderr.contains("cannot be used with"));
 	assert!(watched_files_stderr.contains("--watched-files-only"));
 	assert!(watched_files_stderr.contains("--json"));
+
+	let lock_files_output = run_pullhook(temp.path(), &["managers", "--lock-files-only", "--json"]);
+
+	assert!(
+		!lock_files_output.status.success(),
+		"managers --lock-files-only should conflict with --json"
+	);
+	let lock_files_stderr = stderr_text(&lock_files_output);
+	assert!(lock_files_stderr.contains("cannot be used with"));
+	assert!(lock_files_stderr.contains("--lock-files-only"));
+	assert!(lock_files_stderr.contains("--json"));
+
+	let config_files_output = run_pullhook(temp.path(), &["managers", "--config-files-only", "--json"]);
+
+	assert!(
+		!config_files_output.status.success(),
+		"managers --config-files-only should conflict with --json"
+	);
+	let config_files_stderr = stderr_text(&config_files_output);
+	assert!(config_files_stderr.contains("cannot be used with"));
+	assert!(config_files_stderr.contains("--config-files-only"));
+	assert!(config_files_stderr.contains("--json"));
 }
 
 #[test]
@@ -1501,10 +1609,19 @@ fn managers_line_outputs_conflict_with_each_other() {
 	let conflicting_modes: &[&[&str]] = &[
 		&["managers", "--commands-only", "--names-only"],
 		&["managers", "--commands-only", "--patterns-only"],
+		&["managers", "--commands-only", "--lock-files-only"],
+		&["managers", "--commands-only", "--config-files-only"],
 		&["managers", "--commands-only", "--watched-files-only"],
 		&["managers", "--names-only", "--patterns-only"],
+		&["managers", "--names-only", "--lock-files-only"],
+		&["managers", "--names-only", "--config-files-only"],
 		&["managers", "--names-only", "--watched-files-only"],
+		&["managers", "--patterns-only", "--lock-files-only"],
+		&["managers", "--patterns-only", "--config-files-only"],
 		&["managers", "--patterns-only", "--watched-files-only"],
+		&["managers", "--lock-files-only", "--config-files-only"],
+		&["managers", "--lock-files-only", "--watched-files-only"],
+		&["managers", "--config-files-only", "--watched-files-only"],
 	];
 
 	for args in conflicting_modes {
@@ -4201,6 +4318,8 @@ fn utility_help_groups_options_by_task() {
 	assert!(managers_stdout.contains("pullhook managers --names-only"));
 	assert!(managers_stdout.contains("pullhook managers --patterns-only"));
 	assert!(managers_stdout.contains("pullhook managers --commands-only"));
+	assert!(managers_stdout.contains("pullhook managers --lock-files-only"));
+	assert!(managers_stdout.contains("pullhook managers --config-files-only"));
 	assert!(managers_stdout.contains("pullhook managers --watched-files-only"));
 	assert!(managers_stdout.contains("pullhook managers --json"));
 

@@ -167,6 +167,8 @@ Examples:
   pullhook managers --names-only
   pullhook managers --patterns-only
   pullhook managers --commands-only
+  pullhook managers --lock-files-only
+  pullhook managers --config-files-only
   pullhook managers --watched-files-only
   pullhook managers --json";
 
@@ -1190,7 +1192,14 @@ pub struct ManagersArgs {
 	#[arg(
 		long = "json",
 		default_value_t = false,
-		conflicts_with_all = ["names_only", "patterns_only", "commands_only", "watched_files_only"],
+		conflicts_with_all = [
+			"names_only",
+			"patterns_only",
+			"commands_only",
+			"lock_files_only",
+			"config_files_only",
+			"watched_files_only"
+		],
 		help_heading = "Output options"
 	)]
 	pub json: bool,
@@ -1210,7 +1219,14 @@ pub struct ManagersLineOutputArgs {
 	#[arg(
 		long = "names-only",
 		default_value_t = false,
-		conflicts_with_all = ["json", "patterns_only", "commands_only", "watched_files_only"],
+		conflicts_with_all = [
+			"json",
+			"patterns_only",
+			"commands_only",
+			"lock_files_only",
+			"config_files_only",
+			"watched_files_only"
+		],
 		help_heading = "Output options"
 	)]
 	pub names_only: bool,
@@ -1219,7 +1235,14 @@ pub struct ManagersLineOutputArgs {
 	#[arg(
 		long = "patterns-only",
 		default_value_t = false,
-		conflicts_with_all = ["json", "names_only", "commands_only", "watched_files_only"],
+		conflicts_with_all = [
+			"json",
+			"names_only",
+			"commands_only",
+			"lock_files_only",
+			"config_files_only",
+			"watched_files_only"
+		],
 		help_heading = "Output options"
 	)]
 	pub patterns_only: bool,
@@ -1228,16 +1251,62 @@ pub struct ManagersLineOutputArgs {
 	#[arg(
 		long = "commands-only",
 		default_value_t = false,
-		conflicts_with_all = ["json", "names_only", "patterns_only", "watched_files_only"],
+		conflicts_with_all = [
+			"json",
+			"names_only",
+			"patterns_only",
+			"lock_files_only",
+			"config_files_only",
+			"watched_files_only"
+		],
 		help_heading = "Output options"
 	)]
 	pub commands_only: bool,
+
+	/// Print only package-manager lock files, one per line.
+	#[arg(
+		long = "lock-files-only",
+		default_value_t = false,
+		conflicts_with_all = [
+			"json",
+			"names_only",
+			"patterns_only",
+			"commands_only",
+			"config_files_only",
+			"watched_files_only"
+		],
+		help_heading = "Output options"
+	)]
+	pub lock_files_only: bool,
+
+	/// Print only package-manager config files, one per line.
+	#[arg(
+		long = "config-files-only",
+		default_value_t = false,
+		conflicts_with_all = [
+			"json",
+			"names_only",
+			"patterns_only",
+			"commands_only",
+			"lock_files_only",
+			"watched_files_only"
+		],
+		help_heading = "Output options"
+	)]
+	pub config_files_only: bool,
 
 	/// Print only watched package-manager files, one per line.
 	#[arg(
 		long = "watched-files-only",
 		default_value_t = false,
-		conflicts_with_all = ["json", "names_only", "patterns_only", "commands_only"],
+		conflicts_with_all = [
+			"json",
+			"names_only",
+			"patterns_only",
+			"commands_only",
+			"lock_files_only",
+			"config_files_only"
+		],
 		help_heading = "Output options"
 	)]
 	pub watched_files_only: bool,

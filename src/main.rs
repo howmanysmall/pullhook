@@ -1070,6 +1070,20 @@ fn managers_command(args: &ManagersArgs) -> Result<()> {
 		return Ok(());
 	}
 
+	if args.output.lock_files_only {
+		for lock_file in lock_files_for_managers(&managers) {
+			println!("{lock_file}");
+		}
+		return Ok(());
+	}
+
+	if args.output.config_files_only {
+		for config_file in config_files_for_managers(&managers) {
+			println!("{config_file}");
+		}
+		return Ok(());
+	}
+
 	if args.output.watched_files_only {
 		for watched_file in watched_files_for_managers(&managers) {
 			println!("{watched_file}");
@@ -1135,10 +1149,25 @@ fn manager_info_json(package_manager: PackageManager) -> serde_json::Value {
 	})
 }
 
+fn lock_files_for_managers(package_managers: &[PackageManager]) -> Vec<&'static str> {
+	dedup_package_manager_files(package_managers, PackageManager::lock_files)
+}
+
+fn config_files_for_managers(package_managers: &[PackageManager]) -> Vec<&'static str> {
+	dedup_package_manager_files(package_managers, PackageManager::config_files)
+}
+
 fn watched_files_for_managers(package_managers: &[PackageManager]) -> Vec<&'static str> {
+	dedup_package_manager_files(package_managers, PackageManager::watched_files)
+}
+
+fn dedup_package_manager_files(
+	package_managers: &[PackageManager],
+	files_for_manager: impl Fn(PackageManager) -> &'static [&'static str],
+) -> Vec<&'static str> {
 	let mut watched_files = Vec::new();
 	for package_manager in package_managers {
-		for watched_file in package_manager.watched_files() {
+		for watched_file in files_for_manager(*package_manager) {
 			if !watched_files.contains(watched_file) {
 				watched_files.push(*watched_file);
 			}
