@@ -4292,7 +4292,8 @@ fn config_rules_json(
 	selectors: &[String],
 	search: Option<&str>,
 ) -> serde_json::Value {
-	let selectors = collect_rules_output_selectors(config, kind, selectors, search);
+	let requested_selectors = selectors;
+	let output_selectors = collect_rules_output_selectors(config, kind, requested_selectors, search);
 	let commands = collect_config_rule_commands_for_kind(config, kind);
 	let patterns = collect_config_rule_patterns_for_kind(config, kind);
 	let exclude_patterns = collect_config_rule_exclude_patterns_for_kind(config, kind);
@@ -4305,7 +4306,7 @@ fn config_rules_json(
 	let rules = count_config_rules_for_kind(config, kind);
 	let parallel_groups = count_config_groups_for_kind(config, kind);
 	let entry_count = entries.len();
-	let selector_count = selectors.len();
+	let selector_count = output_selectors.len();
 	let command_count = commands.len();
 	let pattern_count = patterns.len();
 	let exclude_pattern_count = exclude_patterns.len();
@@ -4320,11 +4321,11 @@ fn config_rules_json(
 		"kind": rules_kind_label(kind),
 		"filters": {
 			"kind": rules_kind_label(kind),
-			"rules": selectors,
+			"rules": requested_selectors,
 			"search": search,
 		},
 		"searchFields": ["name", "kind", "command", "changed", "exclude", "failText"],
-		"selectors": selectors,
+		"selectors": output_selectors,
 		"commands": commands,
 		"patterns": patterns,
 		"excludePatterns": exclude_patterns,

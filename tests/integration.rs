@@ -6760,10 +6760,7 @@ fn rules_json_reports_rule_inventory() {
 	assert_eq!(value["code"], serde_json::Value::Null);
 	assert_eq!(value["error"], serde_json::Value::Null);
 	assert_eq!(value["filters"]["kind"], "all");
-	assert_eq!(
-		value["filters"]["rules"],
-		serde_json::json!(["checks", "install dependencies", "lint"])
-	);
+	assert_eq!(value["filters"]["rules"], serde_json::json!([]));
 	assert_eq!(value["filters"]["search"], serde_json::Value::Null);
 	assert_eq!(
 		value["searchFields"],
@@ -6862,6 +6859,7 @@ fn rules_json_filters_inventory_by_search() {
 	);
 	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse searched rules json");
 	assert_eq!(value["filters"]["search"], "generated");
+	assert_eq!(value["filters"]["rules"], serde_json::json!([]));
 	assert_eq!(value["selectors"], serde_json::json!(["lint"]));
 	assert_eq!(value["summary"]["entries"], 1);
 	assert_eq!(value["summary"]["rules"], 1);
@@ -6964,6 +6962,7 @@ fn rules_json_filters_inventory_by_rule_selector() {
 	assert!(output.status.success(), "rules --rule lint --json should succeed");
 	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse rules json");
 	assert_eq!(value["status"], "ok");
+	assert_eq!(value["filters"]["rules"], serde_json::json!(["lint"]));
 	assert_eq!(value["selectors"], serde_json::json!(["lint"]));
 	assert_eq!(value["commands"], serde_json::json!(["cargo test -p lint"]));
 	assert_eq!(value["patterns"], serde_json::json!(["packages/a/package-lock.json"]));
