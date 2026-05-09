@@ -233,20 +233,24 @@ fn check_completion_output(
 
 fn run_legacy(cli: &RunArgs) -> Result<()> {
 	if cli.pattern.is_none() && !cli.install {
-		return Err(anyhow!(
-			"missing required argument: use `--pattern <glob>`, `--install`, or the `run` subcommand"
-		));
+		let error = anyhow!("missing required argument: use `--pattern <glob>`, `--install`, or the `run` subcommand");
+		if cli.json {
+			print_json_error(&error)?;
+		}
+		return Err(error);
 	}
 	ensure_json_without_debug(cli.json, cli.debug)?;
 
 	let renderer = Renderer::new(effective_render_mode(cli.render, cli.no_color));
-	let cwd = std::env::current_dir().context("failed to read current working directory")?;
-	let repo = GitRepo::discover(&cwd, cli.debug).context("failed to resolve repository root")?;
+	let (_, repo) = discover_repo_from_cwd_for_output(cli.debug, cli.json)?;
 	let repo_root = repo.root().to_path_buf();
-	let run_config = resolve_run_config(cli, &repo_root)?;
-	let (changed_count, matched_files) = collect_matches(cli, &repo, &run_config)?;
-	let invocations = runner::prepare_invocations(run_config.command.as_deref(), run_config.script.as_deref())
-		.context("failed to prepare command invocations")?;
+	let run_config = result_for_output(resolve_run_config(cli, &repo_root), cli.json)?;
+	let (changed_count, matched_files) = result_for_output(collect_matches(cli, &repo, &run_config), cli.json)?;
+	let invocations = result_for_output(
+		runner::prepare_invocations(run_config.command.as_deref(), run_config.script.as_deref())
+			.context("failed to prepare command invocations"),
+		cli.json,
+	)?;
 	let tasks = runner::build_task_dirs(&repo_root, &matched_files, run_config.once, cli.unique_cwd);
 
 	if cli.json {
@@ -1347,6 +1351,18 @@ fn filter_config_evaluation_for_output(
 ) -> Result<Vec<EvaluatedEntry>> {
 	match filter_config_evaluation(evaluation, selectors) {
 		Ok(evaluation) => Ok(evaluation),
+		Err(error) => {
+			if json_output {
+				print_json_error(&error)?;
+			}
+			Err(error)
+		}
+	}
+}
+
+fn result_for_output<T>(result: Result<T>, json_output: bool) -> Result<T> {
+	match result {
+		Ok(value) => Ok(value),
 		Err(error) => {
 			if json_output {
 				print_json_error(&error)?;

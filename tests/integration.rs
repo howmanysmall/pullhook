@@ -230,6 +230,88 @@ fn legacy_run_json_reports_failures() {
 }
 
 #[test]
+fn legacy_json_reports_missing_mode_as_json() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+
+	let output = run_pullhook(repo_root, &["--json"]);
+
+	assert!(!output.status.success(), "legacy --json should require a mode");
+	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse missing mode json");
+	assert_eq!(value["status"], "error");
+	let error = value["error"].as_str().expect("error");
+	assert!(error.contains("missing required argument"));
+	let stderr = stderr_text(&output);
+	assert!(stderr.contains("missing required argument"));
+}
+
+#[test]
+fn legacy_json_reports_repo_discovery_errors_as_json() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(
+		temp.path(),
+		&[
+			"--pattern",
+			"packages/*/package-lock.json",
+			"--command",
+			"true",
+			"--json",
+		],
+	);
+
+	assert!(!output.status.success(), "legacy --json should fail outside a git repo");
+	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse repo discovery json");
+	assert_eq!(value["status"], "error");
+	assert_eq!(value["error"], "failed to resolve repository root");
+	let stderr = stderr_text(&output);
+	assert!(stderr.contains("failed to resolve repository root"));
+}
+
+#[test]
+fn legacy_json_reports_invalid_pattern_as_json() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+
+	let output = run_pullhook(repo_root, &["--pattern", "{", "--command", "true", "--json"]);
+
+	assert!(!output.status.success(), "legacy --json should fail for invalid glob");
+	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse invalid pattern json");
+	assert_eq!(value["status"], "error");
+	let error = value["error"].as_str().expect("error");
+	assert!(error.contains("failed to compile pattern"));
+	let stderr = stderr_text(&output);
+	assert!(stderr.contains("failed to compile pattern"));
+}
+
+#[test]
+fn legacy_json_reports_diff_base_errors_as_json() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+
+	let output = run_pullhook(
+		repo_root,
+		&[
+			"--pattern",
+			"packages/*/package-lock.json",
+			"--command",
+			"true",
+			"--base",
+			"missing-base-ref",
+			"--json",
+		],
+	);
+
+	assert!(!output.status.success(), "legacy --json should fail for invalid base");
+	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse legacy base error json");
+	assert_eq!(value["status"], "error");
+	let error = value["error"].as_str().expect("error");
+	assert!(error.contains("failed to resolve diff base or read changed files"));
+	let stderr = stderr_text(&output);
+	assert!(stderr.contains("failed to resolve diff base or read changed files"));
+}
+
+#[test]
 fn legacy_run_json_rejects_debug_mode() {
 	let temp = setup_repo_with_merge();
 	let repo_root = temp.path();
