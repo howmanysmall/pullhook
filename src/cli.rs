@@ -178,6 +178,7 @@ Examples:
   pullhook commands
   pullhook commands --category diagnostic
   pullhook commands --category diagnostic --names-only
+  pullhook commands --search config
   pullhook commands --repo-only
   pullhook commands --standalone-only --names-only
   pullhook commands --json";
@@ -1195,6 +1196,10 @@ pub struct CommandCatalogArgs {
 	/// Only list commands for a specific category.
 	#[arg(long = "category", value_enum, help_heading = "Filter options")]
 	pub category: Option<CommandCategory>,
+
+	/// Only list commands whose name, category, or summary contains this text.
+	#[arg(long = "search", value_name = "TEXT", help_heading = "Filter options")]
+	pub search: Option<String>,
 
 	#[command(flatten)]
 	pub filters: CommandCatalogFilterArgs,

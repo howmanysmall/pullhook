@@ -1110,7 +1110,7 @@ fn filtered_example_infos(command: Option<ExampleCommand>, category: Option<Comm
 }
 
 fn command_catalog_command(args: &CommandCatalogArgs) -> Result<()> {
-	let commands = filtered_command_infos(args.category, repo_requirement_filter(args));
+	let commands = filtered_command_infos(args.category, args.search.as_deref(), repo_requirement_filter(args));
 	if args.json {
 		println!(
 			"{}",
@@ -1119,6 +1119,7 @@ fn command_catalog_command(args: &CommandCatalogArgs) -> Result<()> {
 				"code": serde_json::Value::Null,
 				"filters": {
 					"category": args.category.map(CommandCategory::label),
+					"search": args.search.as_deref(),
 					"requiresRepo": repo_requirement_filter(args),
 				},
 				"commands": commands,
@@ -1144,6 +1145,9 @@ fn command_catalog_command(args: &CommandCatalogArgs) -> Result<()> {
 	if let Some(category) = args.category {
 		println!("filter: category={}", category.label());
 	}
+	if let Some(search) = &args.search {
+		println!("filter: search={search}");
+	}
 	if let Some(requires_repo) = repo_requirement_filter(args) {
 		println!("filter: requiresRepo={requires_repo}");
 	}
@@ -1154,13 +1158,27 @@ fn command_catalog_command(args: &CommandCatalogArgs) -> Result<()> {
 	Ok(())
 }
 
-fn filtered_command_infos(category: Option<CommandCategory>, requires_repo: Option<bool>) -> Vec<CommandInfo> {
+fn filtered_command_infos(
+	category: Option<CommandCategory>,
+	search: Option<&str>,
+	requires_repo: Option<bool>,
+) -> Vec<CommandInfo> {
+	let search = search.map(str::to_ascii_lowercase);
 	COMMAND_INFOS
 		.iter()
 		.copied()
 		.filter(|info| category.is_none_or(|category| info.category == category.label()))
+		.filter(|info| {
+			search
+				.as_deref()
+				.is_none_or(|search| command_info_matches_search(info, search))
+		})
 		.filter(|info| requires_repo.is_none_or(|requires_repo| info.requires_repo == requires_repo))
 		.collect()
+}
+
+fn command_info_matches_search(info: &CommandInfo, search: &str) -> bool {
+	info.name.contains(search) || info.category.contains(search) || info.summary.to_ascii_lowercase().contains(search)
 }
 
 const fn repo_requirement_filter(args: &CommandCatalogArgs) -> Option<bool> {

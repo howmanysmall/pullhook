@@ -1802,6 +1802,7 @@ fn commands_json_lists_cli_catalog() {
 	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse commands json");
 	assert_eq!(value["status"], "ok");
 	assert_eq!(value["code"], serde_json::Value::Null);
+	assert_eq!(value["filters"]["search"], serde_json::Value::Null);
 	assert_eq!(value["filters"]["requiresRepo"], serde_json::Value::Null);
 	let commands = value["commands"].as_array().expect("commands array");
 	assert!(
@@ -1864,6 +1865,7 @@ fn commands_category_filter_limits_results() {
 	);
 	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse filtered commands json");
 	assert_eq!(value["filters"]["category"], "diagnostic");
+	assert_eq!(value["filters"]["search"], serde_json::Value::Null);
 	assert_eq!(value["filters"]["requiresRepo"], serde_json::Value::Null);
 	let commands = value["commands"].as_array().expect("commands array");
 	assert!(
@@ -1887,6 +1889,62 @@ fn commands_category_filter_limits_results() {
 	assert!(
 		stderr.trim().is_empty(),
 		"filtered commands --json should not write stderr"
+	);
+}
+
+#[test]
+fn commands_search_filter_limits_results() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["commands", "--search", "CONFIG", "--json"]);
+
+	assert!(
+		output.status.success(),
+		"commands --search CONFIG --json should succeed"
+	);
+	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse searched commands json");
+	assert_eq!(value["filters"]["category"], serde_json::Value::Null);
+	assert_eq!(value["filters"]["search"], "CONFIG");
+	assert_eq!(value["filters"]["requiresRepo"], serde_json::Value::Null);
+	let commands = value["commands"].as_array().expect("commands array");
+	assert!(!commands.is_empty(), "search filter should keep matching commands");
+	assert!(commands.iter().any(|entry| entry["name"] == "config"));
+	assert!(commands.iter().any(|entry| entry["name"] == "validate"));
+	assert!(commands.iter().any(|entry| entry["name"] == "init"));
+	assert!(
+		!commands.iter().any(|entry| entry["name"] == "shells"),
+		"shells does not match the config search text"
+	);
+	assert_eq!(
+		value["summary"]["commands"].as_u64().expect("command count"),
+		commands.len() as u64
+	);
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"commands --search CONFIG --json should not write stderr"
+	);
+}
+
+#[test]
+fn commands_search_filter_composes_with_repo_filter() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(
+		temp.path(),
+		&["commands", "--search", "resolved", "--repo-only", "--names-only"],
+	);
+
+	assert!(
+		output.status.success(),
+		"commands --search resolved --repo-only --names-only should succeed"
+	);
+	let stdout = stdout_text(&output);
+	assert_eq!(stdout.lines().collect::<Vec<_>>(), vec!["config"]);
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"filtered commands --names-only should not write stderr"
 	);
 }
 
@@ -2839,6 +2897,7 @@ fn utility_help_groups_options_by_task() {
 	assert!(commands_stdout.contains("Output options:"));
 	assert!(commands_stdout.contains("pullhook commands --category diagnostic"));
 	assert!(commands_stdout.contains("pullhook commands --category diagnostic --names-only"));
+	assert!(commands_stdout.contains("pullhook commands --search config"));
 	assert!(commands_stdout.contains("pullhook commands --repo-only"));
 	assert!(commands_stdout.contains("pullhook commands --standalone-only --names-only"));
 }
