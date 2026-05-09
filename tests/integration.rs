@@ -808,6 +808,128 @@ fn formats_script_outputs_conflict_with_json() {
 }
 
 #[test]
+fn managers_text_lists_install_detection_contract() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["managers"]);
+
+	assert!(output.status.success(), "managers should succeed outside a git repo");
+	let stdout = stdout_text(&output);
+	assert!(stdout.contains("Package managers"));
+	assert!(stdout.contains("lock files win over config files"));
+	assert!(stdout.contains("npm: npm install"));
+	assert!(stdout.contains("pattern: +(package.json|package-lock.json|npm-shrinkwrap.json)"));
+	assert!(stdout.contains("aube: aube install"));
+	assert!(stdout.contains("watched files: aube-lock.yaml, bun.lock"));
+	let stderr = stderr_text(&output);
+	assert!(stderr.trim().is_empty(), "managers should not write stderr");
+}
+
+#[test]
+fn managers_json_lists_install_detection_contract() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["managers", "--json"]);
+
+	assert!(
+		output.status.success(),
+		"managers --json should succeed outside a git repo"
+	);
+	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse managers json");
+	assert_eq!(value["status"], "ok");
+	assert_eq!(value["code"], serde_json::Value::Null);
+	let managers = value["managers"].as_array().expect("managers array");
+	assert!(managers.iter().any(|entry| entry["name"] == "npm"
+		&& entry["installCommand"] == "npm install"
+		&& entry["installPattern"] == "+(package.json|package-lock.json|npm-shrinkwrap.json)"));
+	assert!(
+		managers
+			.iter()
+			.any(|entry| entry["name"] == "deno"
+				&& entry["configFiles"] == serde_json::json!(["deno.json", "deno.jsonc"]))
+	);
+	assert_eq!(
+		value["summary"]["managers"].as_u64().expect("manager count"),
+		managers.len() as u64
+	);
+	let stderr = stderr_text(&output);
+	assert!(stderr.trim().is_empty(), "managers --json should not write stderr");
+}
+
+#[test]
+fn managers_names_only_prints_clean_manager_names() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["managers", "--names-only"]);
+
+	assert!(output.status.success(), "managers --names-only should succeed");
+	let stdout = stdout_text(&output);
+	assert_eq!(
+		stdout.lines().collect::<Vec<_>>(),
+		vec!["npm", "yarn", "pnpm", "bun", "deno", "vlt", "aube"]
+	);
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"managers --names-only should not write stderr"
+	);
+}
+
+#[test]
+fn managers_patterns_only_prints_clean_install_patterns() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["managers", "--patterns-only"]);
+
+	assert!(output.status.success(), "managers --patterns-only should succeed");
+	let stdout = stdout_text(&output);
+	assert_eq!(
+		stdout.lines().collect::<Vec<_>>(),
+		vec![
+			"+(package.json|package-lock.json|npm-shrinkwrap.json)",
+			"+(package.json|yarn.lock)",
+			"+(package.json|pnpm-lock.yaml)",
+			"+(package.json|bun.lock|bun.lockb)",
+			"+(package.json|deno.json|deno.jsonc|deno.lock)",
+			"+(package.json|vlt-lock.json)",
+			"+(aube-lock.yaml|bun.lock|npm-shrinkwrap.json|package.json|package-lock.json|pnpm-lock.yaml|yarn.lock)"
+		]
+	);
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"managers --patterns-only should not write stderr"
+	);
+}
+
+#[test]
+fn managers_script_outputs_conflict_with_json() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let names_output = run_pullhook(temp.path(), &["managers", "--names-only", "--json"]);
+
+	assert!(
+		!names_output.status.success(),
+		"managers --names-only should conflict with --json"
+	);
+	let names_stderr = stderr_text(&names_output);
+	assert!(names_stderr.contains("cannot be used with"));
+	assert!(names_stderr.contains("--names-only"));
+	assert!(names_stderr.contains("--json"));
+
+	let patterns_output = run_pullhook(temp.path(), &["managers", "--patterns-only", "--json"]);
+
+	assert!(
+		!patterns_output.status.success(),
+		"managers --patterns-only should conflict with --json"
+	);
+	let patterns_stderr = stderr_text(&patterns_output);
+	assert!(patterns_stderr.contains("cannot be used with"));
+	assert!(patterns_stderr.contains("--patterns-only"));
+	assert!(patterns_stderr.contains("--json"));
+}
+
+#[test]
 fn completion_command_writes_output_file() {
 	let temp = tempfile::tempdir().expect("create temp dir");
 	let output_path = Path::new("completions/fish/pullhook.fish");
@@ -1106,6 +1228,7 @@ fn examples_text_lists_common_workflows() {
 	assert!(stdout.contains("Preview configured rules: pullhook explain --all-matches"));
 	assert!(stdout.contains("List completion shells: pullhook shells --names-only"));
 	assert!(stdout.contains("List config formats: pullhook formats --files-only"));
+	assert!(stdout.contains("List package managers: pullhook managers --patterns-only"));
 	assert!(stdout.contains("List status codes: pullhook codes --codes-only"));
 	let stderr = stderr_text(&output);
 	assert!(stderr.trim().is_empty(), "examples should not write stderr");
@@ -1144,6 +1267,11 @@ fn examples_json_lists_common_workflows() {
 		examples
 			.iter()
 			.any(|entry| entry["commandName"] == "formats" && entry["command"] == "pullhook formats --files-only")
+	);
+	assert!(
+		examples
+			.iter()
+			.any(|entry| entry["commandName"] == "managers" && entry["command"] == "pullhook managers --patterns-only")
 	);
 	assert_eq!(
 		value["summary"]["examples"].as_u64().expect("example count"),
@@ -1258,6 +1386,11 @@ fn commands_json_lists_cli_catalog() {
 	assert!(
 		commands
 			.iter()
+			.any(|entry| entry["name"] == "managers" && entry["category"] == "reference")
+	);
+	assert!(
+		commands
+			.iter()
 			.any(|entry| entry["name"] == "examples" && entry["category"] == "reference")
 	);
 	assert!(
@@ -1328,7 +1461,7 @@ fn commands_names_only_prints_clean_command_names() {
 	let stdout = stdout_text(&output);
 	assert_eq!(
 		stdout.lines().collect::<Vec<_>>(),
-		vec!["shells", "formats", "examples", "commands", "codes"]
+		vec!["shells", "formats", "managers", "examples", "commands", "codes"]
 	);
 	let stderr = stderr_text(&output);
 	assert!(
@@ -1367,6 +1500,7 @@ fn root_help_lists_common_examples() {
 	assert!(stdout.contains("pullhook examples"));
 	assert!(stdout.contains("pullhook shells"));
 	assert!(stdout.contains("pullhook formats"));
+	assert!(stdout.contains("pullhook managers"));
 	assert!(stdout.contains("pullhook commands --json"));
 	assert!(stdout.contains("pullhook codes --json"));
 	assert!(stdout.contains("schema"));
@@ -1375,6 +1509,7 @@ fn root_help_lists_common_examples() {
 	assert!(stdout.contains("Use `pullhook examples` to see common workflows."));
 	assert!(stdout.contains("Use `pullhook shells` to list completion targets."));
 	assert!(stdout.contains("Use `pullhook formats` to list supported config formats."));
+	assert!(stdout.contains("Use `pullhook managers` to list package-manager install detection."));
 	assert!(stdout.contains("Use `pullhook explain --all-matches` to preview config rule matches."));
 	assert!(stdout.contains("Use `pullhook commands` to inspect the command catalog."));
 	assert!(stdout.contains("Use `pullhook codes` to inspect stable JSON status codes."));
@@ -2086,6 +2221,14 @@ fn utility_help_groups_options_by_task() {
 	assert!(formats_stdout.contains("pullhook formats --names-only"));
 	assert!(formats_stdout.contains("pullhook formats --files-only"));
 	assert!(formats_stdout.contains("pullhook formats --json"));
+
+	let managers = run_pullhook(temp.path(), &["managers", "--help"]);
+	assert!(managers.status.success(), "managers help should succeed");
+	let managers_stdout = stdout_text(&managers);
+	assert!(managers_stdout.contains("Output options:"));
+	assert!(managers_stdout.contains("pullhook managers --names-only"));
+	assert!(managers_stdout.contains("pullhook managers --patterns-only"));
+	assert!(managers_stdout.contains("pullhook managers --json"));
 
 	let examples = run_pullhook(temp.path(), &["examples", "--help"]);
 	assert!(examples.status.success(), "examples help should succeed");

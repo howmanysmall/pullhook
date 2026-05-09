@@ -23,15 +23,15 @@ use tracing_subscriber::EnvFilter;
 
 use crate::cli::{
 	Cli, CodeKind, CodesArgs, CommandCatalogArgs, CommandCategory, Commands, CompletionArgs, ConfigArgs, ConfigRunArgs,
-	DoctorArgs, ExampleCommand, ExamplesArgs, ExplainArgs, FormatsArgs, InitArgs, RulesArgs, RulesKind, RunArgs,
-	SchemaArgs, ShellsArgs, ValidateArgs,
+	DoctorArgs, ExampleCommand, ExamplesArgs, ExplainArgs, FormatsArgs, InitArgs, ManagersArgs, RulesArgs, RulesKind,
+	RunArgs, SchemaArgs, ShellsArgs, ValidateArgs,
 };
 use crate::config::{
 	Config, Entry, EvaluatedEntry, EvaluatedGroup, EvaluatedRule, FailTextContext, OnFailure, Pattern,
 };
 use crate::git::GitRepo;
 use crate::output::{DryRunSummary, NonSuccessReport, RenderMode, Renderer, Summary, TaskBlock};
-use crate::pm::detect_package_manager;
+use crate::pm::{PackageManager, detect_package_manager, package_managers};
 
 #[derive(Debug, Clone)]
 struct RunConfig {
@@ -298,6 +298,14 @@ const COMMAND_INFOS: &[CommandInfo] = &[
 		script_friendly: true,
 	},
 	CommandInfo {
+		name: "managers",
+		category: "reference",
+		summary: "List supported package-manager install detection.",
+		json: true,
+		requires_repo: false,
+		script_friendly: true,
+	},
+	CommandInfo {
 		name: "examples",
 		category: "reference",
 		summary: "Show common pullhook workflows and commands.",
@@ -389,6 +397,12 @@ const EXAMPLE_INFOS: &[ExampleInfo] = &[
 		command_name: "formats",
 		command: "pullhook formats --files-only",
 		summary: "Print supported config filenames.",
+	},
+	ExampleInfo {
+		title: "List package managers",
+		command_name: "managers",
+		command: "pullhook managers --patterns-only",
+		summary: "Print install detection patterns.",
 	},
 	ExampleInfo {
 		title: "List status codes",
@@ -731,6 +745,7 @@ fn main() {
 		Some(Commands::Completion(args)) => completion_command(args),
 		Some(Commands::Shells(args)) => shells_command(args),
 		Some(Commands::Formats(args)) => formats_command(args),
+		Some(Commands::Managers(args)) => managers_command(args),
 		Some(Commands::Examples(args)) => examples_command(args),
 		Some(Commands::CommandCatalog(args)) => command_catalog_command(args),
 		Some(Commands::Codes(args)) => codes_command(args),
@@ -857,6 +872,72 @@ fn formats_command(args: &FormatsArgs) -> Result<()> {
 		println!("  {}", format.init_command);
 	}
 	Ok(())
+}
+
+fn managers_command(args: &ManagersArgs) -> Result<()> {
+	if args.json {
+		let managers = package_managers()
+			.iter()
+			.map(|package_manager| manager_info_json(*package_manager))
+			.collect::<Vec<_>>();
+		println!(
+			"{}",
+			serde_json::to_string_pretty(&json!({
+				"status": "ok",
+				"code": serde_json::Value::Null,
+				"managers": managers,
+				"summary": {
+					"managers": managers.len(),
+				},
+			}))?
+		);
+		return Ok(());
+	}
+
+	if args.names_only {
+		for package_manager in package_managers() {
+			println!("{}", package_manager.name());
+		}
+		return Ok(());
+	}
+
+	if args.patterns_only {
+		for package_manager in package_managers() {
+			println!("{}", package_manager.install_pattern());
+		}
+		return Ok(());
+	}
+
+	println!("Package managers");
+	println!("lock files win over config files; multiple lock-file managers are ambiguous");
+	println!();
+	for package_manager in package_managers() {
+		println!("{}: {}", package_manager.name(), package_manager.install_command());
+		println!("  pattern: {}", package_manager.install_pattern());
+		println!("  lock files: {}", list_or_none(package_manager.lock_files()));
+		println!("  config files: {}", list_or_none(package_manager.config_files()));
+		println!("  watched files: {}", package_manager.watched_files().join(", "));
+	}
+	Ok(())
+}
+
+fn manager_info_json(package_manager: PackageManager) -> serde_json::Value {
+	json!({
+		"name": package_manager.name(),
+		"installCommand": package_manager.install_command(),
+		"installPattern": package_manager.install_pattern(),
+		"lockFiles": package_manager.lock_files(),
+		"configFiles": package_manager.config_files(),
+		"watchedFiles": package_manager.watched_files(),
+	})
+}
+
+fn list_or_none(values: &[&str]) -> String {
+	if values.is_empty() {
+		return "none".to_owned();
+	}
+
+	values.join(", ")
 }
 
 fn examples_command(args: &ExamplesArgs) -> Result<()> {

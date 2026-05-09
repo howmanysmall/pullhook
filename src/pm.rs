@@ -80,6 +80,16 @@ const LOCKFILE_DETECTION_PRIORITY: [PackageManager; 7] = [
 
 const CONFIG_DETECTION_PRIORITY: [PackageManager; 2] = [PackageManager::Deno, PackageManager::Npm];
 
+const PACKAGE_MANAGERS: &[PackageManager] = &[
+	PackageManager::Npm,
+	PackageManager::Yarn,
+	PackageManager::Pnpm,
+	PackageManager::Bun,
+	PackageManager::Deno,
+	PackageManager::Vlt,
+	PackageManager::Aube,
+];
+
 /// Supported package managers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PackageManager {
@@ -147,6 +157,12 @@ impl PackageManager {
 	pub fn install_pattern(self) -> String {
 		format!("+({})", self.watched_files().join("|"))
 	}
+}
+
+/// Return all supported package managers in display order.
+#[must_use]
+pub const fn package_managers() -> &'static [PackageManager] {
+	PACKAGE_MANAGERS
 }
 
 /// Detect the package manager for `--install`.

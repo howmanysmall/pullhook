@@ -17,6 +17,7 @@ Examples:
   pullhook examples
   pullhook shells
   pullhook formats
+  pullhook managers
   pullhook commands --json
   pullhook codes --json
   pullhook run --dry-run
@@ -26,6 +27,7 @@ Next steps:
   Use `pullhook examples` to see common workflows.
   Use `pullhook shells` to list completion targets.
   Use `pullhook formats` to list supported config formats.
+  Use `pullhook managers` to list package-manager install detection.
   Use `pullhook explain --all-matches` to preview config rule matches.
   Use `pullhook commands` to inspect the command catalog.
   Use `pullhook codes` to inspect stable JSON status codes.";
@@ -146,6 +148,13 @@ Examples:
   pullhook formats --files-only
   pullhook formats --json";
 
+const MANAGERS_AFTER_HELP: &str = "\
+Examples:
+  pullhook managers
+  pullhook managers --names-only
+  pullhook managers --patterns-only
+  pullhook managers --json";
+
 const CODES_AFTER_HELP: &str = "\
 Examples:
   pullhook codes
@@ -209,6 +218,8 @@ pub enum Commands {
 	Shells(ShellsArgs),
 	/// List supported config formats and filenames.
 	Formats(FormatsArgs),
+	/// List supported package-manager install detection.
+	Managers(ManagersArgs),
 	/// Show common pullhook workflows and commands.
 	Examples(ExamplesArgs),
 	/// List pullhook commands for humans or automation.
@@ -1049,6 +1060,38 @@ pub struct FormatsArgs {
 	pub files_only: bool,
 }
 
+/// Arguments for `pullhook managers`.
+#[derive(Debug, Clone, Args)]
+#[command(after_help = MANAGERS_AFTER_HELP)]
+pub struct ManagersArgs {
+	/// Print machine-readable JSON instead of text output.
+	#[arg(
+		long = "json",
+		default_value_t = false,
+		conflicts_with_all = ["names_only", "patterns_only"],
+		help_heading = "Output options"
+	)]
+	pub json: bool,
+
+	/// Print only package-manager names, one per line.
+	#[arg(
+		long = "names-only",
+		default_value_t = false,
+		conflicts_with_all = ["json", "patterns_only"],
+		help_heading = "Output options"
+	)]
+	pub names_only: bool,
+
+	/// Print only install detection patterns, one per line.
+	#[arg(
+		long = "patterns-only",
+		default_value_t = false,
+		conflicts_with_all = ["json", "names_only"],
+		help_heading = "Output options"
+	)]
+	pub patterns_only: bool,
+}
+
 /// Arguments for `pullhook codes`.
 #[derive(Debug, Clone, Args)]
 #[command(after_help = CODES_AFTER_HELP)]
@@ -1151,6 +1194,8 @@ pub enum ExampleCommand {
 	Shells,
 	/// Config format examples.
 	Formats,
+	/// Package-manager install detection examples.
+	Managers,
 	/// Status code catalog examples.
 	Codes,
 }
@@ -1167,6 +1212,7 @@ impl ExampleCommand {
 			Self::Commands => "commands",
 			Self::Shells => "shells",
 			Self::Formats => "formats",
+			Self::Managers => "managers",
 			Self::Codes => "codes",
 		}
 	}
