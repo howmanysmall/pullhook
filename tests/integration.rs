@@ -598,6 +598,45 @@ fn validate_json_reports_missing_config_as_json() {
 }
 
 #[test]
+fn validate_json_rejects_duplicate_selector_names() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_file(
+		repo_root,
+		Path::new("pullhook.json"),
+		r#"{
+  "rules": [
+    {
+      "name": "checks",
+      "parallel": [
+        {
+          "name": "lint",
+          "changed": "packages/a/package-lock.json",
+          "run": "cargo test -p lint"
+        }
+      ]
+    },
+    {
+      "name": "lint",
+      "changed": "packages/a/package-lock.json",
+      "run": "cargo test -p lint-again"
+    }
+  ]
+}
+"#,
+	);
+
+	let output = run_pullhook(repo_root, &["validate", "--json"]);
+
+	assert!(!output.status.success(), "duplicate selector names should fail");
+	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse validate json");
+	assert_eq!(value["valid"], false);
+	let error = value["error"].as_str().expect("error");
+	assert!(error.contains("rule selector names must be unique"));
+	assert!(error.contains("duplicate selector(s): `lint`"));
+}
+
+#[test]
 fn doctor_json_reports_repo_config_diff_base_and_install_detection() {
 	let temp = setup_repo_with_root_manifest_change();
 	let repo_root = temp.path();

@@ -258,6 +258,7 @@ Use `pullhook rules` to list configured rule and parallel group names before tar
 Use `pullhook rules --names-only` when a script or completion helper only needs valid selector names.
 Use `--rule <name>` with `run` or `explain` to focus on specific rule names or parallel groups in large configs.
 Repeat it to target more than one selector, for example `pullhook run --rule lint --rule typecheck`.
+Rule and group names share one selector namespace, so each configured name must be unique.
 Use `--changed-file <path>` with `run` or `explain` to evaluate against explicit paths instead of the git diff;
 repeat it to simulate several changed files. Use `--changed-files-stdin` when a script already has a newline-delimited
 file list, such as `git diff --name-only`.

@@ -1,5 +1,6 @@
 //! Config-file discovery, parsing, validation, and rule evaluation.
 
+use std::collections::BTreeSet;
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
@@ -468,6 +469,7 @@ fn normalize_config(path: &Path, raw: RawConfig) -> Result<Config, PullhookError
 			entries.push(Entry::Rule(rule));
 		}
 	}
+	validate_unique_selector_names(&entries, &mut errors);
 
 	if !errors.is_empty() {
 		return Err(PullhookError::ConfigValidation {
@@ -481,6 +483,42 @@ fn normalize_config(path: &Path, raw: RawConfig) -> Result<Config, PullhookError
 		on_failure: raw.on_failure,
 		entries,
 	})
+}
+
+fn validate_unique_selector_names(entries: &[Entry], errors: &mut Vec<String>) {
+	let mut seen = BTreeSet::new();
+	let mut duplicates = BTreeSet::new();
+
+	for entry in entries {
+		match entry {
+			Entry::Rule(rule) => {
+				if !seen.insert(rule.name.as_str()) {
+					duplicates.insert(rule.name.as_str());
+				}
+			}
+			Entry::Group(group) => {
+				if !seen.insert(group.name.as_str()) {
+					duplicates.insert(group.name.as_str());
+				}
+				for rule in &group.rules {
+					if !seen.insert(rule.name.as_str()) {
+						duplicates.insert(rule.name.as_str());
+					}
+				}
+			}
+		}
+	}
+
+	if !duplicates.is_empty() {
+		errors.push(format!(
+			"rule selector names must be unique; duplicate selector(s): {}",
+			duplicates
+				.into_iter()
+				.map(|name| format!("`{name}`"))
+				.collect::<Vec<_>>()
+				.join(", ")
+		));
+	}
 }
 
 fn normalize_group(raw: RawEntry, label: &str, errors: &mut Vec<String>) -> Option<Group> {
