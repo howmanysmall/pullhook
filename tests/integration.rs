@@ -838,6 +838,48 @@ fn codes_kind_filter_limits_results() {
 }
 
 #[test]
+fn codes_only_prints_clean_stable_codes() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["codes", "--kind", "doctor-check", "--codes-only"]);
+
+	assert!(
+		output.status.success(),
+		"codes --kind doctor-check --codes-only should succeed"
+	);
+	let stdout = stdout_text(&output);
+	let codes = stdout.lines().collect::<Vec<_>>();
+	assert!(codes.contains(&"config_ok"));
+	assert!(codes.contains(&"diff_base_ok"));
+	assert!(
+		!codes.contains(&"config_missing"),
+		"config_missing is an error code, not a doctor-check code"
+	);
+	assert!(
+		codes.iter().all(|code| !code.contains('[')),
+		"codes-only output should not include text formatting"
+	);
+	let stderr = stderr_text(&output);
+	assert!(stderr.trim().is_empty(), "codes --codes-only should not write stderr");
+}
+
+#[test]
+fn codes_only_conflicts_with_json() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["codes", "--codes-only", "--json"]);
+
+	assert!(
+		!output.status.success(),
+		"codes --codes-only should conflict with --json"
+	);
+	let stderr = stderr_text(&output);
+	assert!(stderr.contains("cannot be used with"));
+	assert!(stderr.contains("--codes-only"));
+	assert!(stderr.contains("--json"));
+}
+
+#[test]
 fn commands_text_lists_cli_catalog() {
 	let temp = tempfile::tempdir().expect("create temp dir");
 
@@ -1679,6 +1721,7 @@ fn utility_help_groups_options_by_task() {
 	let codes_stdout = stdout_text(&codes);
 	assert!(codes_stdout.contains("Filter options:"));
 	assert!(codes_stdout.contains("Output options:"));
+	assert!(codes_stdout.contains("pullhook codes --kind error --codes-only"));
 
 	let commands = run_pullhook(temp.path(), &["commands", "--help"]);
 	assert!(commands.status.success(), "commands help should succeed");

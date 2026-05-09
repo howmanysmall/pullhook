@@ -130,6 +130,7 @@ const CODES_AFTER_HELP: &str = "\
 Examples:
   pullhook codes
   pullhook codes --kind doctor-check
+  pullhook codes --kind error --codes-only
   pullhook codes --json";
 
 const COMMANDS_AFTER_HELP: &str = "\
@@ -969,8 +970,22 @@ pub struct CodesArgs {
 	pub kind: Option<CodeKind>,
 
 	/// Print machine-readable JSON instead of text output.
-	#[arg(long = "json", default_value_t = false, help_heading = "Output options")]
+	#[arg(
+		long = "json",
+		default_value_t = false,
+		conflicts_with = "codes_only",
+		help_heading = "Output options"
+	)]
 	pub json: bool,
+
+	/// Print only stable codes, one per line.
+	#[arg(
+		long = "codes-only",
+		default_value_t = false,
+		conflicts_with = "json",
+		help_heading = "Output options"
+	)]
+	pub codes_only: bool,
 }
 
 /// Arguments for `pullhook commands`.

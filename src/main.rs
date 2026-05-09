@@ -659,6 +659,13 @@ fn codes_command(args: &CodesArgs) -> Result<()> {
 		return Ok(());
 	}
 
+	if args.codes_only {
+		for info in codes {
+			println!("{}", info.code);
+		}
+		return Ok(());
+	}
+
 	println!("JSON status codes");
 	println!("ok responses use code: null");
 	if let Some(kind) = args.kind {
