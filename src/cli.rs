@@ -146,6 +146,7 @@ Examples:
 const FORMATS_AFTER_HELP: &str = "\
 Examples:
   pullhook formats
+  pullhook formats --search yaml
   pullhook formats --names-only
   pullhook formats --files-only
   pullhook formats --json";
@@ -1054,6 +1055,10 @@ pub struct ShellsArgs {
 #[derive(Debug, Clone, Args)]
 #[command(after_help = FORMATS_AFTER_HELP)]
 pub struct FormatsArgs {
+	/// Only list formats whose name, filenames, description, or init command contain this text.
+	#[arg(long = "search", value_name = "TEXT", help_heading = "Filter options")]
+	pub search: Option<String>,
+
 	/// Print machine-readable JSON instead of text output.
 	#[arg(
 		long = "json",

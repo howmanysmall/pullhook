@@ -882,17 +882,22 @@ fn shells_command(args: &ShellsArgs) -> Result<()> {
 }
 
 fn formats_command(args: &FormatsArgs) -> Result<()> {
+	let formats = filtered_format_infos(args.search.as_deref());
+	let config_names = config_names_for_formats(&formats);
 	if args.json {
 		println!(
 			"{}",
 			serde_json::to_string_pretty(&json!({
 				"status": "ok",
 				"code": serde_json::Value::Null,
-				"formats": FORMAT_INFOS,
-				"discoveryOrder": config::config_names(),
+				"filters": {
+					"search": args.search.as_deref(),
+				},
+				"formats": formats,
+				"discoveryOrder": config_names,
 				"summary": {
-					"formats": FORMAT_INFOS.len(),
-					"configNames": config::config_names().len(),
+					"formats": formats.len(),
+					"configNames": config_names.len(),
 				},
 			}))?
 		);
@@ -900,14 +905,14 @@ fn formats_command(args: &FormatsArgs) -> Result<()> {
 	}
 
 	if args.names_only {
-		for format in FORMAT_INFOS {
+		for format in formats {
 			println!("{}", format.name);
 		}
 		return Ok(());
 	}
 
 	if args.files_only {
-		for name in config::config_names() {
+		for name in config_names {
 			println!("{name}");
 		}
 		return Ok(());
@@ -915,11 +920,14 @@ fn formats_command(args: &FormatsArgs) -> Result<()> {
 
 	println!("Config formats");
 	println!("discovery order:");
-	for name in config::config_names() {
+	for name in config_names {
 		println!("  {name}");
 	}
+	if let Some(search) = &args.search {
+		println!("filter: search={search}");
+	}
 	println!();
-	for format in FORMAT_INFOS {
+	for format in formats {
 		println!("{}: {}", format.name, format.default_file);
 		if let Some(alternate_file) = format.alternate_file {
 			println!("  alternate: {alternate_file}");
@@ -928,6 +936,39 @@ fn formats_command(args: &FormatsArgs) -> Result<()> {
 		println!("  {}", format.init_command);
 	}
 	Ok(())
+}
+
+fn filtered_format_infos(search: Option<&str>) -> Vec<FormatInfo> {
+	let search = search.map(str::to_ascii_lowercase);
+	FORMAT_INFOS
+		.iter()
+		.copied()
+		.filter(|format| {
+			search
+				.as_deref()
+				.is_none_or(|search| format_info_matches_search(*format, search))
+		})
+		.collect()
+}
+
+fn format_info_matches_search(format: FormatInfo, search: &str) -> bool {
+	format.name.contains(search)
+		|| format.default_file.contains(search)
+		|| format.alternate_file.is_some_and(|file| file.contains(search))
+		|| format.description.to_ascii_lowercase().contains(search)
+		|| format.init_command.contains(search)
+}
+
+fn config_names_for_formats(formats: &[FormatInfo]) -> Vec<&'static str> {
+	config::config_names()
+		.iter()
+		.copied()
+		.filter(|config_name| {
+			formats.iter().any(|format| {
+				format.default_file == *config_name || format.alternate_file.is_some_and(|file| file == *config_name)
+			})
+		})
+		.collect()
 }
 
 fn managers_command(args: &ManagersArgs) -> Result<()> {

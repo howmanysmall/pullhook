@@ -720,6 +720,7 @@ fn formats_json_lists_config_formats() {
 	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse formats json");
 	assert_eq!(value["status"], "ok");
 	assert_eq!(value["code"], serde_json::Value::Null);
+	assert_eq!(value["filters"]["search"], serde_json::Value::Null);
 	let formats = value["formats"].as_array().expect("formats array");
 	assert!(formats.iter().any(|entry| entry["name"] == "yaml"
 		&& entry["defaultFile"] == "pullhook.yaml"
@@ -740,6 +741,32 @@ fn formats_json_lists_config_formats() {
 }
 
 #[test]
+fn formats_search_filter_limits_results() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["formats", "--search", "YML", "--json"]);
+
+	assert!(output.status.success(), "formats --search YML --json should succeed");
+	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse filtered formats json");
+	assert_eq!(value["status"], "ok");
+	assert_eq!(value["filters"]["search"], "YML");
+	let formats = value["formats"].as_array().expect("formats array");
+	assert_eq!(formats.len(), 1, "yml search should only keep yaml");
+	assert_eq!(formats[0]["name"], "yaml");
+	assert_eq!(
+		value["discoveryOrder"],
+		serde_json::json!(["pullhook.yaml", ".pullhook.yaml"])
+	);
+	assert_eq!(value["summary"]["formats"], 1);
+	assert_eq!(value["summary"]["configNames"], 2);
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"formats --search YML --json should not write stderr"
+	);
+}
+
+#[test]
 fn formats_names_only_prints_clean_format_names() {
 	let temp = tempfile::tempdir().expect("create temp dir");
 
@@ -753,6 +780,25 @@ fn formats_names_only_prints_clean_format_names() {
 	);
 	let stderr = stderr_text(&output);
 	assert!(stderr.trim().is_empty(), "formats --names-only should not write stderr");
+}
+
+#[test]
+fn formats_search_filter_composes_with_names_only() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["formats", "--search", "comment", "--names-only"]);
+
+	assert!(
+		output.status.success(),
+		"formats --search comment --names-only should succeed"
+	);
+	let stdout = stdout_text(&output);
+	assert_eq!(stdout.lines().collect::<Vec<_>>(), vec!["jsonc"]);
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"formats --search comment --names-only should not write stderr"
+	);
 }
 
 #[test]
@@ -778,6 +824,28 @@ fn formats_files_only_prints_clean_config_names() {
 	);
 	let stderr = stderr_text(&output);
 	assert!(stderr.trim().is_empty(), "formats --files-only should not write stderr");
+}
+
+#[test]
+fn formats_search_filter_composes_with_files_only() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["formats", "--search", "toml", "--files-only"]);
+
+	assert!(
+		output.status.success(),
+		"formats --search toml --files-only should succeed"
+	);
+	let stdout = stdout_text(&output);
+	assert_eq!(
+		stdout.lines().collect::<Vec<_>>(),
+		vec!["pullhook.toml", ".pullhook.toml"]
+	);
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"formats --search toml --files-only should not write stderr"
+	);
 }
 
 #[test]
@@ -3128,6 +3196,7 @@ fn utility_help_groups_options_by_task() {
 	assert!(formats.status.success(), "formats help should succeed");
 	let formats_stdout = stdout_text(&formats);
 	assert!(formats_stdout.contains("Output options:"));
+	assert!(formats_stdout.contains("pullhook formats --search yaml"));
 	assert!(formats_stdout.contains("pullhook formats --names-only"));
 	assert!(formats_stdout.contains("pullhook formats --files-only"));
 	assert!(formats_stdout.contains("pullhook formats --json"));
