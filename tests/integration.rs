@@ -1523,8 +1523,35 @@ fn init_help_lists_generation_examples() {
 	assert!(stdout.contains("pullhook init --format yaml"));
 	assert!(stdout.contains("pullhook init --output config/pullhook.custom.json"));
 	assert!(stdout.contains("pullhook init --dry-run --json"));
+	assert!(stdout.contains("Generation options:"));
+	assert!(stdout.contains("Output options:"));
+	assert!(stdout.contains("Write options:"));
+	assert!(stdout.contains("Display options:"));
 	assert!(stdout.contains("--dry-run"));
 	assert!(stdout.contains("--json"));
+}
+
+#[test]
+fn utility_help_groups_options_by_task() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let schema = run_pullhook(temp.path(), &["schema", "--help"]);
+	assert!(schema.status.success(), "schema help should succeed");
+	let schema_stdout = stdout_text(&schema);
+	assert!(schema_stdout.contains("Output options:"));
+	assert!(schema_stdout.contains("Check options:"));
+
+	let completion = run_pullhook(temp.path(), &["completion", "fish", "--help"]);
+	assert!(completion.status.success(), "completion help should succeed");
+	let completion_stdout = stdout_text(&completion);
+	assert!(completion_stdout.contains("Output options:"));
+	assert!(completion_stdout.contains("Check options:"));
+
+	let codes = run_pullhook(temp.path(), &["codes", "--help"]);
+	assert!(codes.status.success(), "codes help should succeed");
+	let codes_stdout = stdout_text(&codes);
+	assert!(codes_stdout.contains("Filter options:"));
+	assert!(codes_stdout.contains("Output options:"));
 }
 
 #[test]

@@ -718,39 +718,75 @@ pub struct ConfigArgs {
 #[command(after_help = INIT_AFTER_HELP)]
 pub struct InitArgs {
 	/// Config format to generate.
-	#[arg(long = "format", value_name = "format", value_enum)]
+	#[arg(
+		long = "format",
+		value_name = "format",
+		value_enum,
+		help_heading = "Generation options"
+	)]
 	pub format: Option<InitFormat>,
 
 	/// Print the starter config to stdout instead of writing a file.
-	#[arg(long = "stdout", default_value_t = false, conflicts_with_all = ["dry_run", "json"])]
+	#[arg(
+		long = "stdout",
+		default_value_t = false,
+		conflicts_with_all = ["dry_run", "json"],
+		help_heading = "Output options"
+	)]
 	pub stdout: bool,
 
 	/// Write the starter config to an explicit path.
-	#[arg(long = "output", value_name = "path", conflicts_with = "stdout")]
+	#[arg(
+		long = "output",
+		value_name = "path",
+		conflicts_with = "stdout",
+		help_heading = "Output options"
+	)]
 	pub output: Option<PathBuf>,
 
 	/// Print the init plan without writing a config file.
-	#[arg(long = "dry-run", default_value_t = false)]
+	#[arg(long = "dry-run", default_value_t = false, help_heading = "Output options")]
 	pub dry_run: bool,
 
 	/// Print machine-readable JSON instead of text output.
-	#[arg(long = "json", default_value_t = false)]
+	#[arg(long = "json", default_value_t = false, help_heading = "Output options")]
 	pub json: bool,
 
 	/// Overwrite an existing pullhook config file in place.
-	#[arg(long = "force", default_value_t = false, conflicts_with = "stdout")]
+	#[arg(
+		long = "force",
+		default_value_t = false,
+		conflicts_with = "stdout",
+		help_heading = "Write options"
+	)]
 	pub force: bool,
 
 	/// Enable debug logging.
-	#[arg(short = 'd', long = "debug", default_value_t = false)]
+	#[arg(
+		short = 'd',
+		long = "debug",
+		default_value_t = false,
+		help_heading = "Display options"
+	)]
 	pub debug: bool,
 
 	/// Control non-debug ANSI styling (`auto`, `always`, `never`).
-	#[arg(long = "render", value_name = "mode", value_enum, default_value_t = RenderMode::Auto)]
+	#[arg(
+		long = "render",
+		value_name = "mode",
+		value_enum,
+		default_value_t = RenderMode::Auto,
+		help_heading = "Display options"
+	)]
 	pub render: RenderMode,
 
 	/// Disable ANSI styling in non-debug output.
-	#[arg(long = "no-color", default_value_t = false, conflicts_with = "render")]
+	#[arg(
+		long = "no-color",
+		default_value_t = false,
+		conflicts_with = "render",
+		help_heading = "Display options"
+	)]
 	pub no_color: bool,
 }
 
@@ -860,15 +896,25 @@ pub enum RulesKind {
 #[command(after_help = SCHEMA_AFTER_HELP)]
 pub struct SchemaArgs {
 	/// Write the schema to a file instead of stdout.
-	#[arg(long = "output", value_name = "path")]
+	#[arg(long = "output", value_name = "path", help_heading = "Output options")]
 	pub output: Option<PathBuf>,
 
 	/// Check that the output file already matches the embedded schema.
-	#[arg(long = "check", default_value_t = false, requires = "output")]
+	#[arg(
+		long = "check",
+		default_value_t = false,
+		requires = "output",
+		help_heading = "Check options"
+	)]
 	pub check: bool,
 
 	/// Print machine-readable check results instead of text output.
-	#[arg(long = "json", default_value_t = false, requires = "check")]
+	#[arg(
+		long = "json",
+		default_value_t = false,
+		requires = "check",
+		help_heading = "Output options"
+	)]
 	pub json: bool,
 }
 
@@ -880,15 +926,25 @@ pub struct CompletionArgs {
 	pub shell: Shell,
 
 	/// Write completions to a file instead of stdout.
-	#[arg(long = "output", value_name = "path")]
+	#[arg(long = "output", value_name = "path", help_heading = "Output options")]
 	pub output: Option<PathBuf>,
 
 	/// Check that the output file already matches the generated completions.
-	#[arg(long = "check", default_value_t = false, requires = "output")]
+	#[arg(
+		long = "check",
+		default_value_t = false,
+		requires = "output",
+		help_heading = "Check options"
+	)]
 	pub check: bool,
 
 	/// Print machine-readable check results instead of text output.
-	#[arg(long = "json", default_value_t = false, requires = "check")]
+	#[arg(
+		long = "json",
+		default_value_t = false,
+		requires = "check",
+		help_heading = "Output options"
+	)]
 	pub json: bool,
 }
 
@@ -897,11 +953,11 @@ pub struct CompletionArgs {
 #[command(after_help = CODES_AFTER_HELP)]
 pub struct CodesArgs {
 	/// Only list codes for a specific kind.
-	#[arg(long = "kind", value_enum)]
+	#[arg(long = "kind", value_enum, help_heading = "Filter options")]
 	pub kind: Option<CodeKind>,
 
 	/// Print machine-readable JSON instead of text output.
-	#[arg(long = "json", default_value_t = false)]
+	#[arg(long = "json", default_value_t = false, help_heading = "Output options")]
 	pub json: bool,
 }
 
