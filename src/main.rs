@@ -1481,11 +1481,14 @@ fn example_info_matches_search(example: &ExampleInfo, search: &str) -> bool {
 
 fn command_catalog_command(args: &CommandCatalogArgs) -> Result<()> {
 	let commands = filtered_command_infos(args.category, args.search.as_deref(), repo_requirement_filter(args));
-	let categories = collect_command_categories(&commands);
+	let top_level_examples =
+		filtered_top_level_example_infos(args.category, args.search.as_deref(), repo_requirement_filter(args));
+	let categories = collect_command_catalog_categories(&commands, &top_level_examples);
 	let category_count = categories.len();
 	if args.json {
 		let command_values = commands.iter().map(|info| command_info_json(*info)).collect::<Vec<_>>();
 		let example_commands = collect_command_example_commands(&commands);
+		let top_level_example_count = top_level_examples.len();
 		println!(
 			"{}",
 			serde_json::to_string_pretty(&json!({
@@ -1498,12 +1501,15 @@ fn command_catalog_command(args: &CommandCatalogArgs) -> Result<()> {
 				},
 				"categories": categories,
 				"commands": command_values,
+				"topLevelExamples": top_level_examples,
 				"summary": {
 					"categories": category_count,
 					"commands": commands.len(),
-					"examples": example_commands.len(),
+					"commandExamples": example_commands.len(),
+					"examples": example_commands.len() + top_level_example_count,
 					"json": commands.iter().filter(|info| info.json).count(),
 					"scriptFriendly": commands.iter().filter(|info| info.script_friendly).count(),
+					"topLevelExamples": top_level_example_count,
 				},
 			}))?
 		);
@@ -1532,6 +1538,9 @@ fn command_catalog_command(args: &CommandCatalogArgs) -> Result<()> {
 	}
 
 	if args.output.example_commands_only {
+		for example in top_level_examples {
+			println!("{}", example.command);
+		}
 		for command in collect_command_example_commands(&commands) {
 			println!("{command}");
 		}
@@ -1540,6 +1549,9 @@ fn command_catalog_command(args: &CommandCatalogArgs) -> Result<()> {
 
 	println!("Pullhook commands");
 	println!("legacy one-off mode is available through top-level options");
+	for example in &top_level_examples {
+		println!("  example: {}", example.command);
+	}
 	if let Some(category) = args.category {
 		println!("filter: category={}", category.label());
 	}
@@ -1571,14 +1583,20 @@ fn command_info_json(info: CommandInfo) -> serde_json::Value {
 	})
 }
 
-fn collect_command_categories(commands: &[CommandInfo]) -> Vec<&'static str> {
-	let mut categories = Vec::new();
-	for command in commands {
-		if !categories.contains(&command.category) {
-			categories.push(command.category);
-		}
-	}
-	categories
+fn collect_command_catalog_categories(
+	commands: &[CommandInfo],
+	top_level_examples: &[ExampleInfo],
+) -> Vec<&'static str> {
+	CATEGORY_INFOS
+		.iter()
+		.filter_map(|category| {
+			(commands.iter().any(|command| command.category == category.name)
+				|| top_level_examples
+					.iter()
+					.any(|example| example.category == category.name))
+			.then_some(category.name)
+		})
+		.collect()
 }
 
 fn collect_command_example_commands(commands: &[CommandInfo]) -> Vec<&'static str> {
@@ -1598,6 +1616,26 @@ fn example_commands_for_command(command: CommandInfo) -> Vec<&'static str> {
 		.iter()
 		.filter(|example| example.command_name == command.name)
 		.map(|example| example.command)
+		.collect()
+}
+
+fn filtered_top_level_example_infos(
+	category: Option<CommandCategory>,
+	search: Option<&str>,
+	requires_repo: Option<bool>,
+) -> Vec<ExampleInfo> {
+	let search = search.map(str::to_ascii_lowercase);
+	EXAMPLE_INFOS
+		.iter()
+		.copied()
+		.filter(|example| example.command_name == "legacy")
+		.filter(|example| category.is_none_or(|category| example.category == category.label()))
+		.filter(|_| requires_repo != Some(false))
+		.filter(|example| {
+			search
+				.as_deref()
+				.is_none_or(|search| example_info_matches_search(example, search))
+		})
 		.collect()
 }
 

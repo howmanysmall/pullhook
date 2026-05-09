@@ -3411,6 +3411,18 @@ fn commands_json_lists_cli_catalog() {
 	assert!(commands.iter().any(|entry| entry["name"] == "examples"
 		&& entry["category"] == "reference"
 		&& entry["exampleCommands"] == serde_json::json!(["pullhook examples --json"])));
+	assert_eq!(
+		value["topLevelExamples"],
+		serde_json::json!([
+			{
+				"title": "Install after lockfile changes",
+				"category": "workflow",
+				"commandName": "legacy",
+				"command": "pullhook --install",
+				"summary": "Use legacy one-off mode to detect the package manager and run install."
+			}
+		])
+	);
 	assert!(
 		commands
 			.iter()
@@ -3430,10 +3442,9 @@ fn commands_json_lists_cli_catalog() {
 		value["summary"]["commands"].as_u64().expect("command count"),
 		commands.len() as u64
 	);
-	assert!(
-		value["summary"]["examples"].as_u64().expect("example count") >= 1,
-		"commands summary should count matching examples"
-	);
+	assert_eq!(value["summary"]["commandExamples"], 18);
+	assert_eq!(value["summary"]["topLevelExamples"], 1);
+	assert_eq!(value["summary"]["examples"], 19);
 	let stderr = stderr_text(&output);
 	assert!(stderr.trim().is_empty(), "commands --json should not write stderr");
 }
@@ -3796,6 +3807,7 @@ fn commands_example_commands_only_prints_matching_example_commands() {
 	);
 	let stdout = stdout_text(&output);
 	let commands = stdout.lines().collect::<Vec<_>>();
+	assert!(commands.contains(&"pullhook --install"));
 	assert!(commands.contains(&"pullhook run --dry-run"));
 	assert!(commands.contains(&"pullhook run --commands-only"));
 	assert!(commands.contains(&"pullhook explain --all-matches"));
@@ -3834,6 +3846,32 @@ fn commands_search_filter_composes_with_example_commands_only() {
 	assert!(
 		stderr.trim().is_empty(),
 		"filtered commands --example-commands-only should not write stderr"
+	);
+}
+
+#[test]
+fn commands_json_search_counts_top_level_examples() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["commands", "--search", "install", "--json"]);
+
+	assert!(
+		output.status.success(),
+		"commands --search install --json should succeed"
+	);
+	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse commands search json");
+	assert_eq!(value["categories"], serde_json::json!(["workflow", "reference"]));
+	assert_eq!(value["summary"]["commandExamples"], 1);
+	assert_eq!(value["summary"]["topLevelExamples"], 1);
+	assert_eq!(value["summary"]["examples"], 2);
+	assert_eq!(
+		value["topLevelExamples"][0]["command"],
+		serde_json::json!("pullhook --install")
+	);
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"commands --search install --json should not write stderr"
 	);
 }
 
