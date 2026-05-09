@@ -158,7 +158,7 @@ fn run_legacy(cli: &RunArgs) -> Result<()> {
 		return Err(anyhow!("--json cannot be used with --debug"));
 	}
 
-	let renderer = Renderer::new(cli.render);
+	let renderer = Renderer::new(effective_render_mode(cli.render, cli.no_color));
 	let cwd = std::env::current_dir().context("failed to read current working directory")?;
 	let repo = GitRepo::discover(&cwd, cli.debug).context("failed to resolve repository root")?;
 	let repo_root = repo.root().to_path_buf();
@@ -295,7 +295,7 @@ fn run_config_command(args: &ConfigRunArgs) -> Result<()> {
 		return Err(anyhow!("--json cannot be used with --debug"));
 	}
 
-	let renderer = Renderer::new(args.render);
+	let renderer = Renderer::new(effective_render_mode(args.render, args.no_color));
 	let (repo, repo_root, config) = load_config_from_cwd(args.debug, args.config.as_deref())?;
 	let explicit_changed_files = collect_explicit_changed_files(
 		&args.changed_files,
@@ -424,7 +424,7 @@ fn explain_config_command(args: &ExplainArgs) -> Result<()> {
 fn validate_config_command(args: &ValidateArgs) -> Result<()> {
 	ensure_json_without_debug(args.json, args.debug)?;
 
-	let renderer = Renderer::new(args.render);
+	let renderer = Renderer::new(effective_render_mode(args.render, args.no_color));
 
 	if args.json {
 		let cwd = std::env::current_dir().context("failed to read current working directory")?;
@@ -518,7 +518,7 @@ fn config_command(args: &ConfigArgs) -> Result<()> {
 		return Ok(());
 	}
 
-	let renderer = Renderer::new(args.render);
+	let renderer = Renderer::new(effective_render_mode(args.render, args.no_color));
 	renderer.render_message_stage(&format!("config: {}", path.display()));
 	renderer.render_message_stage(&format!("format: {}", format.label()));
 	renderer.render_message_stage(if exists { "exists: yes" } else { "exists: no" });
@@ -533,7 +533,7 @@ fn config_command(args: &ConfigArgs) -> Result<()> {
 fn rules_command(args: &RulesArgs) -> Result<()> {
 	ensure_json_without_debug(args.json, args.debug)?;
 
-	let renderer = Renderer::new(args.render);
+	let renderer = Renderer::new(effective_render_mode(args.render, args.no_color));
 	let (_, _, config) = load_config_from_cwd(args.debug, args.config.as_deref())?;
 
 	if args.json {
@@ -574,6 +574,10 @@ fn ensure_json_without_debug(json_output: bool, debug_enabled: bool) -> Result<(
 	Ok(())
 }
 
+const fn effective_render_mode(render: RenderMode, no_color: bool) -> RenderMode {
+	if no_color { RenderMode::Never } else { render }
+}
+
 fn init_config_command(args: &InitArgs) -> Result<()> {
 	let cwd = std::env::current_dir().context("failed to read current working directory")?;
 	let repo = GitRepo::discover(&cwd, args.debug).context("failed to resolve repository root")?;
@@ -585,7 +589,7 @@ fn init_config_command(args: &InitArgs) -> Result<()> {
 		return Ok(());
 	}
 
-	let renderer = Renderer::new(args.render);
+	let renderer = Renderer::new(effective_render_mode(args.render, args.no_color));
 	let (path, format) = if let Some(output) = args.output.as_deref() {
 		resolve_init_output_path(&cwd, output, args.format)?
 	} else {
@@ -1508,7 +1512,13 @@ fn execute_config_entries(
 				if !rule.should_run() {
 					continue;
 				}
-				let state = execute_config_rule(renderer, rule, repo_root, args.debug, args.render);
+				let state = execute_config_rule(
+					renderer,
+					rule,
+					repo_root,
+					args.debug,
+					effective_render_mode(args.render, args.no_color),
+				);
 				counts.add_state(state);
 			}
 			EvaluatedEntry::Group(group) => {
@@ -1544,7 +1554,13 @@ fn execute_config_entries_json(
 				}
 				let result = run_config_rule_task(rule, repo_root, args.debug);
 				counts.add_state(result.state);
-				executions.push(rule_execution_json(rule, None, &result, repo_root, args.render));
+				executions.push(rule_execution_json(
+					rule,
+					None,
+					&result,
+					repo_root,
+					effective_render_mode(args.render, args.no_color),
+				));
 			}
 			EvaluatedEntry::Group(group) => {
 				if !group.should_run() {
@@ -1556,7 +1572,12 @@ fn execute_config_entries_json(
 					group_counts.add_state(result.state);
 				}
 				counts.add(group_counts);
-				executions.push(group_execution_json(group, &results, repo_root, args.render));
+				executions.push(group_execution_json(
+					group,
+					&results,
+					repo_root,
+					effective_render_mode(args.render, args.no_color),
+				));
 			}
 		}
 
@@ -1590,12 +1611,19 @@ fn execute_config_group(
 
 	let mut counts = TaskCounters::default();
 	for (rule, result) in &results {
-		render_config_rule_result(renderer, rule, result, repo_root, args.debug, args.render);
+		render_config_rule_result(
+			renderer,
+			rule,
+			result,
+			repo_root,
+			args.debug,
+			effective_render_mode(args.render, args.no_color),
+		);
 		counts.add_state(result.state);
 	}
 
 	if counts.has_non_success() {
-		render_group_fail_text(group, args.render);
+		render_group_fail_text(group, effective_render_mode(args.render, args.no_color));
 	}
 
 	Ok(counts)

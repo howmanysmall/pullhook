@@ -166,6 +166,10 @@ pub struct RunArgs {
 	#[arg(long = "render", value_name = "mode", value_enum, default_value_t = RenderMode::Auto)]
 	pub render: RenderMode,
 
+	/// Disable ANSI styling in non-debug output.
+	#[arg(long = "no-color", default_value_t = false, conflicts_with = "render")]
+	pub no_color: bool,
+
 	/// Run command once in repo root if any match.
 	#[arg(short = 'o', long = "once", default_value_t = false)]
 	pub once: bool,
@@ -250,6 +254,10 @@ pub struct ConfigRunArgs {
 	/// Control non-debug ANSI styling (`auto`, `always`, `never`).
 	#[arg(long = "render", value_name = "mode", value_enum, default_value_t = RenderMode::Auto)]
 	pub render: RenderMode,
+
+	/// Disable ANSI styling in non-debug output.
+	#[arg(long = "no-color", default_value_t = false, conflicts_with = "render")]
+	pub no_color: bool,
 }
 
 /// Arguments for `pullhook explain`.
@@ -299,6 +307,10 @@ pub struct ExplainArgs {
 	/// Control non-debug ANSI styling (`auto`, `always`, `never`).
 	#[arg(long = "render", value_name = "mode", value_enum, default_value_t = RenderMode::Auto)]
 	pub render: RenderMode,
+
+	/// Disable ANSI styling in non-debug output.
+	#[arg(long = "no-color", default_value_t = false, conflicts_with = "render")]
+	pub no_color: bool,
 }
 
 /// Arguments for `pullhook validate`.
@@ -320,6 +332,10 @@ pub struct ValidateArgs {
 	/// Control non-debug ANSI styling (`auto`, `always`, `never`).
 	#[arg(long = "render", value_name = "mode", value_enum, default_value_t = RenderMode::Auto)]
 	pub render: RenderMode,
+
+	/// Disable ANSI styling in non-debug output.
+	#[arg(long = "no-color", default_value_t = false, conflicts_with = "render")]
+	pub no_color: bool,
 }
 
 /// Arguments for `pullhook doctor`.
@@ -341,6 +357,10 @@ pub struct DoctorArgs {
 	/// Control non-debug ANSI styling (`auto`, `always`, `never`).
 	#[arg(long = "render", value_name = "mode", value_enum, default_value_t = RenderMode::Auto)]
 	pub render: RenderMode,
+
+	/// Disable ANSI styling in non-debug output.
+	#[arg(long = "no-color", default_value_t = false, conflicts_with = "render")]
+	pub no_color: bool,
 }
 
 /// Arguments for `pullhook config`.
@@ -362,10 +382,18 @@ pub struct ConfigArgs {
 	/// Control non-debug ANSI styling (`auto`, `always`, `never`).
 	#[arg(long = "render", value_name = "mode", value_enum, default_value_t = RenderMode::Auto)]
 	pub render: RenderMode,
+
+	/// Disable ANSI styling in non-debug output.
+	#[arg(long = "no-color", default_value_t = false, conflicts_with = "render")]
+	pub no_color: bool,
 }
 
 /// Arguments for `pullhook init`.
 #[derive(Debug, Clone, Args)]
+#[expect(
+	clippy::struct_excessive_bools,
+	reason = "CLI flags are naturally represented as independent booleans"
+)]
 #[command(after_help = INIT_AFTER_HELP)]
 pub struct InitArgs {
 	/// Config format to generate.
@@ -391,10 +419,18 @@ pub struct InitArgs {
 	/// Control non-debug ANSI styling (`auto`, `always`, `never`).
 	#[arg(long = "render", value_name = "mode", value_enum, default_value_t = RenderMode::Auto)]
 	pub render: RenderMode,
+
+	/// Disable ANSI styling in non-debug output.
+	#[arg(long = "no-color", default_value_t = false, conflicts_with = "render")]
+	pub no_color: bool,
 }
 
 /// Arguments for `pullhook rules`.
 #[derive(Debug, Clone, Args)]
+#[expect(
+	clippy::struct_excessive_bools,
+	reason = "CLI flags are naturally represented as independent booleans"
+)]
 #[command(after_help = RULES_AFTER_HELP)]
 pub struct RulesArgs {
 	/// Load config from an explicit path instead of repo-root discovery.
@@ -416,6 +452,10 @@ pub struct RulesArgs {
 	/// Control non-debug ANSI styling (`auto`, `always`, `never`).
 	#[arg(long = "render", value_name = "mode", value_enum, default_value_t = RenderMode::Auto)]
 	pub render: RenderMode,
+
+	/// Disable ANSI styling in non-debug output.
+	#[arg(long = "no-color", default_value_t = false, conflicts_with = "render")]
+	pub no_color: bool,
 }
 
 /// Supported starter config formats for `pullhook init`.

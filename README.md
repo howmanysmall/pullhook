@@ -79,6 +79,7 @@ Options:
   -m, --message <message>   Print message if any matches are found
   -d, --debug               Enable debug logging
       --render <mode>       Control non-debug ANSI styling: auto, always, or never
+      --no-color            Disable ANSI styling in non-debug output
   -o, --once                Run command once in repo root if any match
       --base <rev>          Override the git base revision
       --jobs <n>            Max concurrent jobs
@@ -245,7 +246,8 @@ package-manager files. Config-mode commands always run from the repository root.
 - Placeholders: `{rule}`, `{command}`, `{cwd}`, `{exitCode}`
 - Style examples: `{bold text}`, `{red.bold text}`, `{bgRed.white.bold text}`
 
-Styles respect `--render auto|always|never`; placeholders render in every mode.
+Styles respect `--render auto|always|never`; use `--no-color` as a shortcut for plain non-debug output.
+Placeholders render in every mode.
 
 `pullhook config` shows the config path and format that pullhook will use without parsing the file.
 `validate --json` emits a compact config summary for scripts and still prints structured JSON when the

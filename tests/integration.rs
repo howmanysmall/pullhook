@@ -317,6 +317,20 @@ fn run_help_lists_json_examples() {
 	assert!(stdout.contains("pullhook run --dry-run"));
 	assert!(stdout.contains("pullhook run --json"));
 	assert!(stdout.contains("pullhook run --config config/pullhook.custom.json --all-matches"));
+	assert!(stdout.contains("--no-color"));
+}
+
+#[test]
+fn no_color_conflicts_with_render_mode() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["run", "--no-color", "--render", "never"]);
+
+	assert!(!output.status.success(), "--no-color should conflict with --render");
+	let stderr = stderr_text(&output);
+	assert!(stderr.contains("cannot be used with"));
+	assert!(stderr.contains("--no-color"));
+	assert!(stderr.contains("--render <mode>"));
 }
 
 #[test]
