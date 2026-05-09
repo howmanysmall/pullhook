@@ -1,95 +1,57 @@
 {
-	"$schema": "https://json-schema.org/draft/2020-12/schema",
-	"$id": "https://pullhook.dev/schema.json",
-	"title": "Pullhook config",
-	"type": "object",
-	"additionalProperties": true,
-	"properties": {
-		"$schema": {
-			"type": "string"
-		},
-		"onFailure": {
-			"type": "string",
-			"enum": ["stop", "continue"],
-			"default": "stop"
-		},
-		"rules": {
-			"type": "array",
-			"minItems": 1,
-			"items": {
-				"oneOf": [
-					{
+	"$defs": {
+		"group": {
+			"additionalProperties": false,
+			"properties": {
+				"failText": {
+					"minLength": 1,
+					"type": "string"
+				},
+				"jobs": {
+					"minimum": 1,
+					"type": "integer"
+				},
+				"name": {
+					"minLength": 1,
+					"type": "string"
+				},
+				"parallel": {
+					"items": {
 						"$ref": "#/$defs/rule"
 					},
-					{
-						"$ref": "#/$defs/group"
-					}
-				]
-			}
-		}
-	},
-	"required": ["rules"],
-	"$defs": {
+					"minItems": 1,
+					"type": "array"
+				}
+			},
+			"required": ["name", "parallel"],
+			"type": "object"
+		},
 		"patternList": {
 			"oneOf": [
 				{
-					"type": "string",
-					"minLength": 1
+					"minLength": 1,
+					"type": "string"
 				},
 				{
-					"type": "array",
-					"minItems": 1,
 					"items": {
-						"type": "string",
-						"minLength": 1
-					}
+						"minLength": 1,
+						"type": "string"
+					},
+					"minItems": 1,
+					"type": "array"
 				}
 			]
 		},
 		"rule": {
-			"type": "object",
 			"additionalProperties": false,
-			"properties": {
-				"name": {
-					"type": "string",
-					"minLength": 1
-				},
-				"changed": {
-					"$ref": "#/$defs/patternList"
-				},
-				"exclude": {
-					"$ref": "#/$defs/patternList"
-				},
-				"run": {
-					"type": "string",
-					"minLength": 1
-				},
-				"install": {
-					"type": "boolean"
-				},
-				"runIfBaseMissing": {
-					"type": "boolean"
-				},
-				"failText": {
-					"type": "string",
-					"minLength": 1
-				}
-			},
-			"required": ["name"],
 			"oneOf": [
 				{
-					"required": ["changed", "run"],
 					"not": {
 						"required": ["install"]
-					}
+					},
+					"required": ["changed", "run"]
 				},
 				{
-					"required": ["install"],
-					"properties": {
-						"install": {
-							"const": true
-						}
-					},
 					"not": {
 						"anyOf": [
 							{
@@ -99,35 +61,73 @@
 								"required": ["run"]
 							}
 						]
-					}
+					},
+					"properties": {
+						"install": {
+							"const": true
+						}
+					},
+					"required": ["install"]
 				}
-			]
-		},
-		"group": {
-			"type": "object",
-			"additionalProperties": false,
+			],
 			"properties": {
-				"name": {
-					"type": "string",
-					"minLength": 1
+				"changed": {
+					"$ref": "#/$defs/patternList"
 				},
-				"jobs": {
-					"type": "integer",
-					"minimum": 1
-				},
-				"parallel": {
-					"type": "array",
-					"minItems": 1,
-					"items": {
-						"$ref": "#/$defs/rule"
-					}
+				"exclude": {
+					"$ref": "#/$defs/patternList"
 				},
 				"failText": {
-					"type": "string",
-					"minLength": 1
+					"minLength": 1,
+					"type": "string"
+				},
+				"install": {
+					"type": "boolean"
+				},
+				"name": {
+					"minLength": 1,
+					"type": "string"
+				},
+				"run": {
+					"minLength": 1,
+					"type": "string"
+				},
+				"runIfBaseMissing": {
+					"type": "boolean"
 				}
 			},
-			"required": ["name", "parallel"]
+			"required": ["name"],
+			"type": "object"
 		}
-	}
+	},
+	"$id": "https://pullhook.dev/schema.json",
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"additionalProperties": true,
+	"properties": {
+		"$schema": {
+			"type": "string"
+		},
+		"onFailure": {
+			"default": "stop",
+			"enum": ["stop", "continue"],
+			"type": "string"
+		},
+		"rules": {
+			"items": {
+				"oneOf": [
+					{
+						"$ref": "#/$defs/rule"
+					},
+					{
+						"$ref": "#/$defs/group"
+					}
+				]
+			},
+			"minItems": 1,
+			"type": "array"
+		}
+	},
+	"required": ["rules"],
+	"title": "Pullhook config",
+	"type": "object"
 }
