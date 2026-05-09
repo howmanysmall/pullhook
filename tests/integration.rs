@@ -534,22 +534,85 @@ fn run_dry_run_json_reports_planned_commands() {
 }
 
 #[test]
-fn run_json_requires_dry_run() {
+fn run_json_reports_execution_results() {
 	let temp = setup_repo_with_merge();
 	let repo_root = temp.path();
 	write_config_rule(
 		repo_root,
-		"rebuild package a",
+		"write marker",
 		"packages/a/package-lock.json",
-		"cargo test -p package-a",
+		"sh -c 'echo ok-stdout; echo ok-stderr >&2'",
 	);
 
 	let output = run_pullhook(repo_root, &["run", "--json"]);
 
-	assert!(!output.status.success(), "run --json should fail without --dry-run");
+	assert!(output.status.success(), "run --json should succeed");
+	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse run json");
+	assert_eq!(value["mode"], "run");
+	assert_eq!(value["summary"]["passed"], 1);
+	assert_eq!(value["summary"]["failed"], 0);
+	let executions = value["executions"].as_array().expect("executions array");
+	assert_eq!(executions.len(), 1);
+	assert_eq!(executions[0]["name"], "write marker");
+	assert_eq!(executions[0]["state"], "success");
+	assert_eq!(executions[0]["outputs"][0]["stdout"], "ok-stdout\n");
+	assert_eq!(executions[0]["outputs"][0]["stderr"], "ok-stderr\n");
 	let stderr = stderr_text(&output);
-	assert!(stderr.contains("--dry-run"));
-	assert!(stderr.contains("--json"));
+	assert!(stderr.trim().is_empty(), "run --json should not write stderr");
+}
+
+#[test]
+fn run_json_reports_failure_results() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_file(
+		repo_root,
+		Path::new("pullhook.json"),
+		r#"{
+  "onFailure": "continue",
+  "rules": [
+    {
+      "name": "fail first",
+      "changed": "packages/a/package-lock.json",
+      "run": "sh -c 'echo nope >&2; exit 7'",
+      "failText": "{red.bold {rule} failed}"
+    },
+    {
+      "name": "run second",
+      "changed": "packages/b/package-lock.json",
+      "run": "sh -c 'echo later'"
+    }
+  ]
+}
+"#,
+	);
+
+	let output = run_pullhook(repo_root, &["run", "--json"]);
+
+	assert!(!output.status.success(), "run --json should fail when a rule fails");
+	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse failed run json");
+	assert_eq!(value["summary"]["passed"], 1);
+	assert_eq!(value["summary"]["failed"], 1);
+	let executions = value["executions"].as_array().expect("executions array");
+	assert_eq!(executions.len(), 2);
+	assert_eq!(executions[0]["state"], "failed");
+	assert_eq!(executions[0]["failText"], "fail first failed");
+	assert_eq!(executions[1]["state"], "success");
+	let stderr = stderr_text(&output);
+	assert!(stderr.contains("1 config rule(s) failed"));
+}
+
+#[test]
+fn run_json_rejects_debug_mode() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_config_rule(repo_root, "write marker", "packages/a/package-lock.json", "true");
+
+	let output = run_pullhook(repo_root, &["run", "--json", "--debug"]);
+
+	assert!(!output.status.success(), "run --json --debug should fail");
+	let stderr = stderr_text(&output);
+	assert!(stderr.contains("--json cannot be used with --debug"));
 }
 
 #[test]

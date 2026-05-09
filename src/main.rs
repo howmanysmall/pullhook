@@ -182,6 +182,10 @@ fn run_legacy(cli: &RunArgs) -> Result<()> {
 }
 
 fn run_config_command(args: &ConfigRunArgs) -> Result<()> {
+	if args.json && args.debug {
+		return Err(anyhow!("--json cannot be used with --debug"));
+	}
+
 	let renderer = Renderer::new(args.render);
 	let (repo, repo_root, config) = load_config_from_cwd(args.debug, args.config.as_deref())?;
 	let (changed_files, base_missing) = resolve_config_changed_files(&repo, &config, args.base.as_deref(), args.debug)?;
@@ -189,17 +193,37 @@ fn run_config_command(args: &ConfigRunArgs) -> Result<()> {
 	let matched_files = count_config_matched_files(&evaluation);
 
 	if args.json {
-		let planned_commands = count_planned_commands(&evaluation);
+		if args.dry_run {
+			let planned_commands = count_planned_commands(&evaluation);
+			println!(
+				"{}",
+				serde_json::to_string_pretty(&config_dry_run_json(
+					&config,
+					&changed_files,
+					base_missing,
+					&evaluation,
+					planned_commands,
+				))?
+			);
+			return Ok(());
+		}
+
+		let (counts, executions) = execute_config_entries_json(config.on_failure, &evaluation, &repo_root, args)?;
+		let failure_count = counts.failed + counts.interrupted;
 		println!(
 			"{}",
-			serde_json::to_string_pretty(&config_dry_run_json(
+			serde_json::to_string_pretty(&config_run_json(
 				&config,
 				&changed_files,
 				base_missing,
 				&evaluation,
-				planned_commands,
+				counts,
+				executions,
 			))?
 		);
+		if failure_count > 0 {
+			return Err(anyhow!("{failure_count} config rule(s) failed"));
+		}
 		return Ok(());
 	}
 
@@ -706,6 +730,32 @@ fn config_dry_run_json(
 	value
 }
 
+fn config_run_json(
+	config: &Config,
+	changed_files: &[std::path::PathBuf],
+	base_missing: bool,
+	evaluation: &[EvaluatedEntry],
+	counts: TaskCounters,
+	executions: Vec<serde_json::Value>,
+) -> serde_json::Value {
+	let mut value = config_evaluation_json(config, changed_files, base_missing, evaluation);
+	if let Some(object) = value.as_object_mut() {
+		object.insert("mode".to_owned(), json!("run"));
+		object.insert(
+			"summary".to_owned(),
+			json!({
+				"matchedFiles": count_config_matched_files(evaluation),
+				"taskDirs": counts.task_dirs,
+				"passed": counts.passed,
+				"failed": counts.failed,
+				"interrupted": counts.interrupted,
+			}),
+		);
+		object.insert("executions".to_owned(), serde_json::Value::Array(executions));
+	}
+	value
+}
+
 fn config_entry_json(entry: &EvaluatedEntry) -> serde_json::Value {
 	match entry {
 		EvaluatedEntry::Rule(rule) => config_rule_json(rule),
@@ -830,6 +880,47 @@ fn execute_config_entries(
 	Ok(counts)
 }
 
+fn execute_config_entries_json(
+	on_failure: OnFailure,
+	evaluation: &[EvaluatedEntry],
+	repo_root: &std::path::Path,
+	args: &ConfigRunArgs,
+) -> Result<(TaskCounters, Vec<serde_json::Value>)> {
+	let mut counts = TaskCounters::default();
+	let mut executions = Vec::new();
+
+	for entry in evaluation {
+		match entry {
+			EvaluatedEntry::Rule(rule) => {
+				if !rule.should_run() {
+					continue;
+				}
+				let result = run_config_rule_task(rule, repo_root, args.debug);
+				counts.add_state(result.state);
+				executions.push(rule_execution_json(rule, None, &result, repo_root, args.render));
+			}
+			EvaluatedEntry::Group(group) => {
+				if !group.should_run() {
+					continue;
+				}
+				let results = run_config_group_tasks(group, repo_root, args)?;
+				let mut group_counts = TaskCounters::default();
+				for (_, result) in &results {
+					group_counts.add_state(result.state);
+				}
+				counts.add(group_counts);
+				executions.push(group_execution_json(group, &results, repo_root, args.render));
+			}
+		}
+
+		if counts.has_non_success() && on_failure == OnFailure::Stop {
+			break;
+		}
+	}
+
+	Ok((counts, executions))
+}
+
 fn execute_config_rule(
 	renderer: &Renderer,
 	rule: &EvaluatedRule,
@@ -848,25 +939,7 @@ fn execute_config_group(
 	repo_root: &std::path::Path,
 	args: &ConfigRunArgs,
 ) -> Result<TaskCounters> {
-	let runnable: Vec<_> = group.rules.iter().filter(|rule| rule.should_run()).collect();
-	let jobs = group.group.jobs.unwrap_or_else(|| args.effective_jobs()).max(1);
-	let results = if runnable.len() <= 1 || jobs <= 1 {
-		runnable
-			.iter()
-			.map(|rule| (*rule, run_config_rule_task(rule, repo_root, args.debug)))
-			.collect::<Vec<_>>()
-	} else {
-		let pool = rayon::ThreadPoolBuilder::new()
-			.num_threads(jobs)
-			.build()
-			.map_err(|error| anyhow!(error.to_string()))?;
-		pool.install(|| {
-			runnable
-				.par_iter()
-				.map(|rule| (*rule, run_config_rule_task(rule, repo_root, args.debug)))
-				.collect::<Vec<_>>()
-		})
-	};
+	let results = run_config_group_tasks(group, repo_root, args)?;
 
 	let mut counts = TaskCounters::default();
 	for (rule, result) in &results {
@@ -879,6 +952,34 @@ fn execute_config_group(
 	}
 
 	Ok(counts)
+}
+
+fn run_config_group_tasks<'a>(
+	group: &'a EvaluatedGroup,
+	repo_root: &std::path::Path,
+	args: &ConfigRunArgs,
+) -> Result<Vec<(&'a EvaluatedRule, runner::TaskResult)>> {
+	let runnable: Vec<_> = group.rules.iter().filter(|rule| rule.should_run()).collect();
+	let jobs = group.group.jobs.unwrap_or_else(|| args.effective_jobs()).max(1);
+
+	if runnable.len() <= 1 || jobs <= 1 {
+		return Ok(runnable
+			.iter()
+			.map(|rule| (*rule, run_config_rule_task(rule, repo_root, args.debug)))
+			.collect::<Vec<_>>());
+	}
+
+	let pool = rayon::ThreadPoolBuilder::new()
+		.num_threads(jobs)
+		.build()
+		.map_err(|error| anyhow!(error.to_string()))?;
+
+	Ok(pool.install(|| {
+		runnable
+			.par_iter()
+			.map(|rule| (*rule, run_config_rule_task(rule, repo_root, args.debug)))
+			.collect::<Vec<_>>()
+	}))
 }
 
 fn run_config_rule_task(rule: &EvaluatedRule, repo_root: &std::path::Path, debug_enabled: bool) -> runner::TaskResult {
@@ -917,9 +1018,24 @@ fn render_rule_fail_text(
 	repo_root: &std::path::Path,
 	render_mode: RenderMode,
 ) {
-	let Some(fail_text) = &rule.rule.fail_text else {
-		return;
-	};
+	if let Some(message) = rule_fail_text_message(rule, result, repo_root, render_mode) {
+		eprintln!("{message}");
+	}
+}
+
+fn render_group_fail_text(group: &EvaluatedGroup, render_mode: RenderMode) {
+	if let Some(message) = group_fail_text_message(group, render_mode) {
+		eprintln!("{message}");
+	}
+}
+
+fn rule_fail_text_message(
+	rule: &EvaluatedRule,
+	result: &runner::TaskResult,
+	repo_root: &std::path::Path,
+	render_mode: RenderMode,
+) -> Option<String> {
+	let fail_text = rule.rule.fail_text.as_ref()?;
 	let (command, exit_code) = result.outputs.last().map_or_else(
 		|| ("", "unavailable".to_owned()),
 		|output| {
@@ -938,20 +1054,74 @@ fn render_rule_fail_text(
 		cwd: &cwd,
 		exit_code: &exit_code,
 	};
-	eprintln!("{}", fail_text.render(&context, render_mode));
+	Some(fail_text.render(&context, render_mode))
 }
 
-fn render_group_fail_text(group: &EvaluatedGroup, render_mode: RenderMode) {
-	let Some(fail_text) = &group.group.fail_text else {
-		return;
-	};
+fn group_fail_text_message(group: &EvaluatedGroup, render_mode: RenderMode) -> Option<String> {
+	let fail_text = group.group.fail_text.as_ref()?;
 	let context = FailTextContext {
 		rule: &group.group.name,
 		command: "parallel group",
 		cwd: ".",
 		exit_code: "1",
 	};
-	eprintln!("{}", fail_text.render(&context, render_mode));
+	Some(fail_text.render(&context, render_mode))
+}
+
+fn group_execution_json(
+	group: &EvaluatedGroup,
+	results: &[(&EvaluatedRule, runner::TaskResult)],
+	repo_root: &std::path::Path,
+	render_mode: RenderMode,
+) -> serde_json::Value {
+	json!({
+		"type": "group",
+		"name": group.group.name,
+		"jobs": group.group.jobs,
+		"failText": group_fail_text_message(group, render_mode),
+		"results": results
+			.iter()
+			.map(|(rule, result)| rule_execution_json(rule, Some(&group.group.name), result, repo_root, render_mode))
+			.collect::<Vec<_>>(),
+	})
+}
+
+fn rule_execution_json(
+	rule: &EvaluatedRule,
+	parent_group: Option<&str>,
+	result: &runner::TaskResult,
+	repo_root: &std::path::Path,
+	render_mode: RenderMode,
+) -> serde_json::Value {
+	json!({
+		"type": "rule",
+		"name": rule.rule.name,
+		"parentGroup": parent_group,
+		"cwd": runner::relative_cwd_label(&result.cwd, repo_root),
+		"state": result_state_label(result.state),
+		"failText": rule_fail_text_message(rule, result, repo_root, render_mode),
+		"error": result.error.as_ref().map(ToString::to_string),
+		"outputs": result.outputs.iter().map(invocation_output_json).collect::<Vec<_>>(),
+	})
+}
+
+fn invocation_output_json(output: &runner::InvocationOutput) -> serde_json::Value {
+	json!({
+		"command": output.command,
+		"stdout": output.stdout,
+		"stderr": output.stderr,
+		"state": result_state_label(output.state),
+		"exitCode": output.exit_code,
+	})
+}
+
+const fn result_state_label(state: runner::ResultState) -> &'static str {
+	match state {
+		runner::ResultState::Success => "success",
+		runner::ResultState::Failed => "failed",
+		runner::ResultState::Interrupted => "interrupted",
+		runner::ResultState::SpawnError => "spawn_error",
+	}
 }
 
 fn resolve_run_config(cli: &RunArgs, repo_root: &std::path::Path) -> Result<RunConfig> {

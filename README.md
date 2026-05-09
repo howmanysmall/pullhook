@@ -212,6 +212,7 @@ pullhook doctor
 pullhook doctor --json
 pullhook explain
 pullhook explain --all-matches --json
+pullhook run --json
 pullhook run --dry-run --json
 pullhook run --dry-run
 pullhook run
@@ -233,8 +234,9 @@ Styles respect `--render auto|always|never`; placeholders render in every mode.
 
 `validate --json` emits a compact config summary for scripts. `doctor` checks repo discovery, config
 health, diff-base availability, and `--install` detection in one pass. `explain --json` emits the
-evaluated rule plan, including changed files, matched files, commands, and skip reasons. `run --dry-run --json`
-emits the same plan plus `plannedCommands`, which is handy for CI or editor integrations.
+evaluated rule plan, including changed files, matched files, commands, and skip reasons. `run --json`
+adds real execution results, captured stdout/stderr, and a final summary. `run --dry-run --json` emits
+the same plan plus `plannedCommands`, which is handy for CI or editor integrations.
 
 Use `--config <path>` with `run`, `explain`, `validate`, or `doctor` when you want to point at a
 specific config file instead of repo-root discovery.

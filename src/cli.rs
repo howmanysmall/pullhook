@@ -131,8 +131,8 @@ pub struct ConfigRunArgs {
 	#[arg(long = "dry-run", default_value_t = false)]
 	pub dry_run: bool,
 
-	/// Print machine-readable JSON instead of text output. Requires `--dry-run`.
-	#[arg(long = "json", default_value_t = false, requires = "dry_run")]
+	/// Print machine-readable JSON instead of text output.
+	#[arg(long = "json", default_value_t = false)]
 	pub json: bool,
 
 	/// Show skipped rules as well as matched rules.
