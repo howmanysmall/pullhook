@@ -144,6 +144,10 @@ pub struct ExplainArgs {
 	#[arg(long = "all-matches", default_value_t = false)]
 	pub all_matches: bool,
 
+	/// Print machine-readable JSON instead of text output.
+	#[arg(long = "json", default_value_t = false)]
+	pub json: bool,
+
 	/// Enable debug logging.
 	#[arg(short = 'd', long = "debug", default_value_t = false)]
 	pub debug: bool,
@@ -156,6 +160,10 @@ pub struct ExplainArgs {
 /// Arguments for `pullhook validate`.
 #[derive(Debug, Clone, Args)]
 pub struct ValidateArgs {
+	/// Print machine-readable JSON instead of text output.
+	#[arg(long = "json", default_value_t = false)]
+	pub json: bool,
+
 	/// Enable debug logging.
 	#[arg(short = 'd', long = "debug", default_value_t = false)]
 	pub debug: bool,

@@ -14,6 +14,7 @@ use std::collections::BTreeSet;
 use anyhow::{Context, Result, anyhow};
 use clap::Parser;
 use rayon::prelude::*;
+use serde_json::json;
 use tracing::debug;
 use tracing_subscriber::EnvFilter;
 
@@ -191,6 +192,19 @@ fn explain_config_command(args: &ExplainArgs) -> Result<()> {
 	let (changed_files, base_missing) = resolve_config_changed_files(&repo, &config, args.base.as_deref(), args.debug)?;
 	let evaluation = evaluate_config(&config, &changed_files, base_missing, &repo_root)?;
 
+	if args.json {
+		println!(
+			"{}",
+			serde_json::to_string_pretty(&config_evaluation_json(
+				&config,
+				&changed_files,
+				base_missing,
+				&evaluation
+			))?
+		);
+		return Ok(());
+	}
+
 	render_config_evaluation(&config, &evaluation, args.all_matches, false);
 	Ok(())
 }
@@ -199,7 +213,18 @@ fn validate_config_command(args: &ValidateArgs) -> Result<()> {
 	let renderer = Renderer::new(args.render);
 	let (_, _, config) = load_config_from_cwd(args.debug)?;
 
+	if args.json {
+		println!("{}", serde_json::to_string_pretty(&config_summary_json(&config))?);
+		return Ok(());
+	}
+
 	renderer.render_message_stage(&format!("config valid: {}", config.path.display()));
+	renderer.render_message_stage(&format!(
+		"entries: {} | rules: {} | parallel groups: {}",
+		config.entries.len(),
+		count_config_rules(&config),
+		count_config_groups(&config)
+	));
 	Ok(())
 }
 
@@ -375,6 +400,92 @@ fn render_evaluated_rule(rule: &EvaluatedRule, all_matches: bool) {
 	}
 }
 
+fn config_summary_json(config: &Config) -> serde_json::Value {
+	json!({
+		"valid": true,
+		"path": config.path.display().to_string(),
+		"onFailure": on_failure_label(config.on_failure),
+		"entries": config.entries.len(),
+		"rules": count_config_rules(config),
+		"parallelGroups": count_config_groups(config),
+	})
+}
+
+fn config_evaluation_json(
+	config: &Config,
+	changed_files: &[std::path::PathBuf],
+	base_missing: bool,
+	evaluation: &[EvaluatedEntry],
+) -> serde_json::Value {
+	let entries = evaluation.iter().map(config_entry_json).collect::<Vec<_>>();
+	let matched_files = collect_matched_files(evaluation)
+		.into_iter()
+		.map(|path| path.display().to_string())
+		.collect::<Vec<_>>();
+
+	json!({
+		"path": config.path.display().to_string(),
+		"onFailure": on_failure_label(config.on_failure),
+		"baseMissing": base_missing,
+		"changedFiles": changed_files.iter().map(|path| path.display().to_string()).collect::<Vec<_>>(),
+		"matchedFiles": matched_files,
+		"entries": entries,
+	})
+}
+
+fn config_entry_json(entry: &EvaluatedEntry) -> serde_json::Value {
+	match entry {
+		EvaluatedEntry::Rule(rule) => config_rule_json(rule),
+		EvaluatedEntry::Group(group) => json!({
+			"type": "group",
+			"name": group.group.name,
+			"jobs": group.group.jobs,
+			"status": if group.should_run() { "match" } else { "skip" },
+			"rules": group.rules.iter().map(config_rule_json).collect::<Vec<_>>(),
+		}),
+	}
+}
+
+fn config_rule_json(rule: &EvaluatedRule) -> serde_json::Value {
+	json!({
+		"type": "rule",
+		"name": rule.rule.name,
+		"status": if rule.should_run() { "match" } else { "skip" },
+		"matchCount": rule.matches.len(),
+		"matches": rule.matches.iter().map(|path| path.display().to_string()).collect::<Vec<_>>(),
+		"command": rule.command,
+		"install": rule.rule.install,
+		"runIfBaseMissing": rule.rule.run_if_base_missing,
+		"skipReason": rule.skip_reason,
+	})
+}
+
+const fn on_failure_label(on_failure: OnFailure) -> &'static str {
+	match on_failure {
+		OnFailure::Stop => "stop",
+		OnFailure::Continue => "continue",
+	}
+}
+
+fn count_config_rules(config: &Config) -> usize {
+	config
+		.entries
+		.iter()
+		.map(|entry| match entry {
+			Entry::Rule(_) => 1,
+			Entry::Group(group) => group.rules.len(),
+		})
+		.sum()
+}
+
+fn count_config_groups(config: &Config) -> usize {
+	config
+		.entries
+		.iter()
+		.filter(|entry| matches!(entry, Entry::Group(_)))
+		.count()
+}
+
 fn count_planned_commands(evaluation: &[EvaluatedEntry]) -> usize {
 	evaluation
 		.iter()
@@ -386,6 +497,10 @@ fn count_planned_commands(evaluation: &[EvaluatedEntry]) -> usize {
 }
 
 fn count_config_matched_files(evaluation: &[EvaluatedEntry]) -> usize {
+	collect_matched_files(evaluation).len()
+}
+
+fn collect_matched_files(evaluation: &[EvaluatedEntry]) -> BTreeSet<std::path::PathBuf> {
 	let mut matched_files = BTreeSet::new();
 
 	for entry in evaluation {
@@ -399,7 +514,7 @@ fn count_config_matched_files(evaluation: &[EvaluatedEntry]) -> usize {
 		}
 	}
 
-	matched_files.len()
+	matched_files
 }
 
 fn collect_rule_matches(rule: &EvaluatedRule, matched_files: &mut BTreeSet<std::path::PathBuf>) {

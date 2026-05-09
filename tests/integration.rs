@@ -289,6 +289,93 @@ fn validate_reports_invalid_fail_text() {
 }
 
 #[test]
+fn validate_json_reports_config_summary() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_file(
+		repo_root,
+		Path::new("pullhook.json"),
+		r#"{
+  "rules": [
+    {
+      "name": "install dependencies",
+      "install": true
+    },
+    {
+      "name": "parallel checks",
+      "parallel": [
+        {
+          "name": "typecheck",
+          "changed": "packages/*/package-lock.json",
+          "run": "cargo test"
+        }
+      ]
+    }
+  ]
+}
+"#,
+	);
+
+	let output = run_pullhook(repo_root, &["validate", "--json"]);
+
+	assert!(output.status.success(), "validate --json should succeed");
+	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse validate json");
+	assert_eq!(value["valid"], true);
+	assert_eq!(value["entries"], 2);
+	assert_eq!(value["rules"], 2);
+	assert_eq!(value["parallelGroups"], 1);
+	assert_eq!(value["onFailure"], "stop");
+	let stderr = stderr_text(&output);
+	assert!(stderr.trim().is_empty(), "validate --json should not write stderr");
+}
+
+#[test]
+fn explain_json_reports_matches_and_skips() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_file(
+		repo_root,
+		Path::new("pullhook.json"),
+		r#"{
+  "rules": [
+    {
+      "name": "rebuild package a",
+      "changed": "packages/a/package-lock.json",
+      "run": "cargo test -p package-a"
+    },
+    {
+      "name": "skip markdown",
+      "changed": "**/*.md",
+      "run": "cargo test"
+    }
+  ]
+}
+"#,
+	);
+
+	let output = run_pullhook(repo_root, &["explain", "--all-matches", "--json"]);
+
+	assert!(output.status.success(), "explain --json should succeed");
+	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse explain json");
+	assert_eq!(value["baseMissing"], false);
+	assert_eq!(value["onFailure"], "stop");
+	assert_eq!(
+		value["matchedFiles"],
+		serde_json::json!(["packages/a/package-lock.json"])
+	);
+	let entries = value["entries"].as_array().expect("entries array");
+	assert_eq!(entries.len(), 2);
+	assert_eq!(entries[0]["name"], "rebuild package a");
+	assert_eq!(entries[0]["status"], "match");
+	assert_eq!(entries[0]["command"], "cargo test -p package-a");
+	assert_eq!(entries[1]["name"], "skip markdown");
+	assert_eq!(entries[1]["status"], "skip");
+	assert_eq!(entries[1]["skipReason"], "no matching changed files");
+	let stderr = stderr_text(&output);
+	assert!(stderr.trim().is_empty(), "explain --json should not write stderr");
+}
+
+#[test]
 fn config_validate_and_dry_run_reject_malformed_run_command() {
 	let temp = setup_repo_with_merge();
 	let repo_root = temp.path();

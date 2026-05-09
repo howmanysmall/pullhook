@@ -205,7 +205,9 @@ Run configured rules:
 
 ```bash
 pullhook validate
+pullhook validate --json
 pullhook explain
+pullhook explain --all-matches --json
 pullhook run --dry-run
 pullhook run
 ```
@@ -223,6 +225,9 @@ package-manager files. Config-mode commands always run from the repository root.
 - Style examples: `{bold text}`, `{red.bold text}`, `{bgRed.white.bold text}`
 
 Styles respect `--render auto|always|never`; placeholders render in every mode.
+
+`validate --json` emits a compact config summary for scripts. `explain --json` emits the evaluated
+rule plan, including changed files, matched files, commands, and skip reasons.
 
 ## `--install` Detection
 
