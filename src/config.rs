@@ -133,6 +133,17 @@ impl ConfigFormat {
 		}
 	}
 
+	/// Return the config format label used in CLI output.
+	#[must_use]
+	pub const fn label(self) -> &'static str {
+		match self {
+			Self::Json => "json",
+			Self::Jsonc => "jsonc",
+			Self::Yaml => "yaml",
+			Self::Toml => "toml",
+		}
+	}
+
 	/// Return the starter config text for the requested format.
 	#[must_use]
 	pub const fn starter_config(self) -> &'static str {

@@ -391,6 +391,54 @@ fn init_stdout_prints_requested_format_without_writing_file() {
 }
 
 #[test]
+fn config_json_reports_discovered_config_path_without_validating_contents() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_file(repo_root, Path::new("pullhook.json"), "{not valid json}\n");
+
+	let output = run_pullhook(repo_root, &["config", "--json"]);
+
+	assert!(
+		output.status.success(),
+		"config --json should not require a valid config body"
+	);
+	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse config json");
+	assert!(value["path"].as_str().expect("path").ends_with("pullhook.json"));
+	assert_eq!(value["format"], "json");
+	assert_eq!(value["exists"], true);
+	assert_eq!(value["explicit"], false);
+	assert!(
+		value["repoRoot"]
+			.as_str()
+			.expect("repo root")
+			.ends_with(repo_root.file_name().unwrap().to_str().unwrap())
+	);
+	let stderr = stderr_text(&output);
+	assert!(stderr.trim().is_empty(), "config --json should not write stderr");
+}
+
+#[test]
+fn config_text_reports_explicit_missing_config_path() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+
+	let output = run_pullhook(
+		repo_root,
+		&["config", "--config", "config/pullhook.custom.yaml", "--render", "never"],
+	);
+
+	assert!(
+		output.status.success(),
+		"config should describe explicit paths before they exist"
+	);
+	let stdout = stdout_text(&output);
+	assert!(stdout.contains("config/pullhook.custom.yaml"));
+	assert!(stdout.contains("format: yaml"));
+	assert!(stdout.contains("exists: no"));
+	assert!(stdout.contains("source: explicit"));
+}
+
+#[test]
 fn init_refuses_to_overwrite_existing_config_without_force() {
 	let temp = setup_repo_with_merge();
 	let repo_root = temp.path();

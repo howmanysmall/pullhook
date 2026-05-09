@@ -219,6 +219,8 @@ Run configured rules:
 
 ```bash
 pullhook validate --config config/pullhook.ci.json
+pullhook config
+pullhook config --json
 pullhook validate
 pullhook validate --json
 pullhook doctor
@@ -245,6 +247,7 @@ package-manager files. Config-mode commands always run from the repository root.
 
 Styles respect `--render auto|always|never`; placeholders render in every mode.
 
+`pullhook config` shows the config path and format that pullhook will use without parsing the file.
 `validate --json` emits a compact config summary for scripts and still prints structured JSON when the
 config is invalid. `doctor` checks repo discovery, config health, diff-base availability, and `--install`
 detection in one pass. `explain --json` emits the evaluated rule plan, including changed files, matched

@@ -19,7 +19,9 @@ use serde_json::json;
 use tracing::debug;
 use tracing_subscriber::EnvFilter;
 
-use crate::cli::{Cli, Commands, ConfigRunArgs, DoctorArgs, ExplainArgs, InitArgs, RulesArgs, RunArgs, ValidateArgs};
+use crate::cli::{
+	Cli, Commands, ConfigArgs, ConfigRunArgs, DoctorArgs, ExplainArgs, InitArgs, RulesArgs, RunArgs, ValidateArgs,
+};
 use crate::config::{
 	Config, Entry, EvaluatedEntry, EvaluatedGroup, EvaluatedRule, FailTextContext, OnFailure, Pattern,
 };
@@ -99,6 +101,10 @@ fn main() {
 		Some(Commands::Doctor(args)) => {
 			init_tracing(args.debug);
 			doctor_command(args)
+		}
+		Some(Commands::Config(args)) => {
+			init_tracing(args.debug);
+			config_command(args)
 		}
 		Some(Commands::Rules(args)) => {
 			init_tracing(args.debug);
@@ -447,6 +453,41 @@ fn doctor_command(args: &DoctorArgs) -> Result<()> {
 		return Err(anyhow!("doctor found blocking issues"));
 	}
 
+	Ok(())
+}
+
+fn config_command(args: &ConfigArgs) -> Result<()> {
+	let cwd = std::env::current_dir().context("failed to read current working directory")?;
+	let repo = GitRepo::discover(&cwd, args.debug).context("failed to resolve repository root")?;
+	let repo_root = repo.root().to_path_buf();
+	let path = resolve_config_path(&cwd, &repo_root, args.config.as_deref())?;
+	let format = config::ConfigFormat::from_path(&path)?;
+	let explicit = args.config.is_some();
+	let exists = path.is_file();
+
+	if args.json {
+		println!(
+			"{}",
+			serde_json::to_string_pretty(&json!({
+				"path": path.display().to_string(),
+				"format": format.label(),
+				"exists": exists,
+				"explicit": explicit,
+				"repoRoot": repo_root.display().to_string(),
+			}))?
+		);
+		return Ok(());
+	}
+
+	let renderer = Renderer::new(args.render);
+	renderer.render_message_stage(&format!("config: {}", path.display()));
+	renderer.render_message_stage(&format!("format: {}", format.label()));
+	renderer.render_message_stage(if exists { "exists: yes" } else { "exists: no" });
+	renderer.render_message_stage(if explicit {
+		"source: explicit"
+	} else {
+		"source: discovered"
+	});
 	Ok(())
 }
 
