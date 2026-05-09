@@ -2516,6 +2516,61 @@ fn commands_standalone_names_only_prints_clean_command_names() {
 }
 
 #[test]
+fn commands_summaries_only_prints_clean_command_summaries() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(
+		temp.path(),
+		&["commands", "--category", "diagnostic", "--summaries-only"],
+	);
+
+	assert!(
+		output.status.success(),
+		"commands --category diagnostic --summaries-only should succeed"
+	);
+	let stdout = stdout_text(&output);
+	assert_eq!(
+		stdout.lines().collect::<Vec<_>>(),
+		vec![
+			"Validate the pullhook config file.",
+			"Inspect repository and config readiness.",
+			"Show the resolved pullhook config path.",
+			"List configured rule and group names."
+		]
+	);
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"commands --summaries-only should not write stderr"
+	);
+}
+
+#[test]
+fn commands_search_filter_composes_with_summaries_only() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["commands", "--search", "config", "--summaries-only"]);
+
+	assert!(
+		output.status.success(),
+		"commands --search config --summaries-only should succeed"
+	);
+	let stdout = stdout_text(&output);
+	let summaries = stdout.lines().collect::<Vec<_>>();
+	assert!(summaries.contains(&"Validate the pullhook config file."));
+	assert!(summaries.contains(&"Show the resolved pullhook config path."));
+	assert!(
+		!summaries.contains(&"List supported shell completion targets."),
+		"shells summary should not match config search"
+	);
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"filtered commands --summaries-only should not write stderr"
+	);
+}
+
+#[test]
 fn commands_names_only_conflicts_with_json() {
 	let temp = tempfile::tempdir().expect("create temp dir");
 
@@ -2529,6 +2584,27 @@ fn commands_names_only_conflicts_with_json() {
 	assert!(stderr.contains("cannot be used with"));
 	assert!(stderr.contains("--names-only"));
 	assert!(stderr.contains("--json"));
+}
+
+#[test]
+fn commands_summaries_only_conflicts_with_other_output_modes() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+	let conflicting_modes: &[&[&str]] = &[
+		&["commands", "--summaries-only", "--json"],
+		&["commands", "--summaries-only", "--names-only"],
+	];
+
+	for args in conflicting_modes {
+		let output = run_pullhook(temp.path(), args);
+
+		assert!(
+			!output.status.success(),
+			"commands --summaries-only should conflict for args {args:?}"
+		);
+		let stderr = stderr_text(&output);
+		assert!(stderr.contains("cannot be used with"));
+		assert!(stderr.contains("--summaries-only"));
+	}
 }
 
 #[test]
@@ -3338,6 +3414,7 @@ fn utility_help_groups_options_by_task() {
 	assert!(commands_stdout.contains("pullhook commands --search config"));
 	assert!(commands_stdout.contains("pullhook commands --repo-only"));
 	assert!(commands_stdout.contains("pullhook commands --standalone-only --names-only"));
+	assert!(commands_stdout.contains("pullhook commands --search config --summaries-only"));
 }
 
 #[test]

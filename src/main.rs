@@ -1291,9 +1291,16 @@ fn command_catalog_command(args: &CommandCatalogArgs) -> Result<()> {
 		return Ok(());
 	}
 
-	if args.names_only {
+	if args.output.names_only {
 		for info in commands {
 			println!("{}", info.name);
+		}
+		return Ok(());
+	}
+
+	if args.output.summaries_only {
+		for info in commands {
+			println!("{}", info.summary);
 		}
 		return Ok(());
 	}

@@ -301,6 +301,7 @@ pullhook commands --category reference --names-only
 pullhook commands --search config
 pullhook commands --repo-only
 pullhook commands --standalone-only --names-only
+pullhook commands --search config --summaries-only
 pullhook commands --json
 pullhook codes
 pullhook codes --kind doctor-check
@@ -412,6 +413,7 @@ the catalog.
 Add `--search <text>` to match command names, categories, or summaries case-insensitively.
 Use `--repo-only` or `--standalone-only` to split commands by whether they need to run inside a Git repository.
 Use `pullhook commands --names-only` when a script or completion helper only needs command names.
+Use `pullhook commands --summaries-only` when a script or command palette only needs command descriptions.
 Use `pullhook codes` to inspect the stable code catalog in text form, or `pullhook codes --json` when another
 tool needs the catalog without scraping docs. Add `--kind error` or `--kind doctor-check` to narrow the list.
 Add `--surface run`, `--surface doctor`, or another case-insensitive surface fragment to focus codes by command area.
