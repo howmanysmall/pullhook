@@ -1974,6 +1974,13 @@ fn validate_json_reports_invalid_config_as_json() {
 			.expect("error")
 			.contains("unknown style `sparkle`")
 	);
+	let details = value["details"].as_array().expect("details array");
+	assert!(details.iter().any(|detail| {
+		detail
+			.as_str()
+			.expect("detail")
+			.contains("rules[0]: invalid `failText`: unknown style `sparkle`")
+	}));
 	let stderr = stderr_text(&output);
 	assert!(stderr.contains("config invalid"));
 }
@@ -1996,6 +2003,7 @@ fn validate_json_reports_missing_config_as_json() {
 			.expect("error")
 			.contains("no pullhook config found")
 	);
+	assert_eq!(value["details"], serde_json::json!([]));
 	let stderr = stderr_text(&output);
 	assert!(stderr.contains("no pullhook config found"));
 }

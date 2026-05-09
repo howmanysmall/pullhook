@@ -645,7 +645,11 @@ fn validate_config_command(args: &ValidateArgs) -> Result<()> {
 			Err(error) => {
 				println!(
 					"{}",
-					serde_json::to_string_pretty(&config_validation_error_json(None, &error.to_string()))?
+					serde_json::to_string_pretty(&config_validation_error_json(
+						None,
+						&error.to_string(),
+						&json_error_details(&error),
+					))?
 				);
 				return Err(error);
 			}
@@ -655,7 +659,11 @@ fn validate_config_command(args: &ValidateArgs) -> Result<()> {
 			Err(error) => {
 				println!(
 					"{}",
-					serde_json::to_string_pretty(&config_validation_error_json(Some(&path), &error.to_string()))?
+					serde_json::to_string_pretty(&config_validation_error_json(
+						Some(&path),
+						&error.to_string(),
+						&config_load_error_details(&error),
+					))?
 				);
 				return Err(anyhow!("config invalid"));
 			}
@@ -1384,7 +1392,7 @@ fn result_for_output<T>(result: Result<T>, json_output: bool) -> Result<T> {
 }
 
 fn print_json_error(error: &anyhow::Error) -> Result<()> {
-	let details = error.chain().skip(1).map(ToString::to_string).collect::<Vec<_>>();
+	let details = json_error_details(error);
 	println!(
 		"{}",
 		serde_json::to_string_pretty(&json!({
@@ -1394,6 +1402,18 @@ fn print_json_error(error: &anyhow::Error) -> Result<()> {
 		}))?
 	);
 	Ok(())
+}
+
+fn json_error_details(error: &anyhow::Error) -> Vec<String> {
+	error.chain().skip(1).map(ToString::to_string).collect()
+}
+
+fn config_load_error_details(error: &error::PullhookError) -> Vec<String> {
+	match error {
+		error::PullhookError::ConfigParse { reason, .. } => vec![reason.clone()],
+		error::PullhookError::ConfigValidation { details, .. } => details.lines().map(str::to_owned).collect(),
+		_ => Vec::new(),
+	}
 }
 
 fn format_unknown_selectors(unknown: &[String], available: &[String]) -> String {
@@ -1735,12 +1755,13 @@ fn config_summary_json(config: &Config) -> serde_json::Value {
 	})
 }
 
-fn config_validation_error_json(path: Option<&std::path::Path>, error: &str) -> serde_json::Value {
+fn config_validation_error_json(path: Option<&std::path::Path>, error: &str, details: &[String]) -> serde_json::Value {
 	json!({
 		"status": "error",
 		"valid": false,
 		"path": path.map(|path| path.display().to_string()),
 		"error": error,
+		"details": details,
 	})
 }
 
