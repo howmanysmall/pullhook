@@ -1647,6 +1647,7 @@ fn init_dry_run_json_reports_plan_without_writing_file() {
 	assert!(output.status.success(), "init --dry-run --json should succeed");
 	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse init json");
 	assert_eq!(value["status"], "ok");
+	assert_eq!(value["code"], serde_json::Value::Null);
 	assert!(value["path"].as_str().expect("path").ends_with("pullhook.yaml"));
 	assert_eq!(value["format"], "yaml");
 	assert_eq!(value["existed"], false);
@@ -1684,6 +1685,7 @@ fn init_json_reports_created_config() {
 	assert!(output.status.success(), "init --json should succeed");
 	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse init json");
 	assert_eq!(value["status"], "ok");
+	assert_eq!(value["code"], serde_json::Value::Null);
 	assert!(value["path"].as_str().expect("path").ends_with("pullhook.json"));
 	assert_eq!(value["format"], "json");
 	assert_eq!(value["action"], "create");
@@ -1956,6 +1958,7 @@ fn init_json_reports_existing_config_error() {
 	assert!(!output.status.success(), "init --json should reject overwriting config");
 	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse init json");
 	assert_eq!(value["status"], "error");
+	assert_eq!(value["code"], "init_refusing_overwrite");
 	assert!(value["path"].as_str().expect("path").ends_with("pullhook.json"));
 	assert_eq!(value["format"], "json");
 	assert_eq!(value["existed"], true);

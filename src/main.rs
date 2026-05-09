@@ -2348,8 +2348,14 @@ fn init_plan_json(
 	error: Option<&str>,
 ) -> serde_json::Value {
 	let details = init_plan_details(path, format, dry_run, error);
+	let code = if error.is_some() {
+		json!("init_refusing_overwrite")
+	} else {
+		serde_json::Value::Null
+	};
 	json!({
 		"status": if error.is_some() { "error" } else { "ok" },
+		"code": code,
 		"path": path.display().to_string(),
 		"format": format.label(),
 		"existed": existed,
