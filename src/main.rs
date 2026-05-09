@@ -16,13 +16,14 @@ use std::io::{Read as _, Write as _};
 use anyhow::{Context, Result, anyhow};
 use clap::{Parser, ValueEnum};
 use rayon::prelude::*;
+use serde::Serialize;
 use serde_json::json;
 use tracing::debug;
 use tracing_subscriber::EnvFilter;
 
 use crate::cli::{
-	Cli, Commands, CompletionArgs, ConfigArgs, ConfigRunArgs, DoctorArgs, ExplainArgs, InitArgs, RulesArgs, RulesKind,
-	RunArgs, SchemaArgs, ValidateArgs,
+	Cli, CodesArgs, Commands, CompletionArgs, ConfigArgs, ConfigRunArgs, DoctorArgs, ExplainArgs, InitArgs, RulesArgs,
+	RulesKind, RunArgs, SchemaArgs, ValidateArgs,
 };
 use crate::config::{
 	Config, Entry, EvaluatedEntry, EvaluatedGroup, EvaluatedRule, FailTextContext, OnFailure, Pattern,
@@ -159,11 +160,288 @@ struct DoctorCheck {
 	hint: Option<String>,
 }
 
+#[derive(Debug, Clone, Copy, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct JsonCodeInfo {
+	code: &'static str,
+	surface: &'static str,
+	kind: &'static str,
+	description: &'static str,
+}
+
+const JSON_CODE_INFOS: &[JsonCodeInfo] = &[
+	JsonCodeInfo {
+		code: "changed_files_file",
+		surface: "explain/run",
+		kind: "error",
+		description: "A --changed-files-file path could not be read.",
+	},
+	JsonCodeInfo {
+		code: "command_failed",
+		surface: "legacy run",
+		kind: "error",
+		description: "One or more legacy-mode task commands failed.",
+	},
+	JsonCodeInfo {
+		code: "command_io",
+		surface: "legacy run",
+		kind: "error",
+		description: "A command could not be started or waited on.",
+	},
+	JsonCodeInfo {
+		code: "command_parse",
+		surface: "legacy run",
+		kind: "error",
+		description: "A configured command could not be parsed.",
+	},
+	JsonCodeInfo {
+		code: "completion_error",
+		surface: "completion --check",
+		kind: "error",
+		description: "Completion output check failed for an unexpected reason.",
+	},
+	JsonCodeInfo {
+		code: "completion_missing",
+		surface: "completion --check",
+		kind: "error",
+		description: "The checked completion output file is missing or unreadable.",
+	},
+	JsonCodeInfo {
+		code: "completion_out_of_date",
+		surface: "completion --check",
+		kind: "error",
+		description: "The checked completion output file is stale.",
+	},
+	JsonCodeInfo {
+		code: "config_discovery_failed",
+		surface: "doctor",
+		kind: "doctor-check",
+		description: "Doctor could not complete config discovery.",
+	},
+	JsonCodeInfo {
+		code: "config_evaluation_error",
+		surface: "explain/run",
+		kind: "error",
+		description: "Config rule evaluation failed for an uncategorized reason.",
+	},
+	JsonCodeInfo {
+		code: "config_invalid",
+		surface: "doctor",
+		kind: "doctor-check",
+		description: "Doctor found an invalid config file.",
+	},
+	JsonCodeInfo {
+		code: "config_missing",
+		surface: "config/validate/explain/run/rules/doctor",
+		kind: "error",
+		description: "No pullhook config file was found.",
+	},
+	JsonCodeInfo {
+		code: "config_ok",
+		surface: "doctor",
+		kind: "doctor-check",
+		description: "Doctor found a valid config file.",
+	},
+	JsonCodeInfo {
+		code: "config_parse",
+		surface: "validate/run/explain/rules",
+		kind: "error",
+		description: "The config file could not be parsed.",
+	},
+	JsonCodeInfo {
+		code: "config_path_missing",
+		surface: "config --require-existing",
+		kind: "error",
+		description: "The resolved config path does not exist.",
+	},
+	JsonCodeInfo {
+		code: "config_path_missing_extension",
+		surface: "config/init",
+		kind: "error",
+		description: "A config path has no supported file extension.",
+	},
+	JsonCodeInfo {
+		code: "config_path_unsupported_format",
+		surface: "config/init",
+		kind: "error",
+		description: "A config path uses an unsupported file extension.",
+	},
+	JsonCodeInfo {
+		code: "config_rule_failed",
+		surface: "run --json",
+		kind: "error",
+		description: "One or more config-mode rules failed.",
+	},
+	JsonCodeInfo {
+		code: "config_validation",
+		surface: "validate/run/explain/rules",
+		kind: "error",
+		description: "The config parsed but failed validation.",
+	},
+	JsonCodeInfo {
+		code: "diff_base_error",
+		surface: "run/explain/doctor",
+		kind: "error",
+		description: "Changed-file discovery failed while diffing against the base revision.",
+	},
+	JsonCodeInfo {
+		code: "diff_base_ok",
+		surface: "doctor",
+		kind: "doctor-check",
+		description: "Doctor resolved the diff base and changed-file list.",
+	},
+	JsonCodeInfo {
+		code: "diff_base_revision_error",
+		surface: "run/explain",
+		kind: "error",
+		description: "Git rejected the configured base revision.",
+	},
+	JsonCodeInfo {
+		code: "diff_base_revision_not_found",
+		surface: "run/explain",
+		kind: "error",
+		description: "The configured base revision does not exist.",
+	},
+	JsonCodeInfo {
+		code: "diff_base_unavailable",
+		surface: "run/explain/doctor",
+		kind: "error",
+		description: "No diff base could be resolved from reflog, ORIG_HEAD, or HEAD~1.",
+	},
+	JsonCodeInfo {
+		code: "doctor_blocking_issues",
+		surface: "doctor --json",
+		kind: "error",
+		description: "Doctor found at least one blocking issue.",
+	},
+	JsonCodeInfo {
+		code: "doctor_error",
+		surface: "doctor --json",
+		kind: "error",
+		description: "Doctor failed for an uncategorized reason.",
+	},
+	JsonCodeInfo {
+		code: "doctor_warnings",
+		surface: "doctor --strict --json",
+		kind: "error",
+		description: "Doctor found warnings while strict mode was enabled.",
+	},
+	JsonCodeInfo {
+		code: "error",
+		surface: "all JSON errors",
+		kind: "error",
+		description: "Fallback code for uncategorized errors.",
+	},
+	JsonCodeInfo {
+		code: "init_refusing_overwrite",
+		surface: "init --json",
+		kind: "error",
+		description: "Init refused to overwrite an existing config without --force.",
+	},
+	JsonCodeInfo {
+		code: "invalid_pattern",
+		surface: "legacy run",
+		kind: "error",
+		description: "A changed-file glob pattern is invalid.",
+	},
+	JsonCodeInfo {
+		code: "json_debug_conflict",
+		surface: "all JSON commands",
+		kind: "error",
+		description: "--json was combined with --debug, which would contaminate machine output.",
+	},
+	JsonCodeInfo {
+		code: "message",
+		surface: "all JSON errors",
+		kind: "error",
+		description: "A generic pullhook message was converted to JSON.",
+	},
+	JsonCodeInfo {
+		code: "missing_required_argument",
+		surface: "legacy run",
+		kind: "error",
+		description: "Legacy mode was invoked without a runnable mode.",
+	},
+	JsonCodeInfo {
+		code: "no_rules_matched",
+		surface: "explain/run --require-match",
+		kind: "error",
+		description: "--require-match was set and no configured rules matched.",
+	},
+	JsonCodeInfo {
+		code: "package_manager_ambiguous",
+		surface: "legacy --install/doctor",
+		kind: "error",
+		description: "Package-manager detection found conflicting repo-root markers.",
+	},
+	JsonCodeInfo {
+		code: "package_manager_error",
+		surface: "doctor",
+		kind: "doctor-check",
+		description: "Doctor could not complete package-manager detection.",
+	},
+	JsonCodeInfo {
+		code: "package_manager_missing",
+		surface: "doctor",
+		kind: "doctor-check",
+		description: "Doctor did not find package-manager markers.",
+	},
+	JsonCodeInfo {
+		code: "package_manager_not_found",
+		surface: "legacy --install",
+		kind: "error",
+		description: "Package-manager detection found no supported repo-root markers.",
+	},
+	JsonCodeInfo {
+		code: "package_manager_ok",
+		surface: "doctor",
+		kind: "doctor-check",
+		description: "Doctor detected a package manager.",
+	},
+	JsonCodeInfo {
+		code: "repository_not_found",
+		surface: "all repo commands",
+		kind: "error",
+		description: "The current directory is not inside a Git repository.",
+	},
+	JsonCodeInfo {
+		code: "repository_ok",
+		surface: "doctor",
+		kind: "doctor-check",
+		description: "Doctor found the Git repository root.",
+	},
+	JsonCodeInfo {
+		code: "schema_error",
+		surface: "schema --check",
+		kind: "error",
+		description: "Schema output check failed for an unexpected reason.",
+	},
+	JsonCodeInfo {
+		code: "schema_missing",
+		surface: "schema --check",
+		kind: "error",
+		description: "The checked schema output file is missing or unreadable.",
+	},
+	JsonCodeInfo {
+		code: "schema_out_of_date",
+		surface: "schema --check",
+		kind: "error",
+		description: "The checked schema output file is stale.",
+	},
+	JsonCodeInfo {
+		code: "unknown_selector",
+		surface: "run/explain/rules",
+		kind: "error",
+		description: "One or more requested rule selectors do not exist.",
+	},
+];
+
 fn main() {
 	let cli = Cli::parse();
 
 	let result = match cli.command.as_ref() {
 		Some(Commands::Completion(args)) => completion_command(args),
+		Some(Commands::Codes(args)) => codes_command(args),
 		Some(Commands::Run(args)) => {
 			init_tracing(args.debug);
 			run_config_command(args)
@@ -206,6 +484,32 @@ fn main() {
 		eprintln!("error: {error:#}");
 		std::process::exit(1);
 	}
+}
+
+fn codes_command(args: &CodesArgs) -> Result<()> {
+	if args.json {
+		println!(
+			"{}",
+			serde_json::to_string_pretty(&json!({
+				"status": "ok",
+				"code": serde_json::Value::Null,
+				"successCode": serde_json::Value::Null,
+				"codes": JSON_CODE_INFOS,
+				"summary": {
+					"codes": JSON_CODE_INFOS.len(),
+				},
+			}))?
+		);
+		return Ok(());
+	}
+
+	println!("JSON status codes");
+	println!("ok responses use code: null");
+	println!();
+	for info in JSON_CODE_INFOS {
+		println!("{} [{}] {}", info.code, info.surface, info.description);
+	}
+	Ok(())
 }
 
 fn completion_command(args: &CompletionArgs) -> Result<()> {

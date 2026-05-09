@@ -760,6 +760,49 @@ fn completion_check_json_reports_up_to_date_status() {
 }
 
 #[test]
+fn codes_text_lists_stable_json_codes() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["codes"]);
+
+	assert!(output.status.success(), "codes should succeed outside a git repo");
+	let stdout = stdout_text(&output);
+	assert!(stdout.contains("JSON status codes"));
+	assert!(stdout.contains("ok responses use code: null"));
+	assert!(stdout.contains("config_missing"));
+	assert!(stdout.contains("no_rules_matched"));
+	assert!(stdout.contains("schema_out_of_date"));
+	let stderr = stderr_text(&output);
+	assert!(stderr.trim().is_empty(), "codes should not write stderr");
+}
+
+#[test]
+fn codes_json_lists_stable_json_codes() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["codes", "--json"]);
+
+	assert!(
+		output.status.success(),
+		"codes --json should succeed outside a git repo"
+	);
+	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse codes json");
+	assert_eq!(value["status"], "ok");
+	assert_eq!(value["code"], serde_json::Value::Null);
+	assert_eq!(value["successCode"], serde_json::Value::Null);
+	let codes = value["codes"].as_array().expect("codes array");
+	assert!(codes.iter().any(|entry| entry["code"] == "config_missing"));
+	assert!(codes.iter().any(|entry| entry["code"] == "no_rules_matched"));
+	assert!(codes.iter().any(|entry| entry["code"] == "schema_out_of_date"));
+	assert_eq!(
+		value["summary"]["codes"].as_u64().expect("code count"),
+		codes.len() as u64
+	);
+	let stderr = stderr_text(&output);
+	assert!(stderr.trim().is_empty(), "codes --json should not write stderr");
+}
+
+#[test]
 fn root_help_lists_common_examples() {
 	let temp = tempfile::tempdir().expect("create temp dir");
 
@@ -770,8 +813,11 @@ fn root_help_lists_common_examples() {
 	assert!(stdout.contains("Examples:"));
 	assert!(stdout.contains("pullhook --install --dry-run"));
 	assert!(stdout.contains("pullhook init --format json"));
+	assert!(stdout.contains("pullhook codes --json"));
 	assert!(stdout.contains("schema"));
+	assert!(stdout.contains("codes"));
 	assert!(stdout.contains("Use `pullhook explain --all-matches` to preview config rule matches."));
+	assert!(stdout.contains("Use `pullhook codes` to inspect stable JSON status codes."));
 }
 
 #[test]
