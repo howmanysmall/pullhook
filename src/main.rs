@@ -1919,6 +1919,7 @@ fn init_plan_json(
 	dry_run: bool,
 	error: Option<&str>,
 ) -> serde_json::Value {
+	let details = init_plan_details(path, format, dry_run, error);
 	json!({
 		"status": if error.is_some() { "error" } else { "ok" },
 		"path": path.display().to_string(),
@@ -1929,7 +1930,27 @@ fn init_plan_json(
 		"action": if existed { "overwrite" } else { "create" },
 		"written": !dry_run && error.is_none(),
 		"error": error,
+		"details": details,
 	})
+}
+
+fn init_plan_details(
+	path: &std::path::Path,
+	format: config::ConfigFormat,
+	dry_run: bool,
+	error: Option<&str>,
+) -> Vec<String> {
+	if let Some(error) = error {
+		return vec![error.to_owned()];
+	}
+	if dry_run {
+		return vec![format!(
+			"rerun `pullhook init --output {} --format {}` without `--dry-run` to write config",
+			path.display(),
+			format.label()
+		)];
+	}
+	Vec::new()
 }
 
 fn schema_check_json(

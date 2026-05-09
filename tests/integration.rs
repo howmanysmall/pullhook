@@ -1500,6 +1500,17 @@ fn init_dry_run_json_reports_plan_without_writing_file() {
 	assert_eq!(value["action"], "create");
 	assert_eq!(value["written"], false);
 	assert_eq!(value["error"], serde_json::Value::Null);
+	let details = value["details"].as_array().expect("details array");
+	assert!(
+		details
+			.iter()
+			.any(|detail| { detail.as_str().expect("detail").contains("pullhook init --output") })
+	);
+	assert!(
+		details
+			.iter()
+			.any(|detail| { detail.as_str().expect("detail").contains("--format yaml") })
+	);
 	assert!(!predicate::path::is_file().eval(&repo_root.join("pullhook.yaml")));
 	let stderr = stderr_text(&output);
 	assert!(
@@ -1522,6 +1533,7 @@ fn init_json_reports_created_config() {
 	assert_eq!(value["format"], "json");
 	assert_eq!(value["action"], "create");
 	assert_eq!(value["written"], true);
+	assert_eq!(value["details"], serde_json::json!([]));
 	assert!(predicate::path::is_file().eval(&repo_root.join("pullhook.json")));
 	let stderr = stderr_text(&output);
 	assert!(stderr.trim().is_empty(), "init --json should not write stderr");
