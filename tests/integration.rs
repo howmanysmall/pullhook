@@ -2538,6 +2538,47 @@ fn rules_names_only_filters_by_kind() {
 }
 
 #[test]
+fn rules_names_only_respects_rule_selector_filter() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_file(
+		repo_root,
+		Path::new("pullhook.json"),
+		r#"{
+  "rules": [
+    {
+      "name": "checks",
+      "parallel": [
+        {
+          "name": "lint",
+          "changed": "packages/a/package-lock.json",
+          "run": "cargo test -p lint"
+        },
+        {
+          "name": "typecheck",
+          "changed": "packages/a/package-lock.json",
+          "run": "cargo test -p typecheck"
+        }
+      ]
+    }
+  ]
+}
+"#,
+	);
+
+	let output = run_pullhook(repo_root, &["rules", "--rule", "lint", "--names-only"]);
+
+	assert!(output.status.success(), "rules --rule lint --names-only should succeed");
+	let stdout = stdout_text(&output);
+	assert_eq!(stdout, "lint\n");
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"rules --rule lint --names-only should not write stderr"
+	);
+}
+
+#[test]
 fn rules_commands_only_prints_configured_run_commands() {
 	let temp = setup_repo_with_merge();
 	let repo_root = temp.path();

@@ -797,7 +797,7 @@ fn rules_command(args: &RulesArgs) -> Result<()> {
 	}
 
 	if args.names_only {
-		for selector in collect_rule_selectors_for_kind(&config, args.kind) {
+		for selector in collect_rules_output_selectors(&config, args.kind, &args.rules) {
 			println!("{selector}");
 		}
 		return Ok(());
@@ -1890,7 +1890,7 @@ fn config_rules_json(config: &Config, kind: RulesKind, selectors: &[String]) -> 
 		"path": config.path.display().to_string(),
 		"onFailure": on_failure_label(config.on_failure),
 		"kind": rules_kind_label(kind),
-		"selectors": collect_rules_json_selectors(config, kind, selectors),
+		"selectors": collect_rules_output_selectors(config, kind, selectors),
 		"commands": collect_config_rule_commands_for_kind(config, kind),
 		"patterns": collect_config_rule_patterns_for_kind(config, kind),
 		"entries": config.entries.iter().filter_map(|entry| config_rule_inventory_json(entry, kind)).collect::<Vec<_>>(),
@@ -1899,12 +1899,21 @@ fn config_rules_json(config: &Config, kind: RulesKind, selectors: &[String]) -> 
 	})
 }
 
-fn collect_rules_json_selectors(config: &Config, kind: RulesKind, selectors: &[String]) -> Vec<String> {
+fn collect_rules_output_selectors(config: &Config, kind: RulesKind, selectors: &[String]) -> Vec<String> {
 	if selectors.is_empty() {
 		return collect_rule_selectors_for_kind(config, kind);
 	}
 
-	selectors.iter().cloned().collect::<BTreeSet<_>>().into_iter().collect()
+	let available = collect_rule_selectors_for_kind(config, kind)
+		.into_iter()
+		.collect::<BTreeSet<_>>();
+	selectors
+		.iter()
+		.filter(|selector| available.contains(selector.as_str()))
+		.cloned()
+		.collect::<BTreeSet<_>>()
+		.into_iter()
+		.collect()
 }
 
 fn config_evaluation_json(
