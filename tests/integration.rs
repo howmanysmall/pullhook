@@ -1788,6 +1788,13 @@ fn config_json_reports_unsupported_config_extension_as_json() {
 			.expect("error")
 			.contains("JSON5 configs are not supported")
 	);
+	assert_eq!(
+		value["details"],
+		serde_json::json!([
+			"supported config files are `pullhook.json`, `pullhook.jsonc`, `pullhook.yaml`, and `.pullhook.toml`",
+			"use `pullhook init --output <path>` to create a supported config file"
+		])
+	);
 	let stderr = stderr_text(&output);
 	assert!(stderr.contains("JSON5 configs are not supported"));
 }

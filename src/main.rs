@@ -1634,6 +1634,16 @@ fn json_error_details(error: &anyhow::Error) -> Vec<String> {
 			"or pass explicit `--pattern <glob>` and `--command <cmd>` instead of `--install`".to_owned(),
 		];
 	}
+	if message.contains("configs are not supported")
+		|| message.starts_with("unsupported config extension")
+		|| message == "config path has no extension"
+	{
+		return vec![
+			"supported config files are `pullhook.json`, `pullhook.jsonc`, `pullhook.yaml`, and `.pullhook.toml`"
+				.to_owned(),
+			"use `pullhook init --output <path>` to create a supported config file".to_owned(),
+		];
+	}
 
 	match message.as_str() {
 		"--json cannot be used with --debug" => vec![
