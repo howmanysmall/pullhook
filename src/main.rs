@@ -22,9 +22,9 @@ use tracing::debug;
 use tracing_subscriber::EnvFilter;
 
 use crate::cli::{
-	Cli, CodeKind, CodesArgs, CommandCatalogArgs, CommandCategory, Commands, CompletionArgs, ConfigArgs, ConfigRunArgs,
-	DoctorArgs, ExampleCommand, ExamplesArgs, ExplainArgs, FormatsArgs, InitArgs, ManagersArgs, RulesArgs, RulesKind,
-	RunArgs, SchemaArgs, ShellsArgs, ValidateArgs,
+	CategoriesArgs, Cli, CodeKind, CodesArgs, CommandCatalogArgs, CommandCategory, Commands, CompletionArgs,
+	ConfigArgs, ConfigRunArgs, DoctorArgs, ExampleCommand, ExamplesArgs, ExplainArgs, FormatsArgs, InitArgs,
+	ManagersArgs, RulesArgs, RulesKind, RunArgs, SchemaArgs, ShellsArgs, ValidateArgs,
 };
 use crate::config::{
 	Config, Entry, EvaluatedEntry, EvaluatedGroup, EvaluatedRule, FailTextContext, OnFailure, Pattern,
@@ -209,6 +209,32 @@ struct FormatInfo {
 	init_command: &'static str,
 }
 
+#[derive(Debug, Clone, Copy, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct CategoryInfo {
+	name: &'static str,
+	description: &'static str,
+}
+
+const CATEGORY_INFOS: &[CategoryInfo] = &[
+	CategoryInfo {
+		name: "workflow",
+		description: "Commands that evaluate or run configured workflows.",
+	},
+	CategoryInfo {
+		name: "diagnostic",
+		description: "Commands that inspect repository or config state.",
+	},
+	CategoryInfo {
+		name: "generator",
+		description: "Commands that generate files or shell output.",
+	},
+	CategoryInfo {
+		name: "reference",
+		description: "Commands that describe pullhook's own CLI surface.",
+	},
+];
+
 const COMMAND_INFOS: &[CommandInfo] = &[
 	CommandInfo {
 		name: "run",
@@ -302,6 +328,14 @@ const COMMAND_INFOS: &[CommandInfo] = &[
 		name: "managers",
 		category: "reference",
 		summary: "List supported package-manager install detection.",
+		json: true,
+		requires_repo: false,
+		script_friendly: true,
+	},
+	CommandInfo {
+		name: "categories",
+		category: "reference",
+		summary: "List command categories and their coverage.",
 		json: true,
 		requires_repo: false,
 		script_friendly: true,
@@ -416,6 +450,13 @@ const EXAMPLE_INFOS: &[ExampleInfo] = &[
 		command_name: "managers",
 		command: "pullhook managers --patterns-only",
 		summary: "Print install detection patterns.",
+	},
+	ExampleInfo {
+		title: "List command categories",
+		category: "reference",
+		command_name: "categories",
+		command: "pullhook categories --json",
+		summary: "Return command categories with command and example counts.",
 	},
 	ExampleInfo {
 		title: "List status codes",
@@ -760,6 +801,7 @@ fn main() {
 		Some(Commands::Shells(args)) => shells_command(args),
 		Some(Commands::Formats(args)) => formats_command(args),
 		Some(Commands::Managers(args)) => managers_command(args),
+		Some(Commands::Categories(args)) => categories_command(args),
 		Some(Commands::Examples(args)) => examples_command(args),
 		Some(Commands::CommandCatalog(args)) => command_catalog_command(args),
 		Some(Commands::Codes(args)) => codes_command(args),
@@ -952,6 +994,67 @@ fn list_or_none(values: &[&str]) -> String {
 	}
 
 	values.join(", ")
+}
+
+fn categories_command(args: &CategoriesArgs) -> Result<()> {
+	if args.json {
+		let categories = CATEGORY_INFOS
+			.iter()
+			.map(|category| category_info_json(*category))
+			.collect::<Vec<_>>();
+		println!(
+			"{}",
+			serde_json::to_string_pretty(&json!({
+				"status": "ok",
+				"code": serde_json::Value::Null,
+				"categories": categories,
+				"summary": {
+					"categories": categories.len(),
+				},
+			}))?
+		);
+		return Ok(());
+	}
+
+	if args.names_only {
+		for category in CATEGORY_INFOS {
+			println!("{}", category.name);
+		}
+		return Ok(());
+	}
+
+	println!("Command categories");
+	println!();
+	for category in CATEGORY_INFOS {
+		let command_count = command_count_for_category(category.name);
+		let example_count = example_count_for_category(category.name);
+		println!(
+			"{}: {} command(s), {} example(s)",
+			category.name, command_count, example_count
+		);
+		println!("  {}", category.description);
+	}
+	Ok(())
+}
+
+fn category_info_json(category: CategoryInfo) -> serde_json::Value {
+	json!({
+		"name": category.name,
+		"description": category.description,
+		"commands": command_count_for_category(category.name),
+		"examples": example_count_for_category(category.name),
+	})
+}
+
+fn command_count_for_category(category: &str) -> usize {
+	COMMAND_INFOS.iter().filter(|info| info.category == category).count()
+}
+
+fn example_count_for_category(category: &str) -> usize {
+	EXAMPLE_INFOS
+		.iter()
+		.filter(|example| example.category == category)
+		.count()
 }
 
 fn examples_command(args: &ExamplesArgs) -> Result<()> {

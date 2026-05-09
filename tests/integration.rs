@@ -1216,6 +1216,85 @@ fn commands_text_lists_cli_catalog() {
 }
 
 #[test]
+fn categories_text_lists_command_coverage() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["categories"]);
+
+	assert!(output.status.success(), "categories should succeed outside a git repo");
+	let stdout = stdout_text(&output);
+	assert!(stdout.contains("Command categories"));
+	assert!(stdout.contains("workflow: 2 command(s)"));
+	assert!(stdout.contains("diagnostic: 4 command(s)"));
+	assert!(stdout.contains("generator: 3 command(s)"));
+	assert!(stdout.contains("reference: 7 command(s)"));
+	let stderr = stderr_text(&output);
+	assert!(stderr.trim().is_empty(), "categories should not write stderr");
+}
+
+#[test]
+fn categories_json_lists_command_coverage() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["categories", "--json"]);
+
+	assert!(
+		output.status.success(),
+		"categories --json should succeed outside a git repo"
+	);
+	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse categories json");
+	assert_eq!(value["status"], "ok");
+	assert_eq!(value["code"], serde_json::Value::Null);
+	let categories = value["categories"].as_array().expect("categories array");
+	assert!(
+		categories
+			.iter()
+			.any(|entry| entry["name"] == "reference" && entry["commands"] == 7 && entry["examples"] == 6)
+	);
+	assert_eq!(
+		value["summary"]["categories"].as_u64().expect("category count"),
+		categories.len() as u64
+	);
+	let stderr = stderr_text(&output);
+	assert!(stderr.trim().is_empty(), "categories --json should not write stderr");
+}
+
+#[test]
+fn categories_names_only_prints_clean_category_names() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["categories", "--names-only"]);
+
+	assert!(output.status.success(), "categories --names-only should succeed");
+	let stdout = stdout_text(&output);
+	assert_eq!(
+		stdout.lines().collect::<Vec<_>>(),
+		vec!["workflow", "diagnostic", "generator", "reference"]
+	);
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"categories --names-only should not write stderr"
+	);
+}
+
+#[test]
+fn categories_names_only_conflicts_with_json() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["categories", "--names-only", "--json"]);
+
+	assert!(
+		!output.status.success(),
+		"categories --names-only should conflict with --json"
+	);
+	let stderr = stderr_text(&output);
+	assert!(stderr.contains("cannot be used with"));
+	assert!(stderr.contains("--names-only"));
+	assert!(stderr.contains("--json"));
+}
+
+#[test]
 fn examples_text_lists_common_workflows() {
 	let temp = tempfile::tempdir().expect("create temp dir");
 
@@ -1229,6 +1308,7 @@ fn examples_text_lists_common_workflows() {
 	assert!(stdout.contains("List completion shells [reference]: pullhook shells --names-only"));
 	assert!(stdout.contains("List config formats [reference]: pullhook formats --files-only"));
 	assert!(stdout.contains("List package managers [reference]: pullhook managers --patterns-only"));
+	assert!(stdout.contains("List command categories [reference]: pullhook categories --json"));
 	assert!(stdout.contains("List status codes [reference]: pullhook codes --codes-only"));
 	let stderr = stderr_text(&output);
 	assert!(stderr.trim().is_empty(), "examples should not write stderr");
@@ -1270,6 +1350,11 @@ fn examples_json_lists_common_workflows() {
 		examples
 			.iter()
 			.any(|entry| entry["commandName"] == "managers" && entry["command"] == "pullhook managers --patterns-only")
+	);
+	assert!(
+		examples
+			.iter()
+			.any(|entry| entry["commandName"] == "categories" && entry["command"] == "pullhook categories --json")
 	);
 	assert_eq!(
 		value["summary"]["examples"].as_u64().expect("example count"),
@@ -1338,6 +1423,11 @@ fn examples_category_filter_limits_results() {
 		examples
 			.iter()
 			.any(|entry| entry["commandName"] == "managers" && entry["command"] == "pullhook managers --patterns-only")
+	);
+	assert!(
+		examples
+			.iter()
+			.any(|entry| entry["commandName"] == "categories" && entry["command"] == "pullhook categories --json")
 	);
 	assert!(
 		!examples.iter().any(|entry| entry["command"] == "pullhook run"),
@@ -1422,6 +1512,7 @@ fn examples_category_commands_only_prints_clean_commands() {
 			"pullhook shells --names-only",
 			"pullhook formats --files-only",
 			"pullhook managers --patterns-only",
+			"pullhook categories --json",
 			"pullhook codes --codes-only"
 		]
 	);
@@ -1481,6 +1572,11 @@ fn commands_json_lists_cli_catalog() {
 		commands
 			.iter()
 			.any(|entry| entry["name"] == "managers" && entry["category"] == "reference")
+	);
+	assert!(
+		commands
+			.iter()
+			.any(|entry| entry["name"] == "categories" && entry["category"] == "reference")
 	);
 	assert!(
 		commands
@@ -1555,7 +1651,15 @@ fn commands_names_only_prints_clean_command_names() {
 	let stdout = stdout_text(&output);
 	assert_eq!(
 		stdout.lines().collect::<Vec<_>>(),
-		vec!["shells", "formats", "managers", "examples", "commands", "codes"]
+		vec![
+			"shells",
+			"formats",
+			"managers",
+			"categories",
+			"examples",
+			"commands",
+			"codes"
+		]
 	);
 	let stderr = stderr_text(&output);
 	assert!(
@@ -1595,6 +1699,7 @@ fn root_help_lists_common_examples() {
 	assert!(stdout.contains("pullhook shells"));
 	assert!(stdout.contains("pullhook formats"));
 	assert!(stdout.contains("pullhook managers"));
+	assert!(stdout.contains("pullhook categories"));
 	assert!(stdout.contains("pullhook commands --json"));
 	assert!(stdout.contains("pullhook codes --json"));
 	assert!(stdout.contains("schema"));
@@ -1604,6 +1709,7 @@ fn root_help_lists_common_examples() {
 	assert!(stdout.contains("Use `pullhook shells` to list completion targets."));
 	assert!(stdout.contains("Use `pullhook formats` to list supported config formats."));
 	assert!(stdout.contains("Use `pullhook managers` to list package-manager install detection."));
+	assert!(stdout.contains("Use `pullhook categories` to inspect command categories."));
 	assert!(stdout.contains("Use `pullhook explain --all-matches` to preview config rule matches."));
 	assert!(stdout.contains("Use `pullhook commands` to inspect the command catalog."));
 	assert!(stdout.contains("Use `pullhook codes` to inspect stable JSON status codes."));
@@ -2323,6 +2429,13 @@ fn utility_help_groups_options_by_task() {
 	assert!(managers_stdout.contains("pullhook managers --names-only"));
 	assert!(managers_stdout.contains("pullhook managers --patterns-only"));
 	assert!(managers_stdout.contains("pullhook managers --json"));
+
+	let categories = run_pullhook(temp.path(), &["categories", "--help"]);
+	assert!(categories.status.success(), "categories help should succeed");
+	let categories_stdout = stdout_text(&categories);
+	assert!(categories_stdout.contains("Output options:"));
+	assert!(categories_stdout.contains("pullhook categories --names-only"));
+	assert!(categories_stdout.contains("pullhook categories --json"));
 
 	let examples = run_pullhook(temp.path(), &["examples", "--help"]);
 	assert!(examples.status.success(), "examples help should succeed");

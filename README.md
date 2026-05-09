@@ -74,6 +74,7 @@ Commands:
   shells      List supported shell completion targets
   formats     List supported config formats and filenames
   managers    List supported package-manager install detection
+  categories  List command categories and their coverage
   examples    Show common pullhook workflows and commands
   commands    List pullhook commands for humans or automation
   codes       List stable JSON status codes for automation
@@ -279,6 +280,9 @@ pullhook formats --json
 pullhook managers
 pullhook managers --patterns-only
 pullhook managers --json
+pullhook categories
+pullhook categories --names-only
+pullhook categories --json
 pullhook examples
 pullhook examples --category reference
 pullhook examples --category reference --commands-only
@@ -381,6 +385,7 @@ Add `--command run`, `--command explain`, `--command validate`, `--command docto
 or `--command legacy` to focus the example list.
 Use `pullhook examples --category reference` to narrow examples by command category.
 Use `pullhook examples --commands-only` when a script or completion helper only needs example command lines.
+Use `pullhook categories` to inspect command categories with command and example counts.
 Use `pullhook commands` to inspect the command catalog in text form, or `pullhook commands --json` when another
 tool needs supported commands, categories, and repo requirements without scraping help text.
 Add `--category workflow`, `--category diagnostic`, `--category generator`, or `--category reference` to narrow
