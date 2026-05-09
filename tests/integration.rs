@@ -5185,6 +5185,7 @@ fn rules_json_reports_rule_inventory() {
         {
           "name": "lint",
           "changed": "packages/a/package-lock.json",
+          "exclude": "packages/a/generated/**",
           "failText": "{red.bold {rule} failed}",
           "run": "cargo test -p lint"
         }
@@ -5210,12 +5211,23 @@ fn rules_json_reports_rule_inventory() {
 	assert_eq!(value["summary"]["selectors"], 3);
 	assert_eq!(value["summary"]["commands"], 1);
 	assert_eq!(value["summary"]["patterns"], 1);
+	assert_eq!(value["summary"]["excludePatterns"], 1);
+	assert_eq!(value["summary"]["failText"], 3);
 	assert_eq!(
 		value["selectors"],
 		serde_json::json!(["checks", "install dependencies", "lint"])
 	);
 	assert_eq!(value["commands"], serde_json::json!(["cargo test -p lint"]));
 	assert_eq!(value["patterns"], serde_json::json!(["packages/a/package-lock.json"]));
+	assert_eq!(value["excludePatterns"], serde_json::json!(["packages/a/generated/**"]));
+	assert_eq!(
+		value["failText"],
+		serde_json::json!([
+			"{rule} install failed",
+			"{rule} group failed",
+			"{red.bold {rule} failed}"
+		])
+	);
 	let entries = value["entries"].as_array().expect("entries array");
 	assert_eq!(entries.len(), 2);
 	assert_eq!(entries[0]["type"], "rule");
@@ -5232,7 +5244,10 @@ fn rules_json_reports_rule_inventory() {
 		entries[1]["rules"][0]["changed"],
 		serde_json::json!(["packages/a/package-lock.json"])
 	);
-	assert_eq!(entries[1]["rules"][0]["exclude"], serde_json::json!([]));
+	assert_eq!(
+		entries[1]["rules"][0]["exclude"],
+		serde_json::json!(["packages/a/generated/**"])
+	);
 	assert_eq!(entries[1]["rules"][0]["failText"], "{red.bold {rule} failed}");
 }
 

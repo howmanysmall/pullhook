@@ -3778,6 +3778,8 @@ fn config_rules_json(config: &Config, kind: RulesKind, selectors: &[String]) -> 
 	let selectors = collect_rules_output_selectors(config, kind, selectors);
 	let commands = collect_config_rule_commands_for_kind(config, kind);
 	let patterns = collect_config_rule_patterns_for_kind(config, kind);
+	let exclude_patterns = collect_config_rule_exclude_patterns_for_kind(config, kind);
+	let fail_text = collect_config_fail_text_for_kind(config, kind);
 	let entries = config
 		.entries
 		.iter()
@@ -3789,6 +3791,8 @@ fn config_rules_json(config: &Config, kind: RulesKind, selectors: &[String]) -> 
 	let selector_count = selectors.len();
 	let command_count = commands.len();
 	let pattern_count = patterns.len();
+	let exclude_pattern_count = exclude_patterns.len();
+	let fail_text_count = fail_text.len();
 
 	json!({
 		"status": "ok",
@@ -3800,6 +3804,8 @@ fn config_rules_json(config: &Config, kind: RulesKind, selectors: &[String]) -> 
 		"selectors": selectors,
 		"commands": commands,
 		"patterns": patterns,
+		"excludePatterns": exclude_patterns,
+		"failText": fail_text,
 		"entries": entries,
 		"rules": rules,
 		"parallelGroups": parallel_groups,
@@ -3810,6 +3816,8 @@ fn config_rules_json(config: &Config, kind: RulesKind, selectors: &[String]) -> 
 			"selectors": selector_count,
 			"commands": command_count,
 			"patterns": pattern_count,
+			"excludePatterns": exclude_pattern_count,
+			"failText": fail_text_count,
 		},
 	})
 }
