@@ -297,6 +297,7 @@ pullhook shells --search fish --count-only
 pullhook shells --names-only
 pullhook shells --commands-only
 pullhook shells --descriptions-only
+pullhook shells --markdown
 pullhook shells --json
 pullhook formats
 pullhook formats --search yaml
@@ -304,6 +305,7 @@ pullhook formats --search yaml --count-only
 pullhook formats --files-only
 pullhook formats --init-commands-only
 pullhook formats --descriptions-only
+pullhook formats --markdown
 pullhook formats --json
 pullhook managers
 pullhook managers --search pnpm
@@ -313,6 +315,7 @@ pullhook managers --commands-only
 pullhook managers --lock-files-only
 pullhook managers --config-files-only
 pullhook managers --watched-files-only
+pullhook managers --markdown
 pullhook managers --json
 pullhook categories
 pullhook categories --search workflow
@@ -321,6 +324,7 @@ pullhook categories --names-only
 pullhook categories --commands-only
 pullhook categories --example-commands-only
 pullhook categories --descriptions-only
+pullhook categories --markdown
 pullhook categories --json
 pullhook examples
 pullhook examples --category reference
@@ -408,11 +412,13 @@ Use `--count-only` on catalog commands when a script only needs the number of ma
 Use `pullhook shells --names-only` when a script only needs supported shell names.
 Use `pullhook shells --commands-only` when a script only needs shell completion commands.
 Use `pullhook shells --descriptions-only` when a script only needs short shell descriptions.
+Use `pullhook shells --markdown` to generate a compact shell-completion reference table.
 Use `pullhook formats` to inspect supported config formats and discovery filenames.
 Add `--search <text>` to match format names, config filenames, descriptions, or init commands.
 Use `pullhook formats --files-only` when a script only needs the config filenames pullhook discovers.
 Use `pullhook formats --init-commands-only` when a script only needs starter config commands.
 Use `pullhook formats --descriptions-only` when a script only needs short format descriptions.
+Use `pullhook formats --markdown` to generate a compact config-format reference table.
 Use `pullhook managers` to inspect package-manager detection files and install commands.
 Add `--search <text>` to match package-manager names, install commands, detection patterns, or watched files.
 Use `pullhook managers --patterns-only` when a script only needs install detection patterns.
@@ -420,6 +426,7 @@ Use `pullhook managers --commands-only` when a script only needs package-manager
 Use `pullhook managers --lock-files-only` when a script only needs the lock files pullhook checks first.
 Use `pullhook managers --config-files-only` when a script only needs fallback package-manager config files.
 Use `pullhook managers --watched-files-only` when a script only needs the deduped files that can trigger installs.
+Use `pullhook managers --markdown` to generate a compact package-manager detection table.
 `validate --json` emits a compact config summary for scripts and still prints structured JSON when the
 config is invalid, including `status`, stable `code`, `error`, `details`, and `validationErrors` fields. Config parse failures also include a `parseError` object with the config path and parser reason. Use `validate --quiet` when CI only needs the exit code. Use `validate --path-only` when a script needs the validated config path as one clean line. `doctor` checks repo discovery, config health, diff-base availability, and `--install`
 detection in one pass, with a short hint for each check. Use `doctor --strict` when CI should fail on warnings.
@@ -476,6 +483,7 @@ Add `--search <text>` to match category names or descriptions case-insensitively
 Use `pullhook categories --descriptions-only` when a script or command palette only needs category descriptions.
 Use `pullhook categories --commands-only` when a script needs command names for matching categories.
 Use `pullhook categories --example-commands-only` when a script needs example command lines for matching categories.
+Use `pullhook categories --markdown` to generate a compact command-category coverage table.
 Use `pullhook commands` to inspect the command catalog with example invocations, or `pullhook commands --json` when another
 tool needs supported commands, categories, repo requirements, and example invocations without scraping help text.
 Add `--category workflow`, `--category diagnostic`, `--category generator`, or `--category reference` to narrow

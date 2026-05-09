@@ -2554,6 +2554,84 @@ fn categories_text_lists_command_coverage() {
 }
 
 #[test]
+fn reference_catalogs_markdown_print_filtered_tables() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+	let cases: &[(&[&str], &[&str], &[&str])] = &[
+		(
+			&["shells", "--search", "fish", "--markdown"],
+			&[
+				"| Shell | Completion command | Description |",
+				"| `fish` | `pullhook completion fish` | Generate Fish completion script. |",
+			],
+			&["`bash`"],
+		),
+		(
+			&["formats", "--search", "yaml", "--markdown"],
+			&[
+				"| Format | Default file | Alternate file | Init command | Description |",
+				"| `yaml` | `pullhook.yaml` | `.pullhook.yaml` | `pullhook init --format yaml` | YAML config file; .yml is not supported. |",
+			],
+			&["`json`"],
+		),
+		(
+			&["managers", "--search", "pnpm", "--markdown"],
+			&[
+				"| Manager | Install command | Detection pattern | Lock files | Config files | Watched files |",
+				"| `pnpm` | `pnpm install` | `+(package.json\\|pnpm-lock.yaml)` | `pnpm-lock.yaml` | none | `package.json`<br>`pnpm-lock.yaml` |",
+			],
+			&["`npm`"],
+		),
+		(
+			&["categories", "--search", "generator", "--markdown"],
+			&[
+				"| Category | Commands | Examples | Description |",
+				"| `generator` | 3 | 3 | Commands that generate files or shell output. |",
+			],
+			&["`workflow`"],
+		),
+	];
+
+	for (args, expected, unexpected) in cases {
+		let output = run_pullhook(temp.path(), args);
+
+		assert!(output.status.success(), "{args:?} should succeed");
+		let stdout = stdout_text(&output);
+		for text in *expected {
+			assert!(stdout.contains(text), "{args:?} stdout should contain {text}");
+		}
+		for text in *unexpected {
+			assert!(!stdout.contains(text), "{args:?} stdout should not contain {text}");
+		}
+		let stderr = stderr_text(&output);
+		assert!(stderr.trim().is_empty(), "{args:?} should not write stderr");
+	}
+}
+
+#[test]
+fn reference_catalogs_markdown_conflicts_with_other_output_modes() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+	let cases: &[&[&str]] = &[
+		&["shells", "--markdown", "--json"],
+		&["shells", "--markdown", "--names-only"],
+		&["formats", "--markdown", "--json"],
+		&["formats", "--markdown", "--files-only"],
+		&["managers", "--markdown", "--json"],
+		&["managers", "--markdown", "--commands-only"],
+		&["categories", "--markdown", "--json"],
+		&["categories", "--markdown", "--commands-only"],
+	];
+
+	for args in cases {
+		let output = run_pullhook(temp.path(), args);
+
+		assert!(!output.status.success(), "{args:?} should fail");
+		let stderr = stderr_text(&output);
+		assert!(stderr.contains("cannot be used with"));
+		assert!(stderr.contains("--markdown"));
+	}
+}
+
+#[test]
 fn categories_json_lists_command_coverage() {
 	let temp = tempfile::tempdir().expect("create temp dir");
 
@@ -5292,11 +5370,13 @@ fn utility_help_groups_options_by_task() {
 	let shells_stdout = stdout_text(&shells);
 	assert!(shells_stdout.contains("Output options:"));
 	assert!(shells_stdout.contains("Print JSON with filters and searchFields metadata"));
+	assert!(shells_stdout.contains("Print a Markdown shell completion target table"));
 	assert!(shells_stdout.contains("--count-only"));
 	assert!(shells_stdout.contains("pullhook shells --search fish"));
 	assert!(shells_stdout.contains("pullhook shells --names-only"));
 	assert!(shells_stdout.contains("pullhook shells --commands-only"));
 	assert!(shells_stdout.contains("pullhook shells --descriptions-only"));
+	assert!(shells_stdout.contains("pullhook shells --markdown"));
 	assert!(shells_stdout.contains("pullhook shells --json"));
 
 	let formats = run_pullhook(temp.path(), &["formats", "--help"]);
@@ -5304,12 +5384,14 @@ fn utility_help_groups_options_by_task() {
 	let formats_stdout = stdout_text(&formats);
 	assert!(formats_stdout.contains("Output options:"));
 	assert!(formats_stdout.contains("Print JSON with filters and searchFields metadata"));
+	assert!(formats_stdout.contains("Print a Markdown config format table"));
 	assert!(formats_stdout.contains("--count-only"));
 	assert!(formats_stdout.contains("pullhook formats --search yaml"));
 	assert!(formats_stdout.contains("pullhook formats --names-only"));
 	assert!(formats_stdout.contains("pullhook formats --files-only"));
 	assert!(formats_stdout.contains("pullhook formats --init-commands-only"));
 	assert!(formats_stdout.contains("pullhook formats --descriptions-only"));
+	assert!(formats_stdout.contains("pullhook formats --markdown"));
 	assert!(formats_stdout.contains("pullhook formats --json"));
 
 	let managers = run_pullhook(temp.path(), &["managers", "--help"]);
@@ -5317,6 +5399,7 @@ fn utility_help_groups_options_by_task() {
 	let managers_stdout = stdout_text(&managers);
 	assert!(managers_stdout.contains("Output options:"));
 	assert!(managers_stdout.contains("Print JSON with filters and searchFields metadata"));
+	assert!(managers_stdout.contains("Print a Markdown package-manager detection table"));
 	assert!(managers_stdout.contains("--count-only"));
 	assert!(managers_stdout.contains("pullhook managers --search pnpm"));
 	assert!(managers_stdout.contains("pullhook managers --names-only"));
@@ -5325,6 +5408,7 @@ fn utility_help_groups_options_by_task() {
 	assert!(managers_stdout.contains("pullhook managers --lock-files-only"));
 	assert!(managers_stdout.contains("pullhook managers --config-files-only"));
 	assert!(managers_stdout.contains("pullhook managers --watched-files-only"));
+	assert!(managers_stdout.contains("pullhook managers --markdown"));
 	assert!(managers_stdout.contains("pullhook managers --json"));
 
 	let categories = run_pullhook(temp.path(), &["categories", "--help"]);
@@ -5332,12 +5416,14 @@ fn utility_help_groups_options_by_task() {
 	let categories_stdout = stdout_text(&categories);
 	assert!(categories_stdout.contains("Output options:"));
 	assert!(categories_stdout.contains("Print JSON with filters and searchFields metadata"));
+	assert!(categories_stdout.contains("Print a Markdown command-category coverage table"));
 	assert!(categories_stdout.contains("--count-only"));
 	assert!(categories_stdout.contains("pullhook categories --search workflow"));
 	assert!(categories_stdout.contains("pullhook categories --names-only"));
 	assert!(categories_stdout.contains("pullhook categories --commands-only"));
 	assert!(categories_stdout.contains("pullhook categories --example-commands-only"));
 	assert!(categories_stdout.contains("pullhook categories --descriptions-only"));
+	assert!(categories_stdout.contains("pullhook categories --markdown"));
 	assert!(categories_stdout.contains("pullhook categories --json"));
 
 	let codes = run_pullhook(temp.path(), &["codes", "--help"]);

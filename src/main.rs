@@ -968,6 +968,11 @@ fn shells_command(args: &ShellsArgs) -> Result<()> {
 		return Ok(());
 	}
 
+	if args.markdown {
+		render_shells_markdown(&shells);
+		return Ok(());
+	}
+
 	if args.count_only {
 		println!("{}", shells.len());
 		return Ok(());
@@ -1004,6 +1009,19 @@ fn shells_command(args: &ShellsArgs) -> Result<()> {
 		println!("  {}", shell.description);
 	}
 	Ok(())
+}
+
+fn render_shells_markdown(shells: &[ShellInfo]) {
+	println!("| Shell | Completion command | Description |");
+	println!("| --- | --- | --- |");
+	for shell in shells {
+		println!(
+			"| `{}` | `{}` | {} |",
+			markdown_table_escape(shell.name),
+			markdown_table_escape(shell.completion_command),
+			markdown_table_escape(shell.description)
+		);
+	}
 }
 
 fn filtered_shell_infos(search: Option<&str>) -> Vec<ShellInfo> {
@@ -1046,6 +1064,11 @@ fn formats_command(args: &FormatsArgs) -> Result<()> {
 				},
 			}))?
 		);
+		return Ok(());
+	}
+
+	if args.markdown {
+		render_formats_markdown(&formats);
 		return Ok(());
 	}
 
@@ -1100,6 +1123,24 @@ fn formats_command(args: &FormatsArgs) -> Result<()> {
 		println!("  {}", format.init_command);
 	}
 	Ok(())
+}
+
+fn render_formats_markdown(formats: &[FormatInfo]) {
+	println!("| Format | Default file | Alternate file | Init command | Description |");
+	println!("| --- | --- | --- | --- | --- |");
+	for format in formats {
+		println!(
+			"| `{}` | `{}` | {} | `{}` | {} |",
+			markdown_table_escape(format.name),
+			markdown_table_escape(format.default_file),
+			format.alternate_file.map_or_else(
+				|| "none".to_owned(),
+				|file| format!("`{}`", markdown_table_escape(file))
+			),
+			markdown_table_escape(format.init_command),
+			markdown_table_escape(format.description)
+		);
+	}
 }
 
 fn filtered_format_infos(search: Option<&str>) -> Vec<FormatInfo> {
@@ -1157,6 +1198,11 @@ fn managers_command(args: &ManagersArgs) -> Result<()> {
 				},
 			}))?
 		);
+		return Ok(());
+	}
+
+	if args.markdown {
+		render_managers_markdown(&managers);
 		return Ok(());
 	}
 
@@ -1221,6 +1267,36 @@ fn managers_command(args: &ManagersArgs) -> Result<()> {
 		println!("  watched files: {}", package_manager.watched_files().join(", "));
 	}
 	Ok(())
+}
+
+fn render_managers_markdown(managers: &[PackageManager]) {
+	println!("| Manager | Install command | Detection pattern | Lock files | Config files | Watched files |");
+	println!("| --- | --- | --- | --- | --- | --- |");
+	for package_manager in managers {
+		let install_command = package_manager.install_command();
+		let install_pattern = package_manager.install_pattern();
+		println!(
+			"| `{}` | `{}` | `{}` | {} | {} | {} |",
+			markdown_table_escape(package_manager.name()),
+			markdown_table_escape(&install_command),
+			markdown_table_escape(&install_pattern),
+			markdown_inline_list(package_manager.lock_files()),
+			markdown_inline_list(package_manager.config_files()),
+			markdown_inline_list(package_manager.watched_files())
+		);
+	}
+}
+
+fn markdown_inline_list(values: &[&str]) -> String {
+	if values.is_empty() {
+		return "none".to_owned();
+	}
+
+	values
+		.iter()
+		.map(|value| format!("`{}`", markdown_table_escape(value)))
+		.collect::<Vec<_>>()
+		.join("<br>")
 }
 
 fn filtered_package_managers(search: Option<&str>) -> Vec<PackageManager> {
@@ -1335,6 +1411,11 @@ fn categories_command(args: &CategoriesArgs) -> Result<()> {
 		return Ok(());
 	}
 
+	if args.markdown {
+		render_categories_markdown(&categories);
+		return Ok(());
+	}
+
 	if args.count_only {
 		println!("{}", categories.len());
 		return Ok(());
@@ -1383,6 +1464,20 @@ fn categories_command(args: &CategoriesArgs) -> Result<()> {
 		println!("  {}", category.description);
 	}
 	Ok(())
+}
+
+fn render_categories_markdown(categories: &[CategoryInfo]) {
+	println!("| Category | Commands | Examples | Description |");
+	println!("| --- | --- | --- | --- |");
+	for category in categories {
+		println!(
+			"| `{}` | {} | {} | {} |",
+			markdown_table_escape(category.name),
+			command_count_for_category(category.name),
+			example_count_for_category(category.name),
+			markdown_table_escape(category.description)
+		);
+	}
 }
 
 fn filtered_category_infos(search: Option<&str>) -> Vec<CategoryInfo> {
