@@ -15,6 +15,7 @@ Examples:
   pullhook --install --dry-run
   pullhook init --format json
   pullhook examples
+  pullhook shells
   pullhook commands --json
   pullhook codes --json
   pullhook run --dry-run
@@ -22,6 +23,7 @@ Examples:
 Next steps:
   Use `pullhook init` to create a repo config.
   Use `pullhook examples` to see common workflows.
+  Use `pullhook shells` to list completion targets.
   Use `pullhook explain --all-matches` to preview config rule matches.
   Use `pullhook commands` to inspect the command catalog.
   Use `pullhook codes` to inspect stable JSON status codes.";
@@ -122,11 +124,18 @@ Examples:
 
 const COMPLETION_AFTER_HELP: &str = "\
 Examples:
+  pullhook shells
   pullhook completion bash > ~/.local/share/bash-completion/completions/pullhook
   pullhook completion zsh > ~/.zfunc/_pullhook
   pullhook completion fish --output ~/.config/fish/completions/pullhook.fish
   pullhook completion fish --check --output ~/.config/fish/completions/pullhook.fish
   pullhook completion fish --check --output ~/.config/fish/completions/pullhook.fish --json";
+
+const SHELLS_AFTER_HELP: &str = "\
+Examples:
+  pullhook shells
+  pullhook shells --names-only
+  pullhook shells --json";
 
 const CODES_AFTER_HELP: &str = "\
 Examples:
@@ -187,6 +196,8 @@ pub enum Commands {
 	Init(InitArgs),
 	/// Generate shell completion scripts.
 	Completion(CompletionArgs),
+	/// List supported shell completion targets.
+	Shells(ShellsArgs),
 	/// Show common pullhook workflows and commands.
 	Examples(ExamplesArgs),
 	/// List pullhook commands for humans or automation.
@@ -972,6 +983,29 @@ pub struct CompletionArgs {
 	pub json: bool,
 }
 
+/// Arguments for `pullhook shells`.
+#[derive(Debug, Clone, Args)]
+#[command(after_help = SHELLS_AFTER_HELP)]
+pub struct ShellsArgs {
+	/// Print machine-readable JSON instead of text output.
+	#[arg(
+		long = "json",
+		default_value_t = false,
+		conflicts_with = "names_only",
+		help_heading = "Output options"
+	)]
+	pub json: bool,
+
+	/// Print only shell names, one per line.
+	#[arg(
+		long = "names-only",
+		default_value_t = false,
+		conflicts_with = "json",
+		help_heading = "Output options"
+	)]
+	pub names_only: bool,
+}
+
 /// Arguments for `pullhook codes`.
 #[derive(Debug, Clone, Args)]
 #[command(after_help = CODES_AFTER_HELP)]
@@ -1070,6 +1104,8 @@ pub enum ExampleCommand {
 	Doctor,
 	/// Command catalog examples.
 	Commands,
+	/// Shell completion target examples.
+	Shells,
 	/// Status code catalog examples.
 	Codes,
 }
@@ -1084,6 +1120,7 @@ impl ExampleCommand {
 			Self::Validate => "validate",
 			Self::Doctor => "doctor",
 			Self::Commands => "commands",
+			Self::Shells => "shells",
 			Self::Codes => "codes",
 		}
 	}

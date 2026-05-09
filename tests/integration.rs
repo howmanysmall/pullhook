@@ -611,6 +611,86 @@ fn completion_command_succeeds_outside_git_repo() {
 }
 
 #[test]
+fn shells_text_lists_completion_targets() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["shells"]);
+
+	assert!(output.status.success(), "shells should succeed outside a git repo");
+	let stdout = stdout_text(&output);
+	assert!(stdout.contains("Shell completion targets"));
+	assert!(stdout.contains("bash: pullhook completion bash"));
+	assert!(stdout.contains("fish: pullhook completion fish"));
+	assert!(stdout.contains("zsh: pullhook completion zsh"));
+	let stderr = stderr_text(&output);
+	assert!(stderr.trim().is_empty(), "shells should not write stderr");
+}
+
+#[test]
+fn shells_json_lists_completion_targets() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["shells", "--json"]);
+
+	assert!(
+		output.status.success(),
+		"shells --json should succeed outside a git repo"
+	);
+	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse shells json");
+	assert_eq!(value["status"], "ok");
+	assert_eq!(value["code"], serde_json::Value::Null);
+	let shells = value["shells"].as_array().expect("shells array");
+	assert!(
+		shells
+			.iter()
+			.any(|entry| entry["name"] == "fish" && entry["completionCommand"] == "pullhook completion fish")
+	);
+	assert!(
+		shells.iter().any(
+			|entry| entry["name"] == "powershell" && entry["completionCommand"] == "pullhook completion powershell"
+		)
+	);
+	assert_eq!(
+		value["summary"]["shells"].as_u64().expect("shell count"),
+		shells.len() as u64
+	);
+	let stderr = stderr_text(&output);
+	assert!(stderr.trim().is_empty(), "shells --json should not write stderr");
+}
+
+#[test]
+fn shells_names_only_prints_clean_shell_names() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["shells", "--names-only"]);
+
+	assert!(output.status.success(), "shells --names-only should succeed");
+	let stdout = stdout_text(&output);
+	assert_eq!(
+		stdout.lines().collect::<Vec<_>>(),
+		vec!["bash", "elvish", "fish", "powershell", "zsh"]
+	);
+	let stderr = stderr_text(&output);
+	assert!(stderr.trim().is_empty(), "shells --names-only should not write stderr");
+}
+
+#[test]
+fn shells_names_only_conflicts_with_json() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["shells", "--names-only", "--json"]);
+
+	assert!(
+		!output.status.success(),
+		"shells --names-only should conflict with --json"
+	);
+	let stderr = stderr_text(&output);
+	assert!(stderr.contains("cannot be used with"));
+	assert!(stderr.contains("--names-only"));
+	assert!(stderr.contains("--json"));
+}
+
+#[test]
 fn completion_command_writes_output_file() {
 	let temp = tempfile::tempdir().expect("create temp dir");
 	let output_path = Path::new("completions/fish/pullhook.fish");
@@ -907,6 +987,7 @@ fn examples_text_lists_common_workflows() {
 	assert!(stdout.contains("Pullhook examples"));
 	assert!(stdout.contains("Create a config: pullhook init"));
 	assert!(stdout.contains("Preview configured rules: pullhook explain --all-matches"));
+	assert!(stdout.contains("List completion shells: pullhook shells --names-only"));
 	assert!(stdout.contains("List status codes: pullhook codes --codes-only"));
 	let stderr = stderr_text(&output);
 	assert!(stderr.trim().is_empty(), "examples should not write stderr");
@@ -935,6 +1016,11 @@ fn examples_json_lists_common_workflows() {
 		examples
 			.iter()
 			.any(|entry| entry["command"] == "pullhook run --commands-only")
+	);
+	assert!(
+		examples
+			.iter()
+			.any(|entry| entry["commandName"] == "shells" && entry["command"] == "pullhook shells --names-only")
 	);
 	assert_eq!(
 		value["summary"]["examples"].as_u64().expect("example count"),
@@ -1039,6 +1125,11 @@ fn commands_json_lists_cli_catalog() {
 	assert!(
 		commands
 			.iter()
+			.any(|entry| entry["name"] == "shells" && entry["category"] == "reference")
+	);
+	assert!(
+		commands
+			.iter()
 			.any(|entry| entry["name"] == "examples" && entry["category"] == "reference")
 	);
 	assert!(
@@ -1109,7 +1200,7 @@ fn commands_names_only_prints_clean_command_names() {
 	let stdout = stdout_text(&output);
 	assert_eq!(
 		stdout.lines().collect::<Vec<_>>(),
-		vec!["examples", "commands", "codes"]
+		vec!["shells", "examples", "commands", "codes"]
 	);
 	let stderr = stderr_text(&output);
 	assert!(
@@ -1146,12 +1237,14 @@ fn root_help_lists_common_examples() {
 	assert!(stdout.contains("pullhook --install --dry-run"));
 	assert!(stdout.contains("pullhook init --format json"));
 	assert!(stdout.contains("pullhook examples"));
+	assert!(stdout.contains("pullhook shells"));
 	assert!(stdout.contains("pullhook commands --json"));
 	assert!(stdout.contains("pullhook codes --json"));
 	assert!(stdout.contains("schema"));
 	assert!(stdout.contains("codes"));
 	assert!(stdout.contains("Legacy one-off options:"));
 	assert!(stdout.contains("Use `pullhook examples` to see common workflows."));
+	assert!(stdout.contains("Use `pullhook shells` to list completion targets."));
 	assert!(stdout.contains("Use `pullhook explain --all-matches` to preview config rule matches."));
 	assert!(stdout.contains("Use `pullhook commands` to inspect the command catalog."));
 	assert!(stdout.contains("Use `pullhook codes` to inspect stable JSON status codes."));
@@ -1847,6 +1940,14 @@ fn utility_help_groups_options_by_task() {
 	let completion_stdout = stdout_text(&completion);
 	assert!(completion_stdout.contains("Output options:"));
 	assert!(completion_stdout.contains("Check options:"));
+	assert!(completion_stdout.contains("pullhook shells"));
+
+	let shells = run_pullhook(temp.path(), &["shells", "--help"]);
+	assert!(shells.status.success(), "shells help should succeed");
+	let shells_stdout = stdout_text(&shells);
+	assert!(shells_stdout.contains("Output options:"));
+	assert!(shells_stdout.contains("pullhook shells --names-only"));
+	assert!(shells_stdout.contains("pullhook shells --json"));
 
 	let examples = run_pullhook(temp.path(), &["examples", "--help"]);
 	assert!(examples.status.success(), "examples help should succeed");

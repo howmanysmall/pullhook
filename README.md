@@ -71,6 +71,7 @@ Commands:
   schema      Print or write the pullhook JSON Schema
   init        Create a starter pullhook config file
   completion  Generate shell completion scripts
+  shells      List supported shell completion targets
   examples    Show common pullhook workflows and commands
   commands    List pullhook commands for humans or automation
   codes       List stable JSON status codes for automation
@@ -157,6 +158,8 @@ pullhook run --rule lint --dry-run
 Generate shell completions:
 
 ```bash
+pullhook shells
+pullhook shells --names-only
 pullhook completion bash > ~/.local/share/bash-completion/completions/pullhook
 pullhook completion zsh > "${fpath[1]}/_pullhook"
 pullhook completion fish > ~/.config/fish/completions/pullhook.fish
@@ -265,6 +268,9 @@ pullhook doctor
 pullhook doctor --quiet
 pullhook doctor --strict
 pullhook doctor --json
+pullhook shells
+pullhook shells --names-only
+pullhook shells --json
 pullhook examples
 pullhook examples --command run
 pullhook examples --command run --commands-only
@@ -314,6 +320,9 @@ Unsupported config-path JSON errors list the supported config filenames and an `
 Use `schema --check --output <path>` in CI when a checked-in schema file must stay current.
 `schema --check --json` and `completion <shell> --check --json` include top-level `status`, stable `code`, `error`, and
 `details` fields with the rerun command when generated output is stale.
+Use `pullhook shells` to inspect supported shell completion targets in text form, or `pullhook shells --json`
+when another tool needs shell names and generation commands without scraping help text.
+Use `pullhook shells --names-only` when a script only needs supported shell names.
 `validate --json` emits a compact config summary for scripts and still prints structured JSON when the
 config is invalid, including `status`, stable `code`, `error`, `details`, and `validationErrors` fields. Config parse failures also include a `parseError` object with the config path and parser reason. Use `validate --quiet` when CI only needs the exit code. `doctor` checks repo discovery, config health, diff-base availability, and `--install`
 detection in one pass, with a short hint for each check. Use `doctor --strict` when CI should fail on warnings.

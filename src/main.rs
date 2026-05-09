@@ -24,7 +24,7 @@ use tracing_subscriber::EnvFilter;
 use crate::cli::{
 	Cli, CodeKind, CodesArgs, CommandCatalogArgs, CommandCategory, Commands, CompletionArgs, ConfigArgs, ConfigRunArgs,
 	DoctorArgs, ExampleCommand, ExamplesArgs, ExplainArgs, InitArgs, RulesArgs, RulesKind, RunArgs, SchemaArgs,
-	ValidateArgs,
+	ShellsArgs, ValidateArgs,
 };
 use crate::config::{
 	Config, Entry, EvaluatedEntry, EvaluatedGroup, EvaluatedRule, FailTextContext, OnFailure, Pattern,
@@ -190,6 +190,14 @@ struct ExampleInfo {
 	summary: &'static str,
 }
 
+#[derive(Debug, Clone, Copy, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ShellInfo {
+	name: &'static str,
+	completion_command: &'static str,
+	description: &'static str,
+}
+
 const COMMAND_INFOS: &[CommandInfo] = &[
 	CommandInfo {
 		name: "run",
@@ -259,6 +267,14 @@ const COMMAND_INFOS: &[CommandInfo] = &[
 		name: "completion",
 		category: "generator",
 		summary: "Generate shell completion scripts.",
+		json: true,
+		requires_repo: false,
+		script_friendly: true,
+	},
+	CommandInfo {
+		name: "shells",
+		category: "reference",
+		summary: "List supported shell completion targets.",
 		json: true,
 		requires_repo: false,
 		script_friendly: true,
@@ -345,10 +361,44 @@ const EXAMPLE_INFOS: &[ExampleInfo] = &[
 		summary: "Return supported commands and categories for automation.",
 	},
 	ExampleInfo {
+		title: "List completion shells",
+		command_name: "shells",
+		command: "pullhook shells --names-only",
+		summary: "Print supported shell completion targets.",
+	},
+	ExampleInfo {
 		title: "List status codes",
 		command_name: "codes",
 		command: "pullhook codes --codes-only",
 		summary: "Print stable status codes for scripts or completion helpers.",
+	},
+];
+
+const SHELL_INFOS: &[ShellInfo] = &[
+	ShellInfo {
+		name: "bash",
+		completion_command: "pullhook completion bash",
+		description: "Generate Bash completion script.",
+	},
+	ShellInfo {
+		name: "elvish",
+		completion_command: "pullhook completion elvish",
+		description: "Generate Elvish completion script.",
+	},
+	ShellInfo {
+		name: "fish",
+		completion_command: "pullhook completion fish",
+		description: "Generate Fish completion script.",
+	},
+	ShellInfo {
+		name: "powershell",
+		completion_command: "pullhook completion powershell",
+		description: "Generate PowerShell completion script.",
+	},
+	ShellInfo {
+		name: "zsh",
+		completion_command: "pullhook completion zsh",
+		description: "Generate Zsh completion script.",
 	},
 ];
 
@@ -624,6 +674,7 @@ fn main() {
 
 	let result = match cli.command.as_ref() {
 		Some(Commands::Completion(args)) => completion_command(args),
+		Some(Commands::Shells(args)) => shells_command(args),
 		Some(Commands::Examples(args)) => examples_command(args),
 		Some(Commands::CommandCatalog(args)) => command_catalog_command(args),
 		Some(Commands::Codes(args)) => codes_command(args),
@@ -669,6 +720,38 @@ fn main() {
 		eprintln!("error: {error:#}");
 		std::process::exit(1);
 	}
+}
+
+fn shells_command(args: &ShellsArgs) -> Result<()> {
+	if args.json {
+		println!(
+			"{}",
+			serde_json::to_string_pretty(&json!({
+				"status": "ok",
+				"code": serde_json::Value::Null,
+				"shells": SHELL_INFOS,
+				"summary": {
+					"shells": SHELL_INFOS.len(),
+				},
+			}))?
+		);
+		return Ok(());
+	}
+
+	if args.names_only {
+		for shell in SHELL_INFOS {
+			println!("{}", shell.name);
+		}
+		return Ok(());
+	}
+
+	println!("Shell completion targets");
+	println!();
+	for shell in SHELL_INFOS {
+		println!("{}: {}", shell.name, shell.completion_command);
+		println!("  {}", shell.description);
+	}
+	Ok(())
 }
 
 fn examples_command(args: &ExamplesArgs) -> Result<()> {
