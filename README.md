@@ -327,6 +327,7 @@ Legacy top-level mode also supports `--json`, including the same top-level `stat
 fields for setup failures, live execution results, and dry-run plans.
 Repository-discovery JSON errors include recovery details for running inside or initializing a Git repo.
 Missing-mode legacy JSON errors explain the config-mode path and the explicit legacy `--pattern`/`--command` fallback.
+Pattern JSON errors include a `patternError` object with the rejected glob and parser reason.
 Legacy command-parse JSON errors include a `commandParse` object with the rejected command and parser reason.
 
 Use `pullhook rules` to list configured rule and parallel group names before targeting a large config.

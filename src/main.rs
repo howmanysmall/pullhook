@@ -1536,6 +1536,13 @@ fn print_json_error(error: &anyhow::Error) -> Result<()> {
 		);
 		return Ok(());
 	}
+	if let Some(error::PullhookError::Pattern { pattern, reason }) = error.downcast_ref::<error::PullhookError>() {
+		println!(
+			"{}",
+			serde_json::to_string_pretty(&pattern_error_json(error, &details, pattern, reason))?
+		);
+		return Ok(());
+	}
 	if let Some(error::PullhookError::CommandParse { command, reason }) = error.downcast_ref::<error::PullhookError>() {
 		println!(
 			"{}",
@@ -1553,6 +1560,18 @@ fn print_json_error(error: &anyhow::Error) -> Result<()> {
 		}))?
 	);
 	Ok(())
+}
+
+fn pattern_error_json(error: &anyhow::Error, details: &[String], pattern: &str, reason: &str) -> serde_json::Value {
+	json!({
+		"status": "error",
+		"error": error.to_string(),
+		"details": details,
+		"patternError": {
+			"pattern": pattern,
+			"reason": reason,
+		},
+	})
 }
 
 fn command_parse_error_json(

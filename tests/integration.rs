@@ -327,6 +327,13 @@ fn legacy_json_reports_invalid_pattern_as_json() {
 	assert_eq!(value["status"], "error");
 	let error = value["error"].as_str().expect("error");
 	assert!(error.contains("failed to compile pattern"));
+	assert_eq!(value["patternError"]["pattern"], "{");
+	assert!(
+		value["patternError"]["reason"]
+			.as_str()
+			.expect("pattern reason")
+			.contains("unclosed")
+	);
 	let stderr = stderr_text(&output);
 	assert!(stderr.contains("failed to compile pattern"));
 }
