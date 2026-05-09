@@ -611,6 +611,13 @@ fn command_catalog_command(args: &CommandCatalogArgs) -> Result<()> {
 		return Ok(());
 	}
 
+	if args.names_only {
+		for info in commands {
+			println!("{}", info.name);
+		}
+		return Ok(());
+	}
+
 	println!("Pullhook commands");
 	println!("legacy one-off mode is available through top-level options");
 	if let Some(category) = args.category {

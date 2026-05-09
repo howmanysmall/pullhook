@@ -928,6 +928,41 @@ fn commands_category_filter_limits_results() {
 }
 
 #[test]
+fn commands_names_only_prints_clean_command_names() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["commands", "--category", "reference", "--names-only"]);
+
+	assert!(
+		output.status.success(),
+		"commands --category reference --names-only should succeed"
+	);
+	let stdout = stdout_text(&output);
+	assert_eq!(stdout.lines().collect::<Vec<_>>(), vec!["commands", "codes"]);
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"commands --names-only should not write stderr"
+	);
+}
+
+#[test]
+fn commands_names_only_conflicts_with_json() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["commands", "--names-only", "--json"]);
+
+	assert!(
+		!output.status.success(),
+		"commands --names-only should conflict with --json"
+	);
+	let stderr = stderr_text(&output);
+	assert!(stderr.contains("cannot be used with"));
+	assert!(stderr.contains("--names-only"));
+	assert!(stderr.contains("--json"));
+}
+
+#[test]
 fn root_help_lists_common_examples() {
 	let temp = tempfile::tempdir().expect("create temp dir");
 
@@ -1651,6 +1686,7 @@ fn utility_help_groups_options_by_task() {
 	assert!(commands_stdout.contains("Filter options:"));
 	assert!(commands_stdout.contains("Output options:"));
 	assert!(commands_stdout.contains("pullhook commands --category diagnostic"));
+	assert!(commands_stdout.contains("pullhook commands --category diagnostic --names-only"));
 }
 
 #[test]

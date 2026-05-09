@@ -136,6 +136,7 @@ const COMMANDS_AFTER_HELP: &str = "\
 Examples:
   pullhook commands
   pullhook commands --category diagnostic
+  pullhook commands --category diagnostic --names-only
   pullhook commands --json";
 
 /// Pullhook command line arguments.
@@ -981,8 +982,22 @@ pub struct CommandCatalogArgs {
 	pub category: Option<CommandCategory>,
 
 	/// Print machine-readable JSON instead of text output.
-	#[arg(long = "json", default_value_t = false, help_heading = "Output options")]
+	#[arg(
+		long = "json",
+		default_value_t = false,
+		conflicts_with = "names_only",
+		help_heading = "Output options"
+	)]
 	pub json: bool,
+
+	/// Print only command names, one per line.
+	#[arg(
+		long = "names-only",
+		default_value_t = false,
+		conflicts_with = "json",
+		help_heading = "Output options"
+	)]
+	pub names_only: bool,
 }
 
 /// Supported `pullhook commands` categories.
