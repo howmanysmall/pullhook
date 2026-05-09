@@ -95,6 +95,8 @@ const CONFIG_AFTER_HELP: &str = "\
 Examples:
   pullhook config
   pullhook config --path-only
+  pullhook config --format-only
+  pullhook config --source-only
   pullhook config --require-existing --path-only
   pullhook config --json
   pullhook config --config config/pullhook.custom.json";
@@ -764,13 +766,36 @@ pub struct ConfigArgs {
 	#[arg(
 		long = "path-only",
 		default_value_t = false,
-		conflicts_with = "json",
+		conflicts_with_all = ["json", "format_only", "source_only"],
 		help_heading = "Output options"
 	)]
 	pub path_only: bool,
 
+	/// Print only the resolved config format.
+	#[arg(
+		long = "format-only",
+		default_value_t = false,
+		conflicts_with_all = ["json", "path_only", "source_only"],
+		help_heading = "Output options"
+	)]
+	pub format_only: bool,
+
+	/// Print only the config source (`discovered` or `explicit`).
+	#[arg(
+		long = "source-only",
+		default_value_t = false,
+		conflicts_with_all = ["json", "path_only", "format_only"],
+		help_heading = "Output options"
+	)]
+	pub source_only: bool,
+
 	/// Print machine-readable JSON instead of text output.
-	#[arg(long = "json", default_value_t = false, help_heading = "Output options")]
+	#[arg(
+		long = "json",
+		default_value_t = false,
+		conflicts_with_all = ["path_only", "format_only", "source_only"],
+		help_heading = "Output options"
+	)]
 	pub json: bool,
 
 	/// Exit non-zero if the resolved config file does not exist.

@@ -3706,6 +3706,8 @@ fn diagnostic_help_groups_options_by_task() {
 	let config_stdout = stdout_text(&config);
 	assert!(config_stdout.contains("Input options:"));
 	assert!(config_stdout.contains("Output options:"));
+	assert!(config_stdout.contains("pullhook config --format-only"));
+	assert!(config_stdout.contains("pullhook config --source-only"));
 	assert!(config_stdout.contains("Resolution options:"));
 	assert!(config_stdout.contains("Display options:"));
 }
@@ -4139,6 +4141,29 @@ fn config_path_only_conflicts_with_json() {
 	assert!(stderr.contains("cannot be used with"));
 	assert!(stderr.contains("--path-only"));
 	assert!(stderr.contains("--json"));
+}
+
+#[test]
+fn config_line_outputs_conflict_with_json_and_each_other() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+	let conflicting_modes: &[&[&str]] = &[
+		&["config", "--format-only", "--json"],
+		&["config", "--source-only", "--json"],
+		&["config", "--path-only", "--format-only"],
+		&["config", "--path-only", "--source-only"],
+		&["config", "--format-only", "--source-only"],
+	];
+
+	for args in conflicting_modes {
+		let output = run_pullhook(temp.path(), args);
+
+		assert!(
+			!output.status.success(),
+			"config line-output modes should conflict for args {args:?}"
+		);
+		let stderr = stderr_text(&output);
+		assert!(stderr.contains("cannot be used with"));
+	}
 }
 
 #[test]
@@ -4826,6 +4851,44 @@ fn config_path_only_reports_discovered_config_path() {
 	assert_eq!(stdout.lines().count(), 1);
 	let stderr = stderr_text(&output);
 	assert!(stderr.trim().is_empty(), "config --path-only should not write stderr");
+}
+
+#[test]
+fn config_format_only_reports_discovered_config_format() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_file(repo_root, Path::new("pullhook.jsonc"), "{not valid jsonc}\n");
+
+	let output = run_pullhook(repo_root, &["config", "--format-only"]);
+
+	assert!(
+		output.status.success(),
+		"config --format-only should not require a valid config body"
+	);
+	let stdout = stdout_text(&output);
+	assert_eq!(stdout.lines().collect::<Vec<_>>(), vec!["jsonc"]);
+	let stderr = stderr_text(&output);
+	assert!(stderr.trim().is_empty(), "config --format-only should not write stderr");
+}
+
+#[test]
+fn config_source_only_reports_explicit_config_source() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+
+	let output = run_pullhook(
+		repo_root,
+		&["config", "--config", "config/pullhook.custom.yaml", "--source-only"],
+	);
+
+	assert!(
+		output.status.success(),
+		"config --source-only should not require the explicit config to exist"
+	);
+	let stdout = stdout_text(&output);
+	assert_eq!(stdout.lines().collect::<Vec<_>>(), vec!["explicit"]);
+	let stderr = stderr_text(&output);
+	assert!(stderr.trim().is_empty(), "config --source-only should not write stderr");
 }
 
 #[test]

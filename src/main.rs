@@ -2206,8 +2206,8 @@ fn doctor_command(args: &DoctorArgs) -> Result<()> {
 
 fn config_command(args: &ConfigArgs) -> Result<()> {
 	ensure_json_without_debug(args.json, args.debug)?;
-	if args.path_only && args.debug {
-		return Err(anyhow!("--path-only cannot be used with --debug"));
+	if (args.path_only || args.format_only || args.source_only) && args.debug {
+		return Err(anyhow!("line-output config modes cannot be used with --debug"));
 	}
 
 	let (cwd, repo) = discover_repo_from_cwd_for_output(args.debug, args.json)?;
@@ -2243,6 +2243,16 @@ fn config_command(args: &ConfigArgs) -> Result<()> {
 
 	if args.path_only {
 		println!("{}", path.display());
+		return Ok(());
+	}
+
+	if args.format_only {
+		println!("{}", format.label());
+		return Ok(());
+	}
+
+	if args.source_only {
+		println!("{source}");
 		return Ok(());
 	}
 
