@@ -80,6 +80,7 @@ const VALIDATE_AFTER_HELP: &str = "\
 Examples:
   pullhook validate
   pullhook validate --quiet
+  pullhook validate --path-only
   pullhook validate --json
   pullhook validate --config config/pullhook.custom.json";
 
@@ -653,17 +654,31 @@ pub struct ValidateArgs {
 	pub config: Option<PathBuf>,
 
 	/// Print machine-readable JSON instead of text output.
-	#[arg(long = "json", default_value_t = false, help_heading = "Output options")]
+	#[arg(
+		long = "json",
+		default_value_t = false,
+		conflicts_with_all = ["quiet", "path_only"],
+		help_heading = "Output options"
+	)]
 	pub json: bool,
 
 	/// Suppress successful text output.
 	#[arg(
 		long = "quiet",
 		default_value_t = false,
-		conflicts_with = "json",
+		conflicts_with_all = ["json", "path_only"],
 		help_heading = "Output options"
 	)]
 	pub quiet: bool,
+
+	/// Print only the validated config path.
+	#[arg(
+		long = "path-only",
+		default_value_t = false,
+		conflicts_with_all = ["json", "quiet"],
+		help_heading = "Output options"
+	)]
+	pub path_only: bool,
 
 	/// Enable debug logging.
 	#[arg(

@@ -273,6 +273,7 @@ pullhook config --require-existing --path-only
 pullhook config --json
 pullhook validate
 pullhook validate --quiet
+pullhook validate --path-only
 pullhook validate --json
 pullhook doctor
 pullhook doctor --quiet
@@ -391,7 +392,7 @@ Use `pullhook managers --lock-files-only` when a script only needs the lock file
 Use `pullhook managers --config-files-only` when a script only needs fallback package-manager config files.
 Use `pullhook managers --watched-files-only` when a script only needs the deduped files that can trigger installs.
 `validate --json` emits a compact config summary for scripts and still prints structured JSON when the
-config is invalid, including `status`, stable `code`, `error`, `details`, and `validationErrors` fields. Config parse failures also include a `parseError` object with the config path and parser reason. Use `validate --quiet` when CI only needs the exit code. `doctor` checks repo discovery, config health, diff-base availability, and `--install`
+config is invalid, including `status`, stable `code`, `error`, `details`, and `validationErrors` fields. Config parse failures also include a `parseError` object with the config path and parser reason. Use `validate --quiet` when CI only needs the exit code. Use `validate --path-only` when a script needs the validated config path as one clean line. `doctor` checks repo discovery, config health, diff-base availability, and `--install`
 detection in one pass, with a short hint for each check. Use `doctor --strict` when CI should fail on warnings.
 Use `doctor --quiet` to suppress all-ok text output without hiding warnings or errors.
 Use `doctor --checks-only` or `doctor --codes-only` when scripts only need the check names or stable check codes.

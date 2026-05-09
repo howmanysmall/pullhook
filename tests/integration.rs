@@ -3691,6 +3691,7 @@ fn diagnostic_help_groups_options_by_task() {
 	let validate_stdout = stdout_text(&validate);
 	assert!(validate_stdout.contains("Input options:"));
 	assert!(validate_stdout.contains("Output options:"));
+	assert!(validate_stdout.contains("pullhook validate --path-only"));
 	assert!(validate_stdout.contains("Display options:"));
 
 	let doctor = run_pullhook(temp.path(), &["doctor", "--help"]);
@@ -4179,6 +4180,27 @@ fn validate_quiet_conflicts_with_json() {
 	assert!(stderr.contains("cannot be used with"));
 	assert!(stderr.contains("--quiet"));
 	assert!(stderr.contains("--json"));
+}
+
+#[test]
+fn validate_path_only_conflicts_with_json_and_quiet() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let cases: &[(&[&str], &[&str])] = &[
+		(&["validate", "--path-only", "--json"], &["--path-only", "--json"]),
+		(&["validate", "--quiet", "--path-only"], &["--quiet", "--path-only"]),
+	];
+
+	for (args, flags) in cases {
+		let output = run_pullhook(temp.path(), args);
+
+		assert!(!output.status.success(), "{args:?} should fail");
+		let stderr = stderr_text(&output);
+		assert!(stderr.contains("cannot be used with"));
+		for flag in *flags {
+			assert!(stderr.contains(flag), "{args:?} stderr should mention {flag}");
+		}
+	}
 }
 
 #[test]
@@ -5279,6 +5301,25 @@ fn validate_quiet_suppresses_success_output() {
 	assert!(stdout.trim().is_empty(), "quiet validate should not write stdout");
 	let stderr = stderr_text(&output);
 	assert!(stderr.trim().is_empty(), "quiet validate should not write stderr");
+}
+
+#[test]
+fn validate_path_only_reports_validated_config_path() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_config_rule(repo_root, "write marker", "packages/a/package-lock.json", "true");
+
+	let output = run_pullhook(repo_root, &["validate", "--path-only"]);
+
+	assert!(output.status.success(), "validate --path-only should succeed");
+	let stdout = stdout_text(&output);
+	let expected_path = fs::canonicalize(repo_root.join("pullhook.json")).expect("canonical config path");
+	assert_eq!(
+		stdout.lines().collect::<Vec<_>>(),
+		vec![expected_path.display().to_string()]
+	);
+	let stderr = stderr_text(&output);
+	assert!(stderr.trim().is_empty(), "validate --path-only should not write stderr");
 }
 
 #[test]

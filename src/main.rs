@@ -2159,6 +2159,11 @@ fn validate_config_command(args: &ValidateArgs) -> Result<()> {
 	}
 
 	let (_, _, config) = load_config_from_cwd(args.debug, args.config.as_deref())?;
+	if args.path_only {
+		println!("{}", config.path.display());
+		return Ok(());
+	}
+
 	if args.quiet {
 		return Ok(());
 	}
