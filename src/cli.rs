@@ -249,7 +249,7 @@ pub struct ConfigRunArgs {
 	#[arg(long = "changed-file", value_name = "path", conflicts_with = "base")]
 	pub changed_files: Vec<PathBuf>,
 
-	/// Read changed file paths from a newline-delimited file.
+	/// Read changed file paths from a newline-delimited file (`-` for stdin).
 	#[arg(long = "changed-files-file", value_name = "path", conflicts_with = "base")]
 	pub changed_files_file: Option<PathBuf>,
 
@@ -365,7 +365,7 @@ pub struct ExplainArgs {
 	#[arg(long = "changed-file", value_name = "path", conflicts_with = "base")]
 	pub changed_files: Vec<PathBuf>,
 
-	/// Read changed file paths from a newline-delimited file.
+	/// Read changed file paths from a newline-delimited file (`-` for stdin).
 	#[arg(long = "changed-files-file", value_name = "path", conflicts_with = "base")]
 	pub changed_files_file: Option<PathBuf>,
 

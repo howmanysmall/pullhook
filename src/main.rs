@@ -1145,19 +1145,30 @@ fn collect_explicit_changed_files(
 	read_stdin: bool,
 ) -> Result<Vec<std::path::PathBuf>> {
 	let mut paths = changed_files.to_vec();
+	let mut stdin_consumed = false;
 	if let Some(path) = changed_files_file {
-		let input = std::fs::read_to_string(path)
-			.with_context(|| format!("failed to read changed files from `{}`", path.display()))?;
-		extend_changed_files_from_lines(&mut paths, &input);
+		if path == std::path::Path::new("-") {
+			read_changed_files_from_stdin(&mut paths)?;
+			stdin_consumed = true;
+		} else {
+			let input = std::fs::read_to_string(path)
+				.with_context(|| format!("failed to read changed files from `{}`", path.display()))?;
+			extend_changed_files_from_lines(&mut paths, &input);
+		}
 	}
-	if read_stdin {
-		let mut input = String::new();
-		std::io::stdin()
-			.read_to_string(&mut input)
-			.context("failed to read changed files from stdin")?;
-		extend_changed_files_from_lines(&mut paths, &input);
+	if read_stdin && !stdin_consumed {
+		read_changed_files_from_stdin(&mut paths)?;
 	}
 	Ok(dedupe_paths_preserving_order(paths))
+}
+
+fn read_changed_files_from_stdin(paths: &mut Vec<std::path::PathBuf>) -> Result<()> {
+	let mut input = String::new();
+	std::io::stdin()
+		.read_to_string(&mut input)
+		.context("failed to read changed files from stdin")?;
+	extend_changed_files_from_lines(paths, &input);
+	Ok(())
 }
 
 fn collect_explicit_changed_files_for_output(

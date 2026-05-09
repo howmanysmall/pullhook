@@ -324,7 +324,8 @@ Repeat it to target more than one selector, for example `pullhook run --rule lin
 Rule and group names share one selector namespace, so each configured name must be unique.
 Use `--changed-file <path>` with `run` or `explain` to evaluate against explicit paths instead of the git diff;
 repeat it to simulate several changed files. Use `--changed-files-file <path>` or `--changed-files-stdin` when
-a script already has a newline-delimited file list, such as `git diff --name-only`.
+a script already has a newline-delimited file list, such as `git diff --name-only`. Pass `--changed-files-file -`
+to read that list from stdin.
 
 Use `--config <path>` with `run`, `explain`, `validate`, `doctor`, or `rules` when you want to point at a
 specific config file instead of repo-root discovery. Pair it with `pullhook init --output <path>` to create

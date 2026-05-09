@@ -3175,6 +3175,28 @@ fn explain_json_reads_changed_files_from_file() {
 }
 
 #[test]
+fn explain_json_reads_changed_files_file_dash_from_stdin() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_config_rule(repo_root, "docs check", "docs/*.md", "cargo test -p docs");
+
+	let output = run_pullhook_with_stdin(
+		repo_root,
+		&["explain", "--changed-files-file", "-", "--json"],
+		"docs/guide.md\n\n",
+	);
+
+	assert!(
+		output.status.success(),
+		"explain with --changed-files-file - should read stdin"
+	);
+	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse explain json");
+	assert_eq!(value["changedFiles"], serde_json::json!(["docs/guide.md"]));
+	assert_eq!(value["matchedFiles"], serde_json::json!(["docs/guide.md"]));
+	assert_eq!(value["entries"][0]["status"], "match");
+}
+
+#[test]
 fn explain_json_reports_missing_changed_files_file_as_json() {
 	let temp = setup_repo_with_merge();
 	let repo_root = temp.path();
@@ -3609,6 +3631,28 @@ fn run_dry_run_json_reads_changed_files_from_file() {
 	assert!(
 		output.status.success(),
 		"run --dry-run with --changed-files-file should succeed"
+	);
+	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse run json");
+	assert_eq!(value["plannedCommands"], 1);
+	assert_eq!(value["changedFiles"], serde_json::json!(["docs/guide.md"]));
+	assert_eq!(value["entries"][0]["status"], "match");
+}
+
+#[test]
+fn run_dry_run_json_reads_changed_files_file_dash_from_stdin() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_config_rule(repo_root, "docs check", "docs/*.md", "cargo test -p docs");
+
+	let output = run_pullhook_with_stdin(
+		repo_root,
+		&["run", "--dry-run", "--changed-files-file", "-", "--json"],
+		"docs/guide.md\n\n",
+	);
+
+	assert!(
+		output.status.success(),
+		"run --dry-run with --changed-files-file - should read stdin"
 	);
 	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse run json");
 	assert_eq!(value["plannedCommands"], 1);
