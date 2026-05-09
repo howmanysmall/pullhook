@@ -2865,6 +2865,19 @@ fn examples_command_filter_limits_results() {
 		stderr.trim().is_empty(),
 		"filtered examples --json should not write stderr"
 	);
+
+	let examples_output = run_pullhook(temp.path(), &["examples", "--command", "examples", "--commands-only"]);
+
+	assert!(
+		examples_output.status.success(),
+		"examples --command examples --commands-only should succeed"
+	);
+	assert_eq!(stdout_text(&examples_output), "pullhook examples --json\n");
+	let stderr = stderr_text(&examples_output);
+	assert!(
+		stderr.trim().is_empty(),
+		"examples --command examples --commands-only should not write stderr"
+	);
 }
 
 #[test]
@@ -4886,6 +4899,7 @@ fn utility_help_groups_options_by_task() {
 	assert!(examples_stdout.contains("pullhook examples --command run --commands-only"));
 	assert!(examples_stdout.contains("pullhook examples --command rules --commands-only"));
 	assert!(examples_stdout.contains("pullhook examples --command schema --commands-only"));
+	assert!(examples_stdout.contains("pullhook examples --command examples --commands-only"));
 	assert!(examples_stdout.contains("pullhook examples --category reference --commands-only"));
 	assert!(examples_stdout.contains("pullhook examples --category reference --titles-only"));
 	assert!(examples_stdout.contains("pullhook examples --command-names-only"));

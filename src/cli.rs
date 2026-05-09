@@ -228,6 +228,7 @@ Examples:
   pullhook examples --command run --commands-only
   pullhook examples --command rules --commands-only
   pullhook examples --command schema --commands-only
+  pullhook examples --command examples --commands-only
   pullhook examples --category reference --commands-only
   pullhook examples --category reference --titles-only
   pullhook examples --command-names-only
@@ -1803,6 +1804,8 @@ pub enum ExampleCommand {
 	Completion,
 	/// Command catalog examples.
 	Commands,
+	/// Example workflow catalog examples.
+	Examples,
 	/// Shell completion target examples.
 	Shells,
 	/// Config format examples.
@@ -1829,6 +1832,7 @@ impl ExampleCommand {
 			Self::Schema => "schema",
 			Self::Completion => "completion",
 			Self::Commands => "commands",
+			Self::Examples => "examples",
 			Self::Shells => "shells",
 			Self::Formats => "formats",
 			Self::Managers => "managers",
