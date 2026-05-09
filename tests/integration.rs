@@ -1877,6 +1877,38 @@ fn config_json_reports_unsupported_config_extension_as_json() {
 			.expect("error")
 			.contains("JSON5 configs are not supported")
 	);
+	assert_eq!(value["configPathError"]["kind"], "unsupported_format");
+	let reported_path = PathBuf::from(value["configPathError"]["path"].as_str().expect("config path"));
+	assert_eq!(
+		reported_path
+			.parent()
+			.expect("reported parent")
+			.canonicalize()
+			.expect("canonicalize reported parent"),
+		repo_root.canonicalize().expect("canonicalize repo root")
+	);
+	assert_eq!(
+		reported_path.file_name().and_then(|name| name.to_str()),
+		Some("pullhook.json5")
+	);
+	assert_eq!(value["configPathError"]["extension"], "json5");
+	assert_eq!(
+		value["configPathError"]["reason"],
+		"JSON5 configs are not supported; use `pullhook.json` or `pullhook.jsonc`"
+	);
+	assert_eq!(
+		value["configPathError"]["supported"],
+		serde_json::json!([
+			"pullhook.json",
+			"pullhook.jsonc",
+			"pullhook.yaml",
+			"pullhook.toml",
+			".pullhook.json",
+			".pullhook.jsonc",
+			".pullhook.yaml",
+			".pullhook.toml"
+		])
+	);
 	assert_eq!(
 		value["details"],
 		serde_json::json!([

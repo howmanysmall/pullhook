@@ -1568,6 +1568,24 @@ fn print_json_error(error: &anyhow::Error) -> Result<()> {
 		);
 		return Ok(());
 	}
+	if let Some(error::PullhookError::ConfigFormat {
+		path,
+		extension,
+		reason,
+	}) = pullhook_error
+	{
+		println!(
+			"{}",
+			serde_json::to_string_pretty(&config_path_error_json(
+				error,
+				&details,
+				path,
+				extension.as_deref(),
+				reason
+			))?
+		);
+		return Ok(());
+	}
 
 	println!(
 		"{}",
@@ -1698,6 +1716,27 @@ fn command_parse_error_json(
 		"commandParse": {
 			"command": command,
 			"reason": reason,
+		},
+	})
+}
+
+fn config_path_error_json(
+	error: &anyhow::Error,
+	details: &[String],
+	path: &str,
+	extension: Option<&str>,
+	reason: &str,
+) -> serde_json::Value {
+	json!({
+		"status": "error",
+		"error": error.to_string(),
+		"details": details,
+		"configPathError": {
+			"kind": if extension.is_some() { "unsupported_format" } else { "missing_extension" },
+			"path": path,
+			"extension": extension,
+			"reason": reason,
+			"supported": config::config_names(),
 		},
 	})
 }

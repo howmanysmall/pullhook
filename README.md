@@ -301,6 +301,7 @@ config is invalid, including `status`, `error`, `details`, and `validationErrors
 detection in one pass, with a short hint for each check. Use `doctor --strict` when CI should fail on warnings.
 Use `doctor --quiet` to suppress all-ok text output without hiding warnings or errors.
 `doctor --json` includes `status`, `strict`, `error`, and summary booleans so automation can read the result without scraping stderr.
+Unsupported config-path JSON errors include a `configPathError` object with the rejected path, extension, reason, and supported config filenames.
 `explain --json` emits the evaluated rule plan,
 including changed files, their source (`git`, `explicit`, or `base-missing`), matched files, commands, and
 skip reasons. `explain --json`, `run --dry-run --json`, and `run --json` include top-level `status` and

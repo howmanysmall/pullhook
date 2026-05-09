@@ -255,16 +255,22 @@ impl ConfigFormat {
 			Some("jsonc") => Ok(Self::Jsonc),
 			Some("yaml") => Ok(Self::Yaml),
 			Some("toml") => Ok(Self::Toml),
-			Some("json5") => Err(PullhookError::Message(
-				"JSON5 configs are not supported; use `pullhook.json` or `pullhook.jsonc`".to_owned(),
+			Some("json5") => Err(unsupported_config_format(
+				path,
+				Some("json5"),
+				"JSON5 configs are not supported; use `pullhook.json` or `pullhook.jsonc`",
 			)),
-			Some("yml") => Err(PullhookError::Message(
-				"`*.yml` configs are not supported; use `pullhook.yaml`".to_owned(),
+			Some("yml") => Err(unsupported_config_format(
+				path,
+				Some("yml"),
+				"`*.yml` configs are not supported; use `pullhook.yaml`",
 			)),
-			Some(extension) => Err(PullhookError::Message(format!(
-				"unsupported config extension `.{extension}`"
-			))),
-			None => Err(PullhookError::Message("config path has no extension".to_owned())),
+			Some(extension) => Err(unsupported_config_format(
+				path,
+				Some(extension),
+				format!("unsupported config extension `.{extension}`"),
+			)),
+			None => Err(unsupported_config_format(path, None, "config path has no extension")),
 		}
 	}
 
@@ -299,6 +305,14 @@ impl ConfigFormat {
 			Self::Yaml => STARTER_CONFIG_YAML,
 			Self::Toml => STARTER_CONFIG_TOML,
 		}
+	}
+}
+
+fn unsupported_config_format(path: &Path, extension: Option<&str>, reason: impl Into<String>) -> PullhookError {
+	PullhookError::ConfigFormat {
+		path: path.display().to_string(),
+		extension: extension.map(str::to_owned),
+		reason: reason.into(),
 	}
 }
 

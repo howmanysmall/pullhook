@@ -99,6 +99,17 @@ pub enum PullhookError {
 		reason: String,
 	},
 
+	/// Config file path does not use a supported format.
+	#[error("{reason}")]
+	ConfigFormat {
+		/// Config path.
+		path: String,
+		/// Unsupported or missing extension.
+		extension: Option<String>,
+		/// Human-friendly failure reason.
+		reason: String,
+	},
+
 	/// Config validation failed.
 	#[error("invalid config `{path}`:\n{details}")]
 	ConfigValidation {
