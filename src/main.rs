@@ -1232,11 +1232,16 @@ fn codes_command(args: &CodesArgs) -> Result<()> {
 }
 
 fn filtered_json_code_infos(kind: Option<CodeKind>, surface: Option<&str>) -> Vec<JsonCodeInfo> {
+	let surface = surface.map(str::to_ascii_lowercase);
 	JSON_CODE_INFOS
 		.iter()
 		.copied()
 		.filter(|info| kind.is_none_or(|kind| info.kind == kind.label()))
-		.filter(|info| surface.is_none_or(|surface| info.surface.contains(surface)))
+		.filter(|info| {
+			surface
+				.as_deref()
+				.is_none_or(|surface| info.surface.to_ascii_lowercase().contains(surface))
+		})
 		.collect()
 }
 

@@ -1171,18 +1171,20 @@ fn codes_kind_filter_limits_results() {
 fn codes_surface_filter_limits_results() {
 	let temp = tempfile::tempdir().expect("create temp dir");
 
-	let output = run_pullhook(temp.path(), &["codes", "--surface", "run", "--json"]);
+	let output = run_pullhook(temp.path(), &["codes", "--surface", "RUN", "--json"]);
 
-	assert!(output.status.success(), "codes --surface run --json should succeed");
+	assert!(output.status.success(), "codes --surface RUN --json should succeed");
 	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse surface codes json");
 	assert_eq!(value["filters"]["kind"], serde_json::Value::Null);
-	assert_eq!(value["filters"]["surface"], "run");
+	assert_eq!(value["filters"]["surface"], "RUN");
 	let codes = value["codes"].as_array().expect("codes array");
 	assert!(!codes.is_empty(), "surface filter should keep matching codes");
 	assert!(
-		codes
-			.iter()
-			.all(|entry| entry["surface"].as_str().expect("surface string").contains("run")),
+		codes.iter().all(|entry| entry["surface"]
+			.as_str()
+			.expect("surface string")
+			.to_ascii_lowercase()
+			.contains("run")),
 		"surface filter should exclude codes from other surfaces"
 	);
 	assert!(codes.iter().any(|entry| entry["code"] == "config_rule_failed"));
@@ -1197,7 +1199,32 @@ fn codes_surface_filter_limits_results() {
 	let stderr = stderr_text(&output);
 	assert!(
 		stderr.trim().is_empty(),
-		"codes --surface run --json should not write stderr"
+		"codes --surface RUN --json should not write stderr"
+	);
+}
+
+#[test]
+fn codes_surface_filter_matches_mixed_case_catalog_text() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["codes", "--surface", "json", "--codes-only"]);
+
+	assert!(
+		output.status.success(),
+		"codes --surface json --codes-only should succeed"
+	);
+	let stdout = stdout_text(&output);
+	let codes = stdout.lines().collect::<Vec<_>>();
+	assert!(codes.contains(&"json_debug_conflict"));
+	assert!(codes.contains(&"error"));
+	assert!(
+		!codes.contains(&"repository_not_found"),
+		"repository_not_found is not scoped to a JSON surface"
+	);
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"codes --surface json --codes-only should not write stderr"
 	);
 }
 
