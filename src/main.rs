@@ -1386,23 +1386,30 @@ fn codes_command(args: &CodesArgs) -> Result<()> {
 		return Ok(());
 	}
 
-	if args.output.codes_only {
+	if args.output.values.codes_only {
 		for info in codes {
 			println!("{}", info.code);
 		}
 		return Ok(());
 	}
 
-	if args.output.kinds_only {
+	if args.output.facets.kinds_only {
 		for kind in unique_code_kinds(&codes) {
 			println!("{kind}");
 		}
 		return Ok(());
 	}
 
-	if args.output.surfaces_only {
+	if args.output.facets.surfaces_only {
 		for surface in unique_code_surfaces(&codes) {
 			println!("{surface}");
+		}
+		return Ok(());
+	}
+
+	if args.output.values.descriptions_only {
+		for info in codes {
+			println!("{}", info.description);
 		}
 		return Ok(());
 	}

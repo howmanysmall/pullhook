@@ -1644,6 +1644,62 @@ fn codes_surfaces_only_honors_filters() {
 }
 
 #[test]
+fn codes_descriptions_only_prints_clean_descriptions() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(
+		temp.path(),
+		&["codes", "--surface", "completion", "--descriptions-only"],
+	);
+
+	assert!(
+		output.status.success(),
+		"codes --surface completion --descriptions-only should succeed"
+	);
+	let stdout = stdout_text(&output);
+	assert_eq!(
+		stdout.lines().collect::<Vec<_>>(),
+		vec![
+			"Completion output check failed for an unexpected reason.",
+			"The checked completion output file is missing or unreadable.",
+			"The checked completion output file is stale."
+		]
+	);
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"codes --descriptions-only should not write stderr"
+	);
+}
+
+#[test]
+fn codes_search_filter_composes_with_descriptions_only() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["codes", "--search", "stale", "--descriptions-only"]);
+
+	assert!(
+		output.status.success(),
+		"codes --search stale --descriptions-only should succeed"
+	);
+	let stdout = stdout_text(&output);
+	let descriptions = stdout.lines().collect::<Vec<_>>();
+	assert!(descriptions.contains(&"The checked completion output file is stale."));
+	assert!(descriptions.contains(&"The checked schema output file is stale."));
+	assert!(
+		descriptions
+			.iter()
+			.all(|description| !description.contains("completion_out_of_date")),
+		"descriptions-only output should not include stable codes"
+	);
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"filtered codes --descriptions-only should not write stderr"
+	);
+}
+
+#[test]
 fn codes_only_conflicts_with_json() {
 	let temp = tempfile::tempdir().expect("create temp dir");
 
@@ -1657,6 +1713,29 @@ fn codes_only_conflicts_with_json() {
 	assert!(stderr.contains("cannot be used with"));
 	assert!(stderr.contains("--codes-only"));
 	assert!(stderr.contains("--json"));
+}
+
+#[test]
+fn codes_descriptions_only_conflicts_with_other_output_modes() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+	let conflicting_modes: &[&[&str]] = &[
+		&["codes", "--descriptions-only", "--json"],
+		&["codes", "--descriptions-only", "--codes-only"],
+		&["codes", "--descriptions-only", "--kinds-only"],
+		&["codes", "--descriptions-only", "--surfaces-only"],
+	];
+
+	for args in conflicting_modes {
+		let output = run_pullhook(temp.path(), args);
+
+		assert!(
+			!output.status.success(),
+			"codes --descriptions-only should conflict for args {args:?}"
+		);
+		let stderr = stderr_text(&output);
+		assert!(stderr.contains("cannot be used with"));
+		assert!(stderr.contains("--descriptions-only"));
+	}
 }
 
 #[test]
@@ -3482,6 +3561,7 @@ fn utility_help_groups_options_by_task() {
 	assert!(codes_stdout.contains("pullhook codes --search config"));
 	assert!(codes_stdout.contains("pullhook codes --kinds-only"));
 	assert!(codes_stdout.contains("pullhook codes --surfaces-only"));
+	assert!(codes_stdout.contains("pullhook codes --search config --descriptions-only"));
 	assert!(codes_stdout.contains("pullhook codes --kind error --codes-only"));
 
 	let commands = run_pullhook(temp.path(), &["commands", "--help"]);
