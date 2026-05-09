@@ -363,6 +363,7 @@ that custom file.
 - `vlt`: `vlt-lock.json`
 
 If conflicting lockfiles are present, `pullhook` errors and asks for explicit `--pattern`/`--command`.
+`--install --json` detection errors include recovery details for missing or ambiguous repo-root package-manager files.
 
 `aube` also watches the common JavaScript lockfiles, since changing any of them can require a fresh `aube install`.
 

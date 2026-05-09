@@ -90,6 +90,36 @@ fn install_ignores_nested_manifest_changes_that_do_not_match_install_pattern() {
 }
 
 #[test]
+fn install_json_reports_package_manager_detection_failure_details() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+
+	let output = run_pullhook(repo_root, &["--install", "--dry-run", "--json"]);
+
+	assert!(
+		!output.status.success(),
+		"--install --json should fail without root package manager files"
+	);
+	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse install error json");
+	assert_eq!(value["status"], "error");
+	assert!(
+		value["error"]
+			.as_str()
+			.expect("error")
+			.contains("failed to detect package manager for --install")
+	);
+	assert_eq!(
+		value["details"],
+		serde_json::json!([
+			"add a supported package-manager lockfile at the repo root",
+			"or pass explicit `--pattern <glob>` and `--command <cmd>` instead of `--install`"
+		])
+	);
+	let stderr = stderr_text(&output);
+	assert!(stderr.contains("failed to detect package manager for --install"));
+}
+
+#[test]
 fn install_matches_repo_root_manifest_changes() {
 	let temp = setup_repo_with_root_manifest_change();
 	let repo_root = temp.path();

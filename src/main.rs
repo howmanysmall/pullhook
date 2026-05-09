@@ -1628,6 +1628,12 @@ fn json_error_details(error: &anyhow::Error) -> Vec<String> {
 			"use `--config <path>` to point at a custom config file".to_owned(),
 		];
 	}
+	if message.starts_with("failed to detect package manager") {
+		return vec![
+			"add a supported package-manager lockfile at the repo root".to_owned(),
+			"or pass explicit `--pattern <glob>` and `--command <cmd>` instead of `--install`".to_owned(),
+		];
+	}
 
 	match message.as_str() {
 		"--json cannot be used with --debug" => vec![
