@@ -683,7 +683,7 @@ fn collect_explicit_changed_files(
 			.context("failed to read changed files from stdin")?;
 		extend_changed_files_from_lines(&mut paths, &input);
 	}
-	Ok(paths)
+	Ok(dedupe_paths_preserving_order(paths))
 }
 
 fn extend_changed_files_from_lines(paths: &mut Vec<std::path::PathBuf>, input: &str) {
@@ -694,6 +694,11 @@ fn extend_changed_files_from_lines(paths: &mut Vec<std::path::PathBuf>, input: &
 			.filter(|line| !line.is_empty())
 			.map(std::path::PathBuf::from),
 	);
+}
+
+fn dedupe_paths_preserving_order(paths: Vec<std::path::PathBuf>) -> Vec<std::path::PathBuf> {
+	let mut seen = BTreeSet::new();
+	paths.into_iter().filter(|path| seen.insert(path.clone())).collect()
 }
 
 fn resolve_config_changed_files(

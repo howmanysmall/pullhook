@@ -1225,6 +1225,38 @@ fn run_dry_run_json_reads_changed_files_from_file() {
 }
 
 #[test]
+fn run_dry_run_json_dedupes_explicit_changed_files() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_config_rule(repo_root, "docs check", "docs/*.md", "cargo test -p docs");
+	write_file(repo_root, Path::new(".pullhook-changed"), "docs/guide.md\n");
+
+	let output = run_pullhook_with_stdin(
+		repo_root,
+		&[
+			"run",
+			"--dry-run",
+			"--changed-file",
+			"docs/guide.md",
+			"--changed-files-file",
+			".pullhook-changed",
+			"--changed-files-stdin",
+			"--json",
+		],
+		"docs/guide.md\n",
+	);
+
+	assert!(
+		output.status.success(),
+		"run --dry-run should dedupe repeated explicit changed files"
+	);
+	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse run json");
+	assert_eq!(value["changedFiles"], serde_json::json!(["docs/guide.md"]));
+	assert_eq!(value["matchedFiles"], serde_json::json!(["docs/guide.md"]));
+	assert_eq!(value["entries"][0]["matches"], serde_json::json!(["docs/guide.md"]));
+}
+
+#[test]
 fn run_rejects_changed_file_with_base() {
 	let temp = setup_repo_with_merge();
 	let repo_root = temp.path();
