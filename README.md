@@ -300,7 +300,7 @@ Use `schema --check --output <path>` in CI when a checked-in schema file must st
 config is invalid, including `status`, `error`, `details`, and `validationErrors` fields. Config parse failures also include a `parseError` object with the config path and parser reason. Use `validate --quiet` when CI only needs the exit code. `doctor` checks repo discovery, config health, diff-base availability, and `--install`
 detection in one pass, with a short hint for each check. Use `doctor --strict` when CI should fail on warnings.
 Use `doctor --quiet` to suppress all-ok text output without hiding warnings or errors.
-`doctor --json` includes `status`, `strict`, `error`, stable per-check `code` values, and summary booleans so automation can read the result without scraping stderr.
+`doctor --json` includes `status`, stable top-level and per-check `code` values, `strict`, `error`, and summary booleans so automation can read the result without scraping stderr.
 Unsupported config-path JSON errors include a `configPathError` object with the rejected path, extension, reason, and supported config filenames.
 Missing config JSON errors include a `configDiscoveryError` object with the searched repo root and default config filename.
 `explain --json` emits the evaluated rule plan,

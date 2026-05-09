@@ -2271,8 +2271,15 @@ fn doctor_report_json(
 	error: Option<&str>,
 	strict: bool,
 ) -> serde_json::Value {
+	let code = match error {
+		Some("doctor found blocking issues") => json!("doctor_blocking_issues"),
+		Some("doctor found warnings in strict mode") => json!("doctor_warnings"),
+		Some(_) => json!("doctor_error"),
+		None => serde_json::Value::Null,
+	};
 	json!({
 		"status": if error.is_some() { "error" } else { "ok" },
+		"code": code,
 		"repoRoot": repo_root.display().to_string(),
 		"strict": strict,
 		"checks": checks.iter().map(doctor_check_json).collect::<Vec<_>>(),
