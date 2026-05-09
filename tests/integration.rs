@@ -1814,6 +1814,8 @@ fn doctor_json_reports_repo_config_diff_base_and_install_detection() {
 
 	assert!(output.status.success(), "doctor --json should succeed");
 	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse doctor json");
+	assert_eq!(value["status"], "ok");
+	assert_eq!(value["error"], serde_json::Value::Null);
 	assert_eq!(value["summary"]["ok"], 4);
 	assert_eq!(value["summary"]["warn"], 0);
 	assert_eq!(value["summary"]["error"], 0);
@@ -1881,6 +1883,8 @@ fn doctor_strict_fails_on_warnings() {
 
 	assert!(!output.status.success(), "doctor --strict should fail on warnings");
 	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse doctor json");
+	assert_eq!(value["status"], "error");
+	assert_eq!(value["error"], "doctor found warnings in strict mode");
 	let warn_count = value["summary"]["warn"].as_u64().expect("warn count");
 	assert!(warn_count >= 1, "strict doctor should report at least one warning");
 	assert_eq!(value["summary"]["error"], 0);
@@ -1915,6 +1919,8 @@ fn doctor_json_fails_when_config_is_invalid() {
 
 	assert!(!output.status.success(), "doctor should fail for invalid config");
 	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse doctor json");
+	assert_eq!(value["status"], "error");
+	assert_eq!(value["error"], "doctor found blocking issues");
 	assert_eq!(value["summary"]["error"], 1);
 	let checks = value["checks"].as_array().expect("checks array");
 	assert_eq!(checks[1]["name"], "config");

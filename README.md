@@ -287,6 +287,7 @@ Use `schema --check --output <path>` in CI when a checked-in schema file must st
 config is invalid. Use `validate --quiet` when CI only needs the exit code. `doctor` checks repo discovery, config health, diff-base availability, and `--install`
 detection in one pass, with a short hint for each check. Use `doctor --strict` when CI should fail on warnings.
 Use `doctor --quiet` to suppress all-ok text output without hiding warnings or errors.
+`doctor --json` includes `status` and `error` fields so automation can read the result without scraping stderr.
 `explain --json` emits the evaluated rule plan,
 including changed files, their source (`git`, `explicit`, or `base-missing`), matched files, commands, and
 skip reasons. `run --json` adds real execution results, captured stdout/stderr, and a final summary.

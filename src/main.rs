@@ -637,27 +637,28 @@ fn doctor_command(args: &DoctorArgs) -> Result<()> {
 	let repo = GitRepo::discover(&cwd, args.debug).context("failed to resolve repository root")?;
 	let repo_root = repo.root().to_path_buf();
 	let checks = build_doctor_checks(&repo, &repo_root, args.config.as_deref());
+	let blocking_error = checks.iter().any(|check| check.level == DoctorLevel::Error);
+	let strict_warning = args.strict && checks.iter().any(|check| check.level == DoctorLevel::Warn);
+	let error = if blocking_error {
+		Some("doctor found blocking issues")
+	} else if strict_warning {
+		Some("doctor found warnings in strict mode")
+	} else {
+		None
+	};
 
 	if args.json {
 		println!(
 			"{}",
-			serde_json::to_string_pretty(&json!({
-				"repoRoot": repo_root.display().to_string(),
-				"checks": checks.iter().map(doctor_check_json).collect::<Vec<_>>(),
-				"summary": doctor_summary_json(&checks),
-			}))?
+			serde_json::to_string_pretty(&doctor_report_json(&repo_root, &checks, error))?
 		);
 	} else if !args.quiet || checks.iter().any(|check| check.level != DoctorLevel::Ok) {
 		render_doctor_checks(&checks, &repo_root);
 	}
 
-	if checks.iter().any(|check| check.level == DoctorLevel::Error) {
-		return Err(anyhow!("doctor found blocking issues"));
+	if let Some(error) = error {
+		return Err(anyhow!(error));
 	}
-	if args.strict && checks.iter().any(|check| check.level == DoctorLevel::Warn) {
-		return Err(anyhow!("doctor found warnings in strict mode"));
-	}
-
 	Ok(())
 }
 
@@ -1561,6 +1562,16 @@ fn doctor_summary_json(checks: &[DoctorCheck]) -> serde_json::Value {
 	json!({
 		"ok": ok,
 		"warn": warn,
+		"error": error,
+	})
+}
+
+fn doctor_report_json(repo_root: &std::path::Path, checks: &[DoctorCheck], error: Option<&str>) -> serde_json::Value {
+	json!({
+		"status": if error.is_some() { "error" } else { "ok" },
+		"repoRoot": repo_root.display().to_string(),
+		"checks": checks.iter().map(doctor_check_json).collect::<Vec<_>>(),
+		"summary": doctor_summary_json(checks),
 		"error": error,
 	})
 }
