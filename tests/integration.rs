@@ -330,6 +330,62 @@ fn validate_json_reports_config_summary() {
 }
 
 #[test]
+fn doctor_json_reports_repo_config_diff_base_and_install_detection() {
+	let temp = setup_repo_with_root_manifest_change();
+	let repo_root = temp.path();
+	write_config_rule(repo_root, "rebuild root", "package-lock.json", "npm test");
+
+	let output = run_pullhook(repo_root, &["doctor", "--json"]);
+
+	assert!(output.status.success(), "doctor --json should succeed");
+	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse doctor json");
+	assert_eq!(value["summary"]["ok"], 4);
+	assert_eq!(value["summary"]["warn"], 0);
+	assert_eq!(value["summary"]["error"], 0);
+	let checks = value["checks"].as_array().expect("checks array");
+	assert_eq!(checks.len(), 4);
+	assert_eq!(checks[0]["name"], "repository");
+	assert_eq!(checks[1]["name"], "config");
+	assert_eq!(checks[2]["name"], "diff base");
+	assert_eq!(checks[3]["name"], "install detection");
+	assert_eq!(checks[3]["summary"], "detected npm");
+	let stderr = stderr_text(&output);
+	assert!(stderr.trim().is_empty(), "doctor --json should not write stderr");
+}
+
+#[test]
+fn doctor_json_fails_when_config_is_invalid() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_file(
+		repo_root,
+		Path::new("pullhook.json"),
+		r#"{
+  "rules": [
+    {
+      "name": "bad copy",
+      "changed": "**/*.rs",
+      "run": "cargo test",
+      "failText": "{sparkle nope}"
+    }
+  ]
+}
+"#,
+	);
+
+	let output = run_pullhook(repo_root, &["doctor", "--json"]);
+
+	assert!(!output.status.success(), "doctor should fail for invalid config");
+	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse doctor json");
+	assert_eq!(value["summary"]["error"], 1);
+	let checks = value["checks"].as_array().expect("checks array");
+	assert_eq!(checks[1]["name"], "config");
+	assert_eq!(checks[1]["level"], "error");
+	let stderr = stderr_text(&output);
+	assert!(stderr.contains("doctor found blocking issues"));
+}
+
+#[test]
 fn explain_json_reports_matches_and_skips() {
 	let temp = setup_repo_with_merge();
 	let repo_root = temp.path();

@@ -65,6 +65,7 @@ Commands:
   run         Run configured pullhook rules
   explain     Explain which configured rules match changed files
   validate    Validate the pullhook config file
+  doctor      Inspect repository and config readiness
   init        Create a starter pullhook config file
   completion  Generate shell completion scripts
   help        Print this message or the help of the given subcommand(s)
@@ -206,6 +207,8 @@ Run configured rules:
 ```bash
 pullhook validate
 pullhook validate --json
+pullhook doctor
+pullhook doctor --json
 pullhook explain
 pullhook explain --all-matches --json
 pullhook run --dry-run --json
@@ -227,8 +230,9 @@ package-manager files. Config-mode commands always run from the repository root.
 
 Styles respect `--render auto|always|never`; placeholders render in every mode.
 
-`validate --json` emits a compact config summary for scripts. `explain --json` emits the evaluated
-rule plan, including changed files, matched files, commands, and skip reasons. `run --dry-run --json`
+`validate --json` emits a compact config summary for scripts. `doctor` checks repo discovery, config
+health, diff-base availability, and `--install` detection in one pass. `explain --json` emits the
+evaluated rule plan, including changed files, matched files, commands, and skip reasons. `run --dry-run --json`
 emits the same plan plus `plannedCommands`, which is handy for CI or editor integrations.
 
 ## `--install` Detection

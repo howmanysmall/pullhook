@@ -33,6 +33,8 @@ pub enum Commands {
 	Explain(ExplainArgs),
 	/// Validate the pullhook config file.
 	Validate(ValidateArgs),
+	/// Inspect repository and config readiness.
+	Doctor(DoctorArgs),
 	/// Create a starter pullhook config file.
 	Init(InitArgs),
 	/// Generate shell completion scripts.
@@ -168,6 +170,22 @@ pub struct ExplainArgs {
 /// Arguments for `pullhook validate`.
 #[derive(Debug, Clone, Args)]
 pub struct ValidateArgs {
+	/// Print machine-readable JSON instead of text output.
+	#[arg(long = "json", default_value_t = false)]
+	pub json: bool,
+
+	/// Enable debug logging.
+	#[arg(short = 'd', long = "debug", default_value_t = false)]
+	pub debug: bool,
+
+	/// Control non-debug ANSI styling (`auto`, `always`, `never`).
+	#[arg(long = "render", value_name = "mode", value_enum, default_value_t = RenderMode::Auto)]
+	pub render: RenderMode,
+}
+
+/// Arguments for `pullhook doctor`.
+#[derive(Debug, Clone, Args)]
+pub struct DoctorArgs {
 	/// Print machine-readable JSON instead of text output.
 	#[arg(long = "json", default_value_t = false)]
 	pub json: bool,

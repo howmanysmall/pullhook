@@ -18,7 +18,7 @@ use serde_json::json;
 use tracing::debug;
 use tracing_subscriber::EnvFilter;
 
-use crate::cli::{Cli, Commands, ConfigRunArgs, ExplainArgs, InitArgs, RunArgs, ValidateArgs};
+use crate::cli::{Cli, Commands, ConfigRunArgs, DoctorArgs, ExplainArgs, InitArgs, RunArgs, ValidateArgs};
 use crate::config::{
 	Config, Entry, EvaluatedEntry, EvaluatedGroup, EvaluatedRule, FailTextContext, OnFailure, Pattern,
 };
@@ -41,6 +41,31 @@ struct InstallPlan {
 	command: String,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DoctorLevel {
+	Ok,
+	Warn,
+	Error,
+}
+
+impl DoctorLevel {
+	const fn label(self) -> &'static str {
+		match self {
+			Self::Ok => "ok",
+			Self::Warn => "warn",
+			Self::Error => "error",
+		}
+	}
+}
+
+#[derive(Debug, Clone)]
+struct DoctorCheck {
+	name: &'static str,
+	level: DoctorLevel,
+	summary: String,
+	details: Vec<String>,
+}
+
 fn main() {
 	let cli = Cli::parse();
 
@@ -60,6 +85,10 @@ fn main() {
 		Some(Commands::Validate(args)) => {
 			init_tracing(args.debug);
 			validate_config_command(args)
+		}
+		Some(Commands::Doctor(args)) => {
+			init_tracing(args.debug);
+			doctor_command(args)
 		}
 		Some(Commands::Init(args)) => {
 			init_tracing(args.debug);
@@ -243,6 +272,32 @@ fn validate_config_command(args: &ValidateArgs) -> Result<()> {
 	Ok(())
 }
 
+fn doctor_command(args: &DoctorArgs) -> Result<()> {
+	let cwd = std::env::current_dir().context("failed to read current working directory")?;
+	let repo = GitRepo::discover(&cwd, args.debug).context("failed to resolve repository root")?;
+	let repo_root = repo.root().to_path_buf();
+	let checks = build_doctor_checks(&repo, &repo_root);
+
+	if args.json {
+		println!(
+			"{}",
+			serde_json::to_string_pretty(&json!({
+				"repoRoot": repo_root.display().to_string(),
+				"checks": checks.iter().map(doctor_check_json).collect::<Vec<_>>(),
+				"summary": doctor_summary_json(&checks),
+			}))?
+		);
+	} else {
+		render_doctor_checks(&checks, &repo_root);
+	}
+
+	if checks.iter().any(|check| check.level == DoctorLevel::Error) {
+		return Err(anyhow!("doctor found blocking issues"));
+	}
+
+	Ok(())
+}
+
 fn init_config_command(args: &InitArgs) -> Result<()> {
 	let cwd = std::env::current_dir().context("failed to read current working directory")?;
 	let repo = GitRepo::discover(&cwd, args.debug).context("failed to resolve repository root")?;
@@ -413,6 +468,144 @@ fn render_evaluated_rule(rule: &EvaluatedRule, all_matches: bool) {
 		println!("[skip] {}", rule.rule.name);
 		println!("reason: {}", rule.skip_reason.as_deref().unwrap_or("not runnable"));
 	}
+}
+
+fn build_doctor_checks(repo: &GitRepo, repo_root: &std::path::Path) -> Vec<DoctorCheck> {
+	let mut checks = Vec::with_capacity(4);
+	checks.push(DoctorCheck {
+		name: "repository",
+		level: DoctorLevel::Ok,
+		summary: format!("repo root resolved to {}", repo_root.display()),
+		details: vec![format!("cwd scope is inside `{}`", repo_root.display())],
+	});
+
+	checks.push(match config::discover(repo_root) {
+		Ok(Some(path)) => match config::load(&path) {
+			Ok(config) => DoctorCheck {
+				name: "config",
+				level: DoctorLevel::Ok,
+				summary: format!("loaded {}", path.display()),
+				details: vec![
+					format!("entries: {}", config.entries.len()),
+					format!("rules: {}", count_config_rules(&config)),
+					format!("parallel groups: {}", count_config_groups(&config)),
+				],
+			},
+			Err(error) => DoctorCheck {
+				name: "config",
+				level: DoctorLevel::Error,
+				summary: format!("config is invalid: {}", path.display()),
+				details: vec![error.to_string()],
+			},
+		},
+		Ok(None) => DoctorCheck {
+			name: "config",
+			level: DoctorLevel::Warn,
+			summary: "no pullhook config found".to_owned(),
+			details: vec!["run `pullhook init` to create pullhook.json".to_owned()],
+		},
+		Err(error) => DoctorCheck {
+			name: "config",
+			level: DoctorLevel::Error,
+			summary: "config discovery failed".to_owned(),
+			details: vec![error.to_string()],
+		},
+	});
+
+	checks.push(match repo.resolve_base_and_changed_files(None, false) {
+		Ok((base, changed_files)) => DoctorCheck {
+			name: "diff base",
+			level: DoctorLevel::Ok,
+			summary: format!("resolved {base}"),
+			details: vec![format!("changed files: {}", changed_files.len())],
+		},
+		Err(error::PullhookError::DiffBaseUnavailable) => DoctorCheck {
+			name: "diff base",
+			level: DoctorLevel::Warn,
+			summary: "no automatic diff base available".to_owned(),
+			details: vec!["use `--base <rev>` or rely on `runIfBaseMissing` rules".to_owned()],
+		},
+		Err(error) => DoctorCheck {
+			name: "diff base",
+			level: DoctorLevel::Error,
+			summary: "failed to inspect git history".to_owned(),
+			details: vec![error.to_string()],
+		},
+	});
+
+	checks.push(match detect_package_manager(repo_root) {
+		Ok(package_manager) => DoctorCheck {
+			name: "install detection",
+			level: DoctorLevel::Ok,
+			summary: format!("detected {}", package_manager.name()),
+			details: vec![
+				format!("command: {}", package_manager.install_command()),
+				format!("pattern: {}", package_manager.install_pattern()),
+			],
+		},
+		Err(error::PullhookError::PackageManagerNotFound { .. }) => DoctorCheck {
+			name: "install detection",
+			level: DoctorLevel::Warn,
+			summary: "no supported package manager files found".to_owned(),
+			details: vec!["`pullhook --install` would not work in this repo yet".to_owned()],
+		},
+		Err(error::PullhookError::AmbiguousPackageManagers { found }) => DoctorCheck {
+			name: "install detection",
+			level: DoctorLevel::Error,
+			summary: "multiple package managers detected".to_owned(),
+			details: vec![format!("found: {}", found.join(", "))],
+		},
+		Err(error) => DoctorCheck {
+			name: "install detection",
+			level: DoctorLevel::Error,
+			summary: "package-manager detection failed".to_owned(),
+			details: vec![error.to_string()],
+		},
+	});
+
+	checks
+}
+
+fn render_doctor_checks(checks: &[DoctorCheck], repo_root: &std::path::Path) {
+	println!("Doctor");
+	println!("repo: {}", repo_root.display());
+	println!();
+
+	for check in checks {
+		println!("[{}] {}", check.level.label(), check.name);
+		println!("summary: {}", check.summary);
+		for detail in &check.details {
+			println!("detail: {detail}");
+		}
+		println!();
+	}
+
+	let summary = doctor_summary_json(checks);
+	println!("Summary");
+	println!("ok: {}", summary["ok"]);
+	println!("warn: {}", summary["warn"]);
+	println!("error: {}", summary["error"]);
+}
+
+fn doctor_check_json(check: &DoctorCheck) -> serde_json::Value {
+	json!({
+		"name": check.name,
+		"level": check.level.label(),
+		"summary": check.summary,
+		"details": check.details,
+	})
+}
+
+fn doctor_summary_json(checks: &[DoctorCheck]) -> serde_json::Value {
+	let ok = checks.iter().filter(|check| check.level == DoctorLevel::Ok).count();
+	let warn = checks.iter().filter(|check| check.level == DoctorLevel::Warn).count();
+	let error = checks.iter().filter(|check| check.level == DoctorLevel::Error).count();
+
+	json!({
+		"ok": ok,
+		"warn": warn,
+		"error": error,
+	})
 }
 
 fn config_summary_json(config: &Config) -> serde_json::Value {
