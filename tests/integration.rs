@@ -264,6 +264,46 @@ fn completion_command_succeeds_outside_git_repo() {
 }
 
 #[test]
+fn root_help_lists_common_examples() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["--help"]);
+
+	assert!(output.status.success(), "root help should succeed");
+	let stdout = stdout_text(&output);
+	assert!(stdout.contains("Examples:"));
+	assert!(stdout.contains("pullhook --install --dry-run"));
+	assert!(stdout.contains("pullhook init --format json"));
+	assert!(stdout.contains("Use `pullhook explain --all-matches` to preview config rule matches."));
+}
+
+#[test]
+fn run_help_lists_json_examples() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["run", "--help"]);
+
+	assert!(output.status.success(), "run help should succeed");
+	let stdout = stdout_text(&output);
+	assert!(stdout.contains("pullhook run --dry-run"));
+	assert!(stdout.contains("pullhook run --json"));
+	assert!(stdout.contains("pullhook run --config config/pullhook.custom.json --all-matches"));
+}
+
+#[test]
+fn init_help_lists_generation_examples() {
+	let temp = tempfile::tempdir().expect("create temp dir");
+
+	let output = run_pullhook(temp.path(), &["init", "--help"]);
+
+	assert!(output.status.success(), "init help should succeed");
+	let stdout = stdout_text(&output);
+	assert!(stdout.contains("pullhook init --stdout"));
+	assert!(stdout.contains("pullhook init --force"));
+	assert!(stdout.contains("pullhook init --format yaml"));
+}
+
+#[test]
 fn completion_command_rejects_run_arguments() {
 	let output = run_pullhook(Path::new("."), &["--install", "completion", "bash"]);
 

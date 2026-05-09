@@ -9,6 +9,60 @@ use clap_complete::{Shell, generate};
 use crate::config::ConfigFormat;
 use crate::output::RenderMode;
 
+const ROOT_AFTER_HELP: &str = "\
+Examples:
+  pullhook --pattern \"**/*.rs\" --command \"cargo test\"
+  pullhook --install --dry-run
+  pullhook init --format json
+  pullhook run --dry-run
+
+Next steps:
+  Use `pullhook init` to create a repo config.
+  Use `pullhook explain --all-matches` to preview config rule matches.";
+
+const LEGACY_RUN_AFTER_HELP: &str = "\
+Examples:
+  pullhook --pattern \"packages/*/package-lock.json\" --command \"npm install\"
+  pullhook --pattern \"**/*.rs\" --command \"cargo test\" --once
+  pullhook --pattern \"**/*.json\" --command \"prettier --write\" --dry-run --json";
+
+const CONFIG_RUN_AFTER_HELP: &str = "\
+Examples:
+  pullhook run
+  pullhook run --dry-run
+  pullhook run --json
+  pullhook run --config config/pullhook.custom.json --all-matches";
+
+const EXPLAIN_AFTER_HELP: &str = "\
+Examples:
+  pullhook explain
+  pullhook explain --all-matches
+  pullhook explain --json";
+
+const VALIDATE_AFTER_HELP: &str = "\
+Examples:
+  pullhook validate
+  pullhook validate --json
+  pullhook validate --config config/pullhook.custom.json";
+
+const DOCTOR_AFTER_HELP: &str = "\
+Examples:
+  pullhook doctor
+  pullhook doctor --json
+  pullhook doctor --config config/pullhook.custom.json";
+
+const INIT_AFTER_HELP: &str = "\
+Examples:
+  pullhook init
+  pullhook init --format yaml
+  pullhook init --stdout
+  pullhook init --force";
+
+const COMPLETION_AFTER_HELP: &str = "\
+Examples:
+  pullhook completion bash > ~/.local/share/bash-completion/completions/pullhook
+  pullhook completion zsh > ~/.zfunc/_pullhook";
+
 /// Pullhook command line arguments.
 #[derive(Debug, Clone, Parser)]
 #[command(name = "pullhook")]
@@ -17,6 +71,7 @@ use crate::output::RenderMode;
 #[command(args_conflicts_with_subcommands = true)]
 #[command(subcommand_negates_reqs = true)]
 #[command(propagate_version = true)]
+#[command(after_help = ROOT_AFTER_HELP)]
 pub struct Cli {
 	#[command(flatten)]
 	pub run: RunArgs,
@@ -39,6 +94,7 @@ pub enum Commands {
 	/// Create a starter pullhook config file.
 	Init(InitArgs),
 	/// Generate shell completion scripts.
+	#[command(after_help = COMPLETION_AFTER_HELP)]
 	Completion {
 		/// Shell to generate completions for.
 		shell: Shell,
@@ -51,6 +107,7 @@ pub enum Commands {
 	clippy::struct_excessive_bools,
 	reason = "CLI flags are naturally represented as independent booleans"
 )]
+#[command(after_help = LEGACY_RUN_AFTER_HELP)]
 pub struct RunArgs {
 	/// Pattern to match files.
 	#[arg(short = 'p', long = "pattern", value_name = "glob")]
@@ -118,6 +175,7 @@ pub struct RunArgs {
 	clippy::struct_excessive_bools,
 	reason = "CLI flags are naturally represented as independent booleans"
 )]
+#[command(after_help = CONFIG_RUN_AFTER_HELP)]
 pub struct ConfigRunArgs {
 	/// Load config from an explicit path instead of repo-root discovery.
 	#[arg(long = "config", value_name = "path")]
@@ -154,6 +212,7 @@ pub struct ConfigRunArgs {
 
 /// Arguments for `pullhook explain`.
 #[derive(Debug, Clone, Args)]
+#[command(after_help = EXPLAIN_AFTER_HELP)]
 pub struct ExplainArgs {
 	/// Load config from an explicit path instead of repo-root discovery.
 	#[arg(long = "config", value_name = "path")]
@@ -182,6 +241,7 @@ pub struct ExplainArgs {
 
 /// Arguments for `pullhook validate`.
 #[derive(Debug, Clone, Args)]
+#[command(after_help = VALIDATE_AFTER_HELP)]
 pub struct ValidateArgs {
 	/// Load config from an explicit path instead of repo-root discovery.
 	#[arg(long = "config", value_name = "path")]
@@ -202,6 +262,7 @@ pub struct ValidateArgs {
 
 /// Arguments for `pullhook doctor`.
 #[derive(Debug, Clone, Args)]
+#[command(after_help = DOCTOR_AFTER_HELP)]
 pub struct DoctorArgs {
 	/// Load config from an explicit path instead of repo-root discovery.
 	#[arg(long = "config", value_name = "path")]
@@ -222,6 +283,7 @@ pub struct DoctorArgs {
 
 /// Arguments for `pullhook init`.
 #[derive(Debug, Clone, Args)]
+#[command(after_help = INIT_AFTER_HELP)]
 pub struct InitArgs {
 	/// Config format to generate.
 	#[arg(long = "format", value_name = "format", value_enum)]

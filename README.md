@@ -75,18 +75,21 @@ Options:
   -c, --command <command>   Execute command for each matched file
   -s, --script <script>     Execute npm script for each matched file
   -i, --install             Detect package manager and run install
-  -m, --message <message>   Message to print once when matches are found
+  -m, --message <message>   Print message if any matches are found
   -d, --debug               Enable debug logging
       --render <mode>       Control non-debug ANSI styling: auto, always, or never
-  -o, --once                Run once in repo root
-      --base <rev>          Override diff base revision
+  -o, --once                Run command once in repo root if any match
+      --base <rev>          Override the git base revision
       --jobs <n>            Max concurrent jobs
-      --shell               Run --command through shell
+      --shell               Run --command via a shell
       --dry-run             Print planned commands and exit
-      --unique-cwd          De-dupe per-match working directories
+      --json                Print machine-readable JSON instead of text output
+      --unique-cwd          Dedupe directories before per-match execution
   -h, --help                Print help
   -V, --version             Print version
 ```
+
+The live `--help` output also includes examples and next-step hints for the root command and the main subcommands.
 
 ## Examples
 
