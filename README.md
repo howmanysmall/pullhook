@@ -281,6 +281,7 @@ Placeholders render in every mode.
 `pullhook config` shows the config path and format that pullhook will use without parsing the file.
 Use `pullhook config --path-only` when a script needs the resolved path as one clean line.
 Add `--require-existing` when that script should fail instead of returning a planned-but-missing config path.
+`config --json` includes `status` and `error` fields for the same automation-friendly result shape used by other JSON commands.
 `pullhook schema` prints the config JSON Schema, and `pullhook schema --output <path>` writes it for editor setup.
 Use `schema --check --output <path>` in CI when a checked-in schema file must stay current.
 `validate --json` emits a compact config summary for scripts and still prints structured JSON when the

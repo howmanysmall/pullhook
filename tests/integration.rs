@@ -1321,10 +1321,12 @@ fn config_json_reports_discovered_config_path_without_validating_contents() {
 		"config --json should not require a valid config body"
 	);
 	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse config json");
+	assert_eq!(value["status"], "ok");
 	assert!(value["path"].as_str().expect("path").ends_with("pullhook.json"));
 	assert_eq!(value["format"], "json");
 	assert_eq!(value["exists"], true);
 	assert_eq!(value["explicit"], false);
+	assert_eq!(value["error"], serde_json::Value::Null);
 	assert!(
 		value["repoRoot"]
 			.as_str()
@@ -1426,6 +1428,7 @@ fn config_require_existing_json_reports_missing_config_path_as_json() {
 		"config --require-existing --json should reject missing paths"
 	);
 	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse config error json");
+	assert_eq!(value["status"], "error");
 	assert_eq!(value["format"], "yaml");
 	assert_eq!(value["exists"], false);
 	assert_eq!(value["explicit"], true);

@@ -680,6 +680,7 @@ fn config_command(args: &ConfigArgs) -> Result<()> {
 			println!(
 				"{}",
 				serde_json::to_string_pretty(&json!({
+					"status": "error",
 					"path": path.display().to_string(),
 					"format": format.label(),
 					"exists": false,
@@ -701,11 +702,13 @@ fn config_command(args: &ConfigArgs) -> Result<()> {
 		println!(
 			"{}",
 			serde_json::to_string_pretty(&json!({
+				"status": "ok",
 				"path": path.display().to_string(),
 				"format": format.label(),
 				"exists": exists,
 				"explicit": explicit,
 				"repoRoot": repo_root.display().to_string(),
+				"error": null,
 			}))?
 		);
 		return Ok(());
