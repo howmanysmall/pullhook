@@ -653,6 +653,7 @@ fn rules_help_lists_script_friendly_output_modes() {
 	assert!(stdout.contains("pullhook rules --names-only"));
 	assert!(stdout.contains("pullhook rules --commands-only"));
 	assert!(stdout.contains("pullhook rules --patterns-only"));
+	assert!(stdout.contains("pullhook rules --rule lint --json"));
 	assert!(stdout.contains("--commands-only"));
 	assert!(stdout.contains("--patterns-only"));
 }
@@ -2376,6 +2377,80 @@ fn rules_json_filters_inventory_by_kind() {
 }
 
 #[test]
+fn rules_json_filters_inventory_by_rule_selector() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_file(
+		repo_root,
+		Path::new("pullhook.json"),
+		r#"{
+  "rules": [
+    {
+      "name": "install dependencies",
+      "install": true
+    },
+    {
+      "name": "checks",
+      "parallel": [
+        {
+          "name": "lint",
+          "changed": "packages/a/package-lock.json",
+          "run": "cargo test -p lint"
+        },
+        {
+          "name": "typecheck",
+          "changed": "packages/b/package-lock.json",
+          "run": "cargo test -p typecheck"
+        }
+      ]
+    }
+  ]
+}
+"#,
+	);
+
+	let output = run_pullhook(repo_root, &["rules", "--rule", "lint", "--json"]);
+
+	assert!(output.status.success(), "rules --rule lint --json should succeed");
+	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse rules json");
+	assert_eq!(value["status"], "ok");
+	assert_eq!(value["selectors"], serde_json::json!(["lint"]));
+	assert_eq!(value["commands"], serde_json::json!(["cargo test -p lint"]));
+	assert_eq!(value["patterns"], serde_json::json!(["packages/a/package-lock.json"]));
+	assert_eq!(value["rules"], 1);
+	assert_eq!(value["parallelGroups"], 1);
+	let entries = value["entries"].as_array().expect("entries array");
+	assert_eq!(entries.len(), 1);
+	assert_eq!(entries[0]["type"], "group");
+	assert_eq!(entries[0]["name"], "checks");
+	let rules = entries[0]["rules"].as_array().expect("group rules");
+	assert_eq!(rules.len(), 1);
+	assert_eq!(rules[0]["name"], "lint");
+}
+
+#[test]
+fn rules_json_rejects_unknown_rule_selector_as_json() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_config_rule(
+		repo_root,
+		"typecheck",
+		"packages/a/package-lock.json",
+		"cargo test -p typecheck",
+	);
+
+	let output = run_pullhook(repo_root, &["rules", "--rule", "typcheck", "--json"]);
+
+	assert!(!output.status.success(), "rules should fail for an unknown selector");
+	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse selector error json");
+	assert_eq!(value["status"], "error");
+	let error = value["error"].as_str().expect("error message");
+	assert!(error.contains("unknown rule selector(s): typcheck (did you mean `typecheck`?)"));
+	let stderr = stderr_text(&output);
+	assert!(stderr.contains("unknown rule selector(s): typcheck (did you mean `typecheck`?)"));
+}
+
+#[test]
 fn rules_names_only_prints_rule_selectors() {
 	let temp = setup_repo_with_merge();
 	let repo_root = temp.path();
@@ -2553,6 +2628,55 @@ fn rules_commands_only_respects_kind_filter() {
 	assert!(
 		stderr.trim().is_empty(),
 		"rules --kind install --commands-only should not write stderr"
+	);
+}
+
+#[test]
+fn rules_commands_only_respects_rule_selector_filter() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+	write_file(
+		repo_root,
+		Path::new("pullhook.json"),
+		r#"{
+  "rules": [
+    {
+      "name": "format",
+      "changed": "packages/a/package-lock.json",
+      "run": "cargo fmt --all"
+    },
+    {
+      "name": "checks",
+      "parallel": [
+        {
+          "name": "lint",
+          "changed": "packages/a/package-lock.json",
+          "run": "cargo clippy --all-targets"
+        },
+        {
+          "name": "test",
+          "changed": "packages/a/package-lock.json",
+          "run": "cargo nextest run"
+        }
+      ]
+    }
+  ]
+}
+"#,
+	);
+
+	let output = run_pullhook(repo_root, &["rules", "--rule", "lint", "--commands-only"]);
+
+	assert!(
+		output.status.success(),
+		"rules --rule lint --commands-only should succeed"
+	);
+	let stdout = stdout_text(&output);
+	assert_eq!(stdout, "cargo clippy --all-targets\n");
+	let stderr = stderr_text(&output);
+	assert!(
+		stderr.trim().is_empty(),
+		"rules --rule lint --commands-only should not write stderr"
 	);
 }
 

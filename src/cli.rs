@@ -93,6 +93,7 @@ Examples:
   pullhook rules --commands-only
   pullhook rules --patterns-only
   pullhook rules --json
+  pullhook rules --rule lint --json
   pullhook rules --config config/pullhook.custom.json";
 
 const SCHEMA_AFTER_HELP: &str = "\
@@ -627,6 +628,10 @@ pub struct RulesArgs {
 	/// Limit inventory to all entries, leaf rules, groups, run rules, or install rules.
 	#[arg(long = "kind", value_name = "kind", value_enum, default_value_t = RulesKind::All)]
 	pub kind: RulesKind,
+
+	/// Limit inventory to one or more named rules or parallel groups.
+	#[arg(long = "rule", value_name = "name")]
+	pub rules: Vec<String>,
 
 	/// Enable debug logging.
 	#[arg(short = 'd', long = "debug", default_value_t = false)]

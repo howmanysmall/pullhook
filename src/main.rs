@@ -786,11 +786,12 @@ fn rules_command(args: &RulesArgs) -> Result<()> {
 
 	let renderer = Renderer::new(effective_render_mode(args.render, args.no_color));
 	let (_, _, config) = load_config_from_cwd_for_output(args.debug, args.config.as_deref(), args.json)?;
+	let config = filter_config_rules_for_output(config, &args.rules, args.json)?;
 
 	if args.json {
 		println!(
 			"{}",
-			serde_json::to_string_pretty(&config_rules_json(&config, args.kind))?
+			serde_json::to_string_pretty(&config_rules_json(&config, args.kind, &args.rules))?
 		);
 		return Ok(());
 	}
@@ -837,6 +838,69 @@ fn rules_command(args: &RulesArgs) -> Result<()> {
 	}
 
 	Ok(())
+}
+
+fn filter_config_rules_for_output(config: Config, selectors: &[String], json_output: bool) -> Result<Config> {
+	match filter_config_rules(config, selectors) {
+		Ok(config) => Ok(config),
+		Err(error) => {
+			if json_output {
+				print_json_error(&error)?;
+			}
+			Err(error)
+		}
+	}
+}
+
+fn filter_config_rules(mut config: Config, selectors: &[String]) -> Result<Config> {
+	if selectors.is_empty() {
+		return Ok(config);
+	}
+
+	let available = collect_config_selectors(&config);
+	let available_set = available.iter().map(String::as_str).collect::<BTreeSet<_>>();
+	let requested = selectors.iter().map(String::as_str).collect::<BTreeSet<_>>();
+	let unknown = selectors
+		.iter()
+		.filter(|selector| !available_set.contains(selector.as_str()))
+		.cloned()
+		.collect::<Vec<_>>();
+	if !unknown.is_empty() {
+		return Err(anyhow!(
+			"unknown rule selector(s): {}",
+			format_unknown_selectors(&unknown, &available)
+		));
+	}
+
+	config.entries = filter_config_entries_by_selectors(&config.entries, &requested);
+	Ok(config)
+}
+
+fn filter_config_entries_by_selectors(entries: &[Entry], requested: &BTreeSet<&str>) -> Vec<Entry> {
+	entries
+		.iter()
+		.filter_map(|entry| match entry {
+			Entry::Rule(rule) if requested.contains(rule.name.as_str()) => Some(Entry::Rule(rule.clone())),
+			Entry::Rule(_) => None,
+			Entry::Group(group) if requested.contains(group.name.as_str()) => Some(Entry::Group(group.clone())),
+			Entry::Group(group) => {
+				let rules = group
+					.rules
+					.iter()
+					.filter(|rule| requested.contains(rule.name.as_str()))
+					.cloned()
+					.collect::<Vec<_>>();
+				(!rules.is_empty()).then(|| {
+					Entry::Group(config::Group {
+						name: group.name.clone(),
+						jobs: group.jobs,
+						rules,
+						fail_text: group.fail_text.clone(),
+					})
+				})
+			}
+		})
+		.collect()
 }
 
 fn schema_command(args: &SchemaArgs) -> Result<()> {
@@ -1819,20 +1883,28 @@ fn completion_shell_label(shell: clap_complete::Shell) -> String {
 		.map_or_else(|| "unknown".to_owned(), |value| value.get_name().to_owned())
 }
 
-fn config_rules_json(config: &Config, kind: RulesKind) -> serde_json::Value {
+fn config_rules_json(config: &Config, kind: RulesKind, selectors: &[String]) -> serde_json::Value {
 	json!({
 		"status": "ok",
 		"error": serde_json::Value::Null,
 		"path": config.path.display().to_string(),
 		"onFailure": on_failure_label(config.on_failure),
 		"kind": rules_kind_label(kind),
-		"selectors": collect_rule_selectors_for_kind(config, kind),
+		"selectors": collect_rules_json_selectors(config, kind, selectors),
 		"commands": collect_config_rule_commands_for_kind(config, kind),
 		"patterns": collect_config_rule_patterns_for_kind(config, kind),
 		"entries": config.entries.iter().filter_map(|entry| config_rule_inventory_json(entry, kind)).collect::<Vec<_>>(),
 		"rules": count_config_rules_for_kind(config, kind),
 		"parallelGroups": count_config_groups_for_kind(config, kind),
 	})
+}
+
+fn collect_rules_json_selectors(config: &Config, kind: RulesKind, selectors: &[String]) -> Vec<String> {
+	if selectors.is_empty() {
+		return collect_rule_selectors_for_kind(config, kind);
+	}
+
+	selectors.iter().cloned().collect::<BTreeSet<_>>().into_iter().collect()
 }
 
 fn config_evaluation_json(
@@ -2095,6 +2167,10 @@ fn collect_rule_selectors_for_kind(config: &Config, kind: RulesKind) -> Vec<Stri
 		}
 	}
 	selectors.into_iter().collect()
+}
+
+fn collect_config_selectors(config: &Config) -> Vec<String> {
+	collect_rule_selectors_for_kind(config, RulesKind::All)
 }
 
 fn collect_config_rule_commands_for_kind(config: &Config, kind: RulesKind) -> Vec<&str> {
