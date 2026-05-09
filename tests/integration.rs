@@ -1540,6 +1540,29 @@ fn config_require_existing_json_reports_missing_config_path_as_json() {
 }
 
 #[test]
+fn config_json_reports_unsupported_config_extension_as_json() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+
+	let output = run_pullhook(repo_root, &["config", "--config", "pullhook.json5", "--json"]);
+
+	assert!(
+		!output.status.success(),
+		"config --json should reject unsupported config extensions as JSON"
+	);
+	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse config error json");
+	assert_eq!(value["status"], "error");
+	assert!(
+		value["error"]
+			.as_str()
+			.expect("error")
+			.contains("JSON5 configs are not supported")
+	);
+	let stderr = stderr_text(&output);
+	assert!(stderr.contains("JSON5 configs are not supported"));
+}
+
+#[test]
 fn init_refuses_to_overwrite_existing_config_without_force() {
 	let temp = setup_repo_with_merge();
 	let repo_root = temp.path();
@@ -1615,6 +1638,36 @@ fn init_rejects_mismatched_explicit_format_and_output_extension() {
 	let stderr = stderr_text(&output);
 	assert!(stderr.contains("uses pullhook.json"));
 	assert!(stderr.contains("matching `--format`"));
+}
+
+#[test]
+fn init_json_reports_mismatched_explicit_format_and_output_extension() {
+	let temp = setup_repo_with_merge();
+	let repo_root = temp.path();
+
+	let output = run_pullhook(
+		repo_root,
+		&[
+			"init",
+			"--format",
+			"yaml",
+			"--output",
+			"config/pullhook.custom.json",
+			"--json",
+		],
+	);
+
+	assert!(
+		!output.status.success(),
+		"init --json should reject mismatched format as JSON"
+	);
+	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse init error json");
+	assert_eq!(value["status"], "error");
+	let error = value["error"].as_str().expect("error");
+	assert!(error.contains("uses pullhook.json"));
+	assert!(error.contains("matching `--format`"));
+	let stderr = stderr_text(&output);
+	assert!(stderr.contains("uses pullhook.json"));
 }
 
 #[test]

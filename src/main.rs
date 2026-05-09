@@ -716,8 +716,8 @@ fn config_command(args: &ConfigArgs) -> Result<()> {
 
 	let (cwd, repo) = discover_repo_from_cwd_for_output(args.debug, args.json)?;
 	let repo_root = repo.root().to_path_buf();
-	let path = resolve_config_path(&cwd, &repo_root, args.config.as_deref())?;
-	let format = config::ConfigFormat::from_path(&path)?;
+	let path = resolve_config_path_for_output(&cwd, &repo_root, args.config.as_deref(), args.json)?;
+	let format = config_format_from_path_for_output(&path, args.json)?;
 	let explicit = args.config.is_some();
 	let exists = path.is_file();
 	if args.require_existing && !exists {
@@ -918,10 +918,18 @@ fn init_config_command(args: &InitArgs) -> Result<()> {
 	let repo_root = repo.root();
 
 	let renderer = Renderer::new(effective_render_mode(args.render, args.no_color));
-	let (path, format) = if let Some(output) = args.output.as_deref() {
-		resolve_init_output_path(&cwd, output, args.format)?
-	} else {
-		resolve_default_init_output(repo_root, args.format, requested_format, args.force)?
+	let path_and_format = args.output.as_deref().map_or_else(
+		|| resolve_default_init_output(repo_root, args.format, requested_format, args.force),
+		|output| resolve_init_output_path(&cwd, output, args.format),
+	);
+	let (path, format) = match path_and_format {
+		Ok(resolved) => resolved,
+		Err(error) => {
+			if args.json {
+				print_json_error(&error)?;
+			}
+			return Err(error);
+		}
 	};
 	let exists = path.exists();
 
@@ -1039,6 +1047,36 @@ fn discover_repo_from_cwd_for_output(debug_enabled: bool, json_output: bool) -> 
 	match GitRepo::discover(&cwd, debug_enabled).context("failed to resolve repository root") {
 		Ok(repo) => Ok((cwd, repo)),
 		Err(error) => {
+			if json_output {
+				print_json_error(&error)?;
+			}
+			Err(error)
+		}
+	}
+}
+
+fn resolve_config_path_for_output(
+	cwd: &std::path::Path,
+	repo_root: &std::path::Path,
+	explicit_config: Option<&std::path::Path>,
+	json_output: bool,
+) -> Result<std::path::PathBuf> {
+	match resolve_config_path(cwd, repo_root, explicit_config) {
+		Ok(path) => Ok(path),
+		Err(error) => {
+			if json_output {
+				print_json_error(&error)?;
+			}
+			Err(error)
+		}
+	}
+}
+
+fn config_format_from_path_for_output(path: &std::path::Path, json_output: bool) -> Result<config::ConfigFormat> {
+	match config::ConfigFormat::from_path(path) {
+		Ok(format) => Ok(format),
+		Err(error) => {
+			let error = anyhow!(error);
 			if json_output {
 				print_json_error(&error)?;
 			}
