@@ -373,18 +373,7 @@ fn run_config_command(args: &ConfigRunArgs) -> Result<()> {
 		return Ok(());
 	}
 
-	if args.summary_only {
-		render_config_evaluation_summary(&changed_files, base_missing, changed_files_source, &evaluation);
-		return Ok(());
-	}
-
-	if args.commands_only {
-		render_config_evaluation_commands(&evaluation);
-		return Ok(());
-	}
-
-	if args.matched_files_only {
-		render_config_evaluation_matched_files(&evaluation);
+	if render_config_run_planning_only_output(args, &changed_files, base_missing, changed_files_source, &evaluation) {
 		return Ok(());
 	}
 
@@ -418,6 +407,36 @@ fn run_config_command(args: &ConfigRunArgs) -> Result<()> {
 	}
 
 	Ok(())
+}
+
+fn render_config_run_planning_only_output(
+	args: &ConfigRunArgs,
+	changed_files: &[std::path::PathBuf],
+	base_missing: bool,
+	changed_files_source: ChangedFilesSource,
+	evaluation: &[EvaluatedEntry],
+) -> bool {
+	if args.summary_only {
+		render_config_evaluation_summary(changed_files, base_missing, changed_files_source, evaluation);
+		return true;
+	}
+
+	if args.commands_only {
+		render_config_evaluation_commands(evaluation);
+		return true;
+	}
+
+	if args.changed_files_only {
+		render_path_list(changed_files);
+		return true;
+	}
+
+	if args.matched_files_only {
+		render_config_evaluation_matched_files(evaluation);
+		return true;
+	}
+
+	false
 }
 
 fn explain_config_command(args: &ExplainArgs) -> Result<()> {
@@ -464,6 +483,11 @@ fn explain_config_command(args: &ExplainArgs) -> Result<()> {
 
 	if args.commands_only {
 		render_config_evaluation_commands(&evaluation);
+		return Ok(());
+	}
+
+	if args.changed_files_only {
+		render_path_list(&changed_files);
 		return Ok(());
 	}
 
@@ -1153,8 +1177,12 @@ fn render_config_evaluation_commands(evaluation: &[EvaluatedEntry]) {
 }
 
 fn render_config_evaluation_matched_files(evaluation: &[EvaluatedEntry]) {
-	for path in collect_matched_files(evaluation) {
-		println!("{}", path.display());
+	render_path_list(collect_matched_files(evaluation));
+}
+
+fn render_path_list(paths: impl IntoIterator<Item = impl AsRef<std::path::Path>>) {
+	for path in paths {
+		println!("{}", path.as_ref().display());
 	}
 }
 

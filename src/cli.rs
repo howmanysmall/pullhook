@@ -34,6 +34,7 @@ Examples:
   pullhook run --quiet
   pullhook run --summary-only
   pullhook run --commands-only
+  pullhook run --changed-files-only
   pullhook run --matched-files-only
   pullhook run --changed-file packages/a/package-lock.json --dry-run
   pullhook run --changed-files-file .pullhook-changed --dry-run
@@ -51,6 +52,7 @@ Examples:
   pullhook explain --rule lint --all-matches
   pullhook explain --summary-only
   pullhook explain --commands-only
+  pullhook explain --changed-files-only
   pullhook explain --matched-files-only
   pullhook explain --json";
 
@@ -265,7 +267,7 @@ pub struct ConfigRunArgs {
 	#[arg(
 		long = "summary-only",
 		default_value_t = false,
-		conflicts_with_all = ["json", "quiet", "commands_only", "matched_files_only"]
+		conflicts_with_all = ["json", "quiet", "commands_only", "changed_files_only", "matched_files_only"]
 	)]
 	pub summary_only: bool,
 
@@ -273,15 +275,23 @@ pub struct ConfigRunArgs {
 	#[arg(
 		long = "commands-only",
 		default_value_t = false,
-		conflicts_with_all = ["json", "quiet", "matched_files_only"]
+		conflicts_with_all = ["json", "quiet", "changed_files_only", "matched_files_only"]
 	)]
 	pub commands_only: bool,
+
+	/// Print only resolved changed files and exit without executing.
+	#[arg(
+		long = "changed-files-only",
+		default_value_t = false,
+		conflicts_with_all = ["json", "quiet", "summary_only", "commands_only", "matched_files_only"]
+	)]
+	pub changed_files_only: bool,
 
 	/// Print only matched changed files and exit without executing.
 	#[arg(
 		long = "matched-files-only",
 		default_value_t = false,
-		conflicts_with_all = ["json", "quiet", "summary_only", "commands_only"]
+		conflicts_with_all = ["json", "quiet", "summary_only", "commands_only", "changed_files_only"]
 	)]
 	pub matched_files_only: bool,
 
@@ -343,18 +353,34 @@ pub struct ExplainArgs {
 	pub rules: Vec<String>,
 
 	/// Print only changed-file and planned-command counts.
-	#[arg(long = "summary-only", default_value_t = false, conflicts_with = "json")]
+	#[arg(
+		long = "summary-only",
+		default_value_t = false,
+		conflicts_with_all = ["json", "commands_only", "changed_files_only", "matched_files_only"]
+	)]
 	pub summary_only: bool,
 
 	/// Print only planned commands, one per line.
-	#[arg(long = "commands-only", default_value_t = false, conflicts_with_all = ["json", "summary_only"])]
+	#[arg(
+		long = "commands-only",
+		default_value_t = false,
+		conflicts_with_all = ["json", "summary_only", "changed_files_only", "matched_files_only"]
+	)]
 	pub commands_only: bool,
+
+	/// Print only resolved changed files, one per line.
+	#[arg(
+		long = "changed-files-only",
+		default_value_t = false,
+		conflicts_with_all = ["json", "summary_only", "commands_only", "matched_files_only"]
+	)]
+	pub changed_files_only: bool,
 
 	/// Print only matched changed files, one per line.
 	#[arg(
 		long = "matched-files-only",
 		default_value_t = false,
-		conflicts_with_all = ["json", "summary_only", "commands_only"]
+		conflicts_with_all = ["json", "summary_only", "commands_only", "changed_files_only"]
 	)]
 	pub matched_files_only: bool,
 
