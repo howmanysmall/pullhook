@@ -2778,6 +2778,10 @@ fn examples_json_lists_common_workflows() {
 	assert_eq!(value["status"], "ok");
 	assert_eq!(value["code"], serde_json::Value::Null);
 	assert_eq!(value["filters"]["search"], serde_json::Value::Null);
+	assert_eq!(
+		value["searchFields"],
+		serde_json::json!(["title", "category", "commandName", "command", "summary"])
+	);
 	let examples = value["examples"].as_array().expect("examples array");
 	assert!(examples.iter().any(|entry| entry["commandName"] == "init"
 		&& entry["category"] == "generator"
@@ -3376,6 +3380,10 @@ fn commands_json_lists_cli_catalog() {
 	assert_eq!(value["code"], serde_json::Value::Null);
 	assert_eq!(value["filters"]["search"], serde_json::Value::Null);
 	assert_eq!(value["filters"]["requiresRepo"], serde_json::Value::Null);
+	assert_eq!(
+		value["searchFields"],
+		serde_json::json!(["name", "category", "summary", "exampleCommands"])
+	);
 	let commands = value["commands"].as_array().expect("commands array");
 	assert!(
 		commands

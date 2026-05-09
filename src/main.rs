@@ -1374,6 +1374,7 @@ fn examples_command(args: &ExamplesArgs) -> Result<()> {
 					"category": args.category.map(CommandCategory::label),
 					"search": args.search.as_deref(),
 				},
+				"searchFields": ["title", "category", "commandName", "command", "summary"],
 				"categories": categories,
 				"examples": examples,
 				"summary": {
@@ -1509,6 +1510,7 @@ fn command_catalog_command(args: &CommandCatalogArgs) -> Result<()> {
 					"search": args.search.as_deref(),
 					"requiresRepo": repo_requirement_filter(args),
 				},
+				"searchFields": ["name", "category", "summary", "exampleCommands"],
 				"categories": categories,
 				"commands": command_values,
 				"topLevelExamples": top_level_examples,
