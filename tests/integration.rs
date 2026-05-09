@@ -703,6 +703,7 @@ fn completion_check_json_reports_match_status() {
 	);
 	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse completion check json");
 	assert_eq!(value["status"], "error");
+	assert_eq!(value["code"], "completion_out_of_date");
 	assert!(value["path"].as_str().expect("path").ends_with(output_path_str));
 	assert_eq!(value["shell"], "fish");
 	assert_eq!(value["exists"], true);
@@ -742,6 +743,7 @@ fn completion_check_json_reports_up_to_date_status() {
 	);
 	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse completion check json");
 	assert_eq!(value["status"], "ok");
+	assert_eq!(value["code"], serde_json::Value::Null);
 	assert_eq!(value["error"], serde_json::Value::Null);
 	assert_eq!(value["shell"], "fish");
 	assert_eq!(value["exists"], true);
@@ -1498,6 +1500,7 @@ fn schema_check_json_reports_match_status() {
 	);
 	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse schema check json");
 	assert_eq!(value["status"], "error");
+	assert_eq!(value["code"], "schema_out_of_date");
 	assert!(
 		value["path"]
 			.as_str()
@@ -1534,6 +1537,7 @@ fn schema_check_json_reports_up_to_date_status() {
 	);
 	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse schema check json");
 	assert_eq!(value["status"], "ok");
+	assert_eq!(value["code"], serde_json::Value::Null);
 	assert_eq!(value["error"], serde_json::Value::Null);
 	assert_eq!(value["exists"], true);
 	assert_eq!(value["matches"], true);

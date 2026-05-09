@@ -294,7 +294,7 @@ Missing config JSON errors include setup details for `pullhook init` and `--conf
 Unsupported config-path JSON errors list the supported config filenames and an `init --output` recovery command.
 `pullhook schema` prints the config JSON Schema, and `pullhook schema --output <path>` writes it for editor setup.
 Use `schema --check --output <path>` in CI when a checked-in schema file must stay current.
-`schema --check --json` and `completion <shell> --check --json` include top-level `status`, `error`, and
+`schema --check --json` and `completion <shell> --check --json` include top-level `status`, stable `code`, `error`, and
 `details` fields with the rerun command when generated output is stale.
 `validate --json` emits a compact config summary for scripts and still prints structured JSON when the
 config is invalid, including `status`, `error`, `details`, and `validationErrors` fields. Config parse failures also include a `parseError` object with the config path and parser reason. Use `validate --quiet` when CI only needs the exit code. `doctor` checks repo discovery, config health, diff-base availability, and `--install`

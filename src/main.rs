@@ -2380,6 +2380,7 @@ fn schema_check_json(
 ) -> serde_json::Value {
 	json!({
 		"status": if error.is_some() { "error" } else { "ok" },
+		"code": generated_file_check_code("schema", exists, matches, error),
 		"error": error,
 		"path": path.display().to_string(),
 		"exists": exists,
@@ -2398,6 +2399,7 @@ fn generated_file_check_json(
 ) -> serde_json::Value {
 	json!({
 		"status": if error.is_some() { "error" } else { "ok" },
+		"code": generated_file_check_code("completion", exists, matches, error),
 		"error": error,
 		"path": path.display().to_string(),
 		"shell": shell,
@@ -2405,6 +2407,27 @@ fn generated_file_check_json(
 		"matches": matches,
 		"details": details,
 	})
+}
+
+fn generated_file_check_code(
+	kind: &'static str,
+	exists: bool,
+	matches: bool,
+	error: Option<&str>,
+) -> serde_json::Value {
+	if error.is_none() {
+		return serde_json::Value::Null;
+	}
+
+	let suffix = if !exists {
+		"missing"
+	} else if !matches {
+		"out_of_date"
+	} else {
+		"error"
+	};
+
+	format!("{kind}_{suffix}").into()
 }
 
 fn schema_check_details(path: &std::path::Path) -> Vec<String> {
