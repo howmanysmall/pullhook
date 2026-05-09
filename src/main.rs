@@ -487,6 +487,13 @@ const EXAMPLE_INFOS: &[ExampleInfo] = &[
 		summary: "Return command categories with command and example counts.",
 	},
 	ExampleInfo {
+		title: "List example workflows",
+		category: "reference",
+		command_name: "examples",
+		command: "pullhook examples --json",
+		summary: "Return common workflows and copy-ready commands for automation.",
+	},
+	ExampleInfo {
 		title: "List status codes",
 		category: "reference",
 		command_name: "codes",

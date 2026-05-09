@@ -2803,6 +2803,11 @@ fn examples_json_lists_common_workflows() {
 			.iter()
 			.any(|entry| entry["commandName"] == "categories" && entry["command"] == "pullhook categories --json")
 	);
+	assert!(
+		examples
+			.iter()
+			.any(|entry| entry["commandName"] == "examples" && entry["command"] == "pullhook examples --json")
+	);
 	assert!(examples.iter().any(|entry| entry["commandName"] == "schema"
 		&& entry["command"] == "pullhook schema --output .vscode/pullhook.schema.json"));
 	assert!(
@@ -3385,11 +3390,9 @@ fn commands_json_lists_cli_catalog() {
 			.iter()
 			.any(|entry| entry["name"] == "categories" && entry["category"] == "reference")
 	);
-	assert!(
-		commands
-			.iter()
-			.any(|entry| entry["name"] == "examples" && entry["category"] == "reference")
-	);
+	assert!(commands.iter().any(|entry| entry["name"] == "examples"
+		&& entry["category"] == "reference"
+		&& entry["exampleCommands"] == serde_json::json!(["pullhook examples --json"])));
 	assert!(
 		commands
 			.iter()
