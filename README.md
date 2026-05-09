@@ -282,6 +282,7 @@ Placeholders render in every mode.
 Use `pullhook config --path-only` when a script needs the resolved path as one clean line.
 Add `--require-existing` when that script should fail instead of returning a planned-but-missing config path.
 `config --json` includes `status` and `error` fields for the same automation-friendly result shape used by other JSON commands.
+Standard JSON errors also include `details` when there is a deeper cause chain, so scripts can show the short error while still keeping the useful diagnostic text.
 `pullhook schema` prints the config JSON Schema, and `pullhook schema --output <path>` writes it for editor setup.
 Use `schema --check --output <path>` in CI when a checked-in schema file must stay current.
 `schema --check --json` and `completion <shell> --check --json` include top-level `status` and `error` fields.
@@ -309,8 +310,8 @@ Add `--require-match` to `explain` or `run` when an empty plan should fail the c
 Use `run --quiet` when successful text output would be noise; failures still print the failed task, any `failText`,
 and the final summary.
 
-Legacy top-level mode also supports `--json`, including the same top-level `status` and `error` fields,
-live execution results, and dry-run plans.
+Legacy top-level mode also supports `--json`, including the same top-level `status`, `error`, and `details`
+fields for setup failures, live execution results, and dry-run plans.
 
 Use `pullhook rules` to list configured rule and parallel group names before targeting a large config.
 `rules --json` includes top-level `status` and `error` fields like the other JSON commands.
