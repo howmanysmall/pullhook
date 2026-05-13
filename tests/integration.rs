@@ -5517,7 +5517,10 @@ fn schema_prints_json_schema() {
 
 	assert!(output.status.success(), "schema command should succeed");
 	let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("parse schema json");
-	assert_eq!(value["$id"], "https://pullhook.dev/schema.json");
+	assert_eq!(
+		value["$id"],
+		"https://raw.githubusercontent.com/howmanysmall/pullhook/main/schema.json"
+	);
 	assert_eq!(value["properties"]["rules"]["type"], "array");
 	assert_eq!(value["$defs"]["rule"]["properties"]["run"]["type"], "string");
 	assert_eq!(
@@ -5542,7 +5545,10 @@ fn schema_can_write_to_output_file() {
 	);
 	let schema = fs::read_to_string(output_path).expect("read schema output");
 	let value: serde_json::Value = serde_json::from_str(&schema).expect("parse written schema");
-	assert_eq!(value["$id"], "https://pullhook.dev/schema.json");
+	assert_eq!(
+		value["$id"],
+		"https://raw.githubusercontent.com/howmanysmall/pullhook/main/schema.json"
+	);
 }
 
 #[test]

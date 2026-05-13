@@ -50,7 +50,7 @@ const STYLES: &[&str] = &[
 ];
 
 const STARTER_CONFIG_JSON: &str = r#"{
-  "$schema": "https://pullhook.dev/schema.json",
+  "$schema": "https://raw.githubusercontent.com/howmanysmall/pullhook/main/schema.json",
   "onFailure": "stop",
   "rules": [
     {
@@ -63,7 +63,7 @@ const STARTER_CONFIG_JSON: &str = r#"{
 
 const STARTER_CONFIG_JSONC: &str = r#"{
   // pullhook runs each rule once from the repo root when changed files match.
-  "$schema": "https://pullhook.dev/schema.json",
+  "$schema": "https://raw.githubusercontent.com/howmanysmall/pullhook/main/schema.json",
   "onFailure": "stop",
   "rules": [
     {
@@ -74,14 +74,14 @@ const STARTER_CONFIG_JSONC: &str = r#"{
 }
 "#;
 
-const STARTER_CONFIG_YAML: &str = r"$schema: https://pullhook.dev/schema.json
+const STARTER_CONFIG_YAML: &str = r"$schema: https://raw.githubusercontent.com/howmanysmall/pullhook/main/schema.json
 onFailure: stop
 rules:
   - name: install dependencies
     install: true
 ";
 
-const STARTER_CONFIG_TOML: &str = r#"$schema = "https://pullhook.dev/schema.json"
+const STARTER_CONFIG_TOML: &str = r#"$schema = "https://raw.githubusercontent.com/howmanysmall/pullhook/main/schema.json"
 onFailure = "stop"
 
 [[rules]]
@@ -92,7 +92,7 @@ install = true
 /// JSON Schema for pullhook config files.
 pub const CONFIG_SCHEMA_JSON: &str = r##"{
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://pullhook.dev/schema.json",
+  "$id": "https://raw.githubusercontent.com/howmanysmall/pullhook/main/schema.json",
   "title": "pullhook config",
   "type": "object",
   "additionalProperties": false,
@@ -1103,7 +1103,7 @@ mod tests {
 		fs::write(
 			&path,
 			r#"{
-  "$schema": "https://pullhook.dev/schema.json",
+  "$schema": "https://raw.githubusercontent.com/howmanysmall/pullhook/main/schema.json",
   "rules": [
     {
       "name": "build",
