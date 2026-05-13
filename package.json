@@ -14,9 +14,10 @@
 		"@commitlint/config-conventional": "^20.5.3",
 		"@commitlint/types": "^20.5.0",
 		"@types/node": "^25.6.1",
+		"chrome-devtools-mcp": "^0.26.0",
 		"commitlint": "^20.5.3",
-		"oxfmt": "^0.48.0",
-		"oxlint": "^1.63.0",
+		"oxfmt": "^0.49.0",
+		"oxlint": "^1.64.0",
 		"oxlint-tsgolint": "^0.22.1",
 		"package-registry-mcp": "^2.1.0",
 		"skills": "^1.5.6"

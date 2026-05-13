@@ -179,7 +179,6 @@
 		},
 	},
 	"instructions": ["./AGENTS.md"],
-	"layout": "stretch",
 	"lsp": {
 		"biome": {
 			"command": ["biome", "lsp-proxy"],
@@ -238,6 +237,13 @@
 				".yaml",
 				".yml",
 			],
+			"initialization": {},
+		},
+		"oxlint": {
+			"command": ["oxlint", "--lsp"],
+			"disabled": false,
+			"extensions": [".js", ".mjs", ".cjs", ".ts", ".mts", ".cts", ".jsx", ".tsx", ".vue", ".svelte", ".astro"],
+			"initialization": {},
 		},
 		"rumdl": {
 			"command": ["rumdl", "server"],
@@ -267,6 +273,15 @@
 		},
 	},
 	"mcp": {
+		"astro-docs": {
+			"type": "remote",
+			"url": "https://mcp.docs.astro.build/mcp",
+		},
+		"chrome-dev-tools": {
+			"command": ["bash", "./scripts/get-chrome-path.sh", "--serve"],
+			"enabled": true,
+			"type": "local",
+		},
 		"context7": {
 			"enabled": true,
 			"headers": { "CONTEXT7_API_KEY": "{env:CONTEXT7_API_KEY}" },
@@ -317,5 +332,17 @@
 		"webfetch": "ask",
 	},
 	"plugin": ["opencode-wakatime"],
+	"provider": {
+		"openai": {
+			"models": {
+				"gpt-5.4": {
+					"limit": { "context": 200000, "output": 128000 },
+				},
+				"gpt-5.5": {
+					"limit": { "context": 400000, "output": 128000 },
+				},
+			},
+		},
+	},
 	"username": "pullhook",
 }
