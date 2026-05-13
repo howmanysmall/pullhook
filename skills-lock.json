@@ -13,6 +13,12 @@
       "skillPath": "skills/aube-package-manager/SKILL.md",
       "computedHash": "f99ffefd0050c4ab87a5faec5f02b98755fd92792510f0d0525a628082f55a3f"
     },
+    "frontend-design": {
+      "source": "anthropics/skills",
+      "sourceType": "github",
+      "skillPath": "skills/frontend-design/SKILL.md",
+      "computedHash": "063a0e6448123cd359ad0044cc46b0e490cc7964d45ef4bb9fd842bd2ffbca67"
+    },
     "llm-council": {
       "source": "am-will/codex-skills",
       "sourceType": "github",

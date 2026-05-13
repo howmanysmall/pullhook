@@ -5,6 +5,7 @@
 
 .agents/skills/astro
 .agents/skills/aube-package-manager
+.agents/skills/frontend-design/
 .agents/skills/llm-council
 .agents/skills/markdown-url
 .agents/skills/parallel-task
