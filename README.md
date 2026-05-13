@@ -237,7 +237,7 @@ Example:
 
 ```json
 {
-  "$schema": "https://pullhook.dev/schema.json",
+  "$schema": "https://raw.githubusercontent.com/howmanysmall/pullhook/main/schema.json",
   "onFailure": "stop",
   "rules": [
     {

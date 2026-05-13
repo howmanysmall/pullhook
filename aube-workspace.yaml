@@ -1,0 +1,13 @@
+allowBuilds:
+  esbuild: true
+  sharp: true
+
+packages:
+  - documentation
+
+overrides:
+
+patchedDependencies:
+
+trustPolicyExclude:
+  - skills
