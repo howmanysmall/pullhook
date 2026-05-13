@@ -1,5 +1,8 @@
 allowBuilds:
 
+packages:
+  - documentation
+
 overrides:
 
 patchedDependencies:
