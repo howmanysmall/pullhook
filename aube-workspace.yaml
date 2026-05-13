@@ -5,9 +5,6 @@ allowBuilds:
 packages:
   - documentation
 
-packages:
-  - documentation
-
 overrides:
 
 patchedDependencies:
