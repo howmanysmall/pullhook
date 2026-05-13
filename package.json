@@ -7,7 +7,8 @@
 		"biome": "biome",
 		"commitlint": "commitlint",
 		"format": "oxfmt",
-		"prepare": "lefthook install"
+		"prepare": "lefthook install",
+		"skills": "skills"
 	},
 	"devDependencies": {
 		"@commitlint/config-conventional": "^20.5.3",
@@ -17,7 +18,8 @@
 		"oxfmt": "^0.48.0",
 		"oxlint": "^1.63.0",
 		"oxlint-tsgolint": "^0.22.1",
-		"package-registry-mcp": "^2.1.0"
+		"package-registry-mcp": "^2.1.0",
+		"skills": "^1.5.6"
 	},
-	"packageManager": "aube@1.9.1"
+	"packageManager": "aube@1.12.0"
 }

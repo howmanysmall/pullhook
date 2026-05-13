@@ -1,0 +1,8 @@
+allowBuilds:
+
+overrides:
+
+patchedDependencies:
+
+trustPolicyExclude:
+  - skills

@@ -1,7 +1,7 @@
 min_version = "2024.11.0"
 
 [tools]
-aube = "1.9.1"
+aube = "latest"
 biome = "latest"
 gitleaks = "latest"
 lefthook = "latest"
