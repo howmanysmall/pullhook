@@ -11,7 +11,7 @@
 		"skills": "skills"
 	},
 	"devDependencies": {
-		"@commitlint/config-conventional": "^20.5.3",
+		"@commitlint/config-conventional": "^21.0.1",
 		"@commitlint/types": "^20.5.0",
 		"@types/node": "^25.6.1",
 		"chrome-devtools-mcp": "^0.26.0",
